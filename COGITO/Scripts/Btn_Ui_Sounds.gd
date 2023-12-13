@@ -1,7 +1,7 @@
 extends Button
 
-@export var sfx_pressed : String = "btn_pressed"
-@export var sfx_hover : String = "btn_hover"
+@export var sfx_pressed : AudioStream
+@export var sfx_hover : AudioStream
 
 @onready var pressed_to_call = "button_pressed"
 @onready var hover_to_call = "button_hovered"
@@ -17,8 +17,8 @@ func _ready():
 
 
 func button_hovered():
-	AudioManagerPd.play_audio(sfx_hover)
+	Audio.play_sound(sfx_hover)
 
 func button_pressed():
-	AudioManagerPd.play_audio(sfx_pressed)
+	Audio.play_sound(sfx_pressed)
 	
