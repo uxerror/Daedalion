@@ -1,5 +1,5 @@
 extends Button
-class_name CogitoButton
+class_name CogitoUiButton
 
 signal pressed_string(text:String)
 
