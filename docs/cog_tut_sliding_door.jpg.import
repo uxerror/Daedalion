@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://0tbm6xivmc85"
-path="res://.godot/imported/ProgressBar_FiveUnits.png-6ab49f6156e7b591297da0639f5dbda1.ctex"
+uid="uid://c5n2b4vbg642f"
+path="res://.godot/imported/cog_tut_sliding_door.jpg-734713d866bc5868e9a7b0fb53ce0f9f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://COGITO/Assets/Graphics/ProgressBar_FiveUnits.png"
-dest_files=["res://.godot/imported/ProgressBar_FiveUnits.png-6ab49f6156e7b591297da0639f5dbda1.ctex"]
+source_file="res://docs/cog_tut_sliding_door.jpg"
+dest_files=["res://.godot/imported/cog_tut_sliding_door.jpg-734713d866bc5868e9a7b0fb53ce0f9f.ctex"]
 
 [params]
 

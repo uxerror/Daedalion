@@ -1,94 +1,107 @@
-![COGITO_banner](https://github.com/Phazorknight/Cogito/assets/70389309/dd5060b1-a28e-40c1-8253-3a7e3e4bc116)
-# COGITO
-By Philip Drobar
-Version: **BETA 202402.20**
-Runs on Godot **4.2.1 stable**
+# Documentation
+> [!WARNING]  
+> The documentation is still work in progress and will be updated over time.
 
-COGITO is a first Person Immersive Sim Template Project for Godot Engine 4.
-In comparison to other first person assets out there, which focus mostly on shooter mechanics, COGITO focuses more on
-providing a framework for creating interactable objects and items.
+> [!IMPORTANT]  
+> This documenation will give you an overview of the most important properties & methods of the different nodes and how to use them. If you want to dive deeper into the code, you can also read the comments in the source code.
 
-**Video giving an overview of features: [COGITO Overview](https://www.youtube.com/watch?v=LYBo1_Qfru0)
+**Table of Contents**
+- [Documentation](#documentation)
+- [Intro to COGITO](#intro_to_cogito)]
+  - [COGITO Setup](#cogito_setup)]
+  - [Basic Game Scene Setup](#basic_game_scene_setup)
 
-**Credits:**
-- Player controller is based on Like475's First Person Controller Advanced: https://github.com/Like475/fpc-godot
-- Menus are based on SavoVuksan's EasyMenus (also see this link for documentation): https://github.com/SavoVuksan/EasyMenus
-- Inventory system was helped by following DevLogLogan on Youtube: https://www.youtube.com/watch?v=V79YabQZC
-- InputHelper by Nathan Hoad (also see this link for documentation): https://github.com/nathanhoad/godot_input_helper
-- QuickAudio by Bryce Dixon (https://github.com/BtheDestroyer/Godot_QuickAudio)
-- Stairs handling based on GodotStairs by elvisish (https://github.com/elvisish/GodotStairs)
-- DynamicFootstepSystem by AC-Arcana.
-- Cogito Quest System based on shomykohai's Godot 4 quest system.
+- [Player Attributes](#player_attributes)
+  - [ Generic attributes](#generic_attributes)
+  - [ Health Attribute]
+  - [ Stamina Attribute]
+  - [ Visibility Attribute]
+  - [ UI Attribute Component]
 
-**Thanks:**
-- Thanks to pcbeard for tweaks and bugfixes.
+- [Player Interaction System](#player_interaction_system)
 
-## Overview
-### Current working features:
-- First person player controller
-- Main Menu + Pause Menu
-- Save system for scene persistence and player attributes and inventory (WIP)
-- Player attributes (component based)
-  - Health
-  - Stamina
-  - Sanity (drains if not within Safezones)
-  - Visibility (goes up within Lightzones, cumulative to a limit)
-- Raycast Interaction system
-- Included Examples:
-  - Carryable crate
-  - Door (unlockable)
-  - Lamp (switchable)
-  - Chest (item container)
-  - Wheel (press and hold interactable)
-  - Hazard Zone (Area3D that drains a player attribute)
-  - Lightzone (Area that adds to player brightness)
-  - Keypad
-  - Simple readable objects
-  - Basic Quests/Objectives
-  - Items:
-	- Flashlight (combine with batteries to recharge)
-	- Battery (used to recharge Flashlight by combining them)
-	- Health Potion
-	- Stamina extension potion (increases max stamina)
-	- Key to unlock door
-	- Diamond Key A and B (combinable to create Diamond Key)
-	- Foam Pistol
-	- Laser Rifle (hitscan weapon)
+- [Cogito Objects](#cogito_objects)
+  - [ Cogito Object](#cogito_object)
+  - [ Cogito Door](#cogito_door)
+  - [ Cogito Button](#cogito_button)
+  - [ Cogito Switch](#cogito_switch)
+  - [ Cogito Keypad](#cogito_keypad)
+  - [ Cogito Turnwheel](#cogito_turnwheel)
 
+- [Cogito Object Components](#cogito_interactions)
+  - [ Basic Interaction](#basic_interaction)
+  - [ Hold Interaction](#hold_interaction)
+  - [ Carryable Component](#carryable_component)
+  - [ Readable Component](#readable_component)
+  - [ Pickup Component](#pickup_component)
 
-### To-Do's that are next in line:
-- Please check the GitHub Repo Issues and Discussion pages.
- 
+- [Cogito Inventory System]
+  - [ Overview]
+  - [ Inventory Item Class]
+  - [ Consumable Item]
+  - [ Combinable Item]
+  - [ Ammo Item]
+  - [ Key Item]
+  - [ Wieldable Item]
 
-## Set-Up
-It is recommended to use the whole project as a starting point for your game, though everything needed should be contained within the COGITO folder within the project.
+- [Wieldables](#behaviour-tree)
+  - [ Overview](#wieldable_overview)
+  - [ Flashlight (tool)]
+  - [ Toy Pistol (projectile weapon)]
+  - [ Laser Rifle (raycast weapon)]
+  - [ Pickaxe (melee weapon)]
 
-Make sure that two Autoloads are set up in your project:
-- //COGITO/EsayMenus/Nodes/menu_template_manager.tscn
-- //COGITO/SceneManagement/cogito_scene_manager.gd
+- [ Saving, Loading and Persistence - Scene Management]
+  - [ Overview]
+  - [ Player State]
+  - [ Scene State]
 
-Make sure you have this plug-in set up in your project:
-- Quick Audio (currently v1.0)
-- Input Helper (currently v4.2.2)
+- [ Scene Transitions](#scene_transitions)
+  - [Overview]
+  - [Cogito Scene and Connectors]
+  - [Transition Areas]
 
-**Open and run res://COGITO/DemoScenes/COGITO_Demo_01.tscn to try out everything that comes with COGITO**
+- [ Cogito Quest System]
+  - [ Overview]
+  - [ Cogito Quests]
+  - [ Quest Updater]
+
+- [FAQ and Troubleshooting](#faq)
 
 
-### Scene set-up
+# Intro to COGITO
+COGITO is a fully featured template. It is recommended to use this as the starting point of your project BEFORE implementing any of your own features.
+(TODO expand this section)
+
+## COGITO Setup
+1. Clone this repo or download it and unzip it into it's own directory.
+2. Open the project with the Godot editor.
+3. Make sure the following plug-ins are activated:
+  - Quick Audio (currently v1.0)
+  - Input Helper (currently v4.2.2)
+4. Make sure the following Autoloads are set up in your project:
+  - res://COGITO/EsayMenus/Nodes/menu_template_manager.tscn
+  - res://COGITO/SceneManagement/cogito_scene_manager.gd
+  - res://COGITO/QuestSysteemPD/CogitoQuestManager.gd
+5. Open and run **res://COGITO/DemoScenes/COGITO_04_Demo_Lobby.tscn** to see if everything works.
+
+
+## Basic Game Scene Setup
 To fully work, you need 3 Prefab Scenes in your scene + the following references set up in their inspector. These nodes should be in this order in the scene tree:
 - player.tscn
   - Reference to Pause Menu node
   - Reference to Player_HUD node
 - Player_HUD.tscn
   - Reference to player node
-- PauseMenu.tscn
-- To enable transitioning between scenes, your scene root node needs to have cogito_scene.gd attached and connector nodes defined (see demo scene).
+- TabMenu.tscn
 
 All signals needed get hooked up via code, so this should work without any extra signal setup.
-PauseMenu and MainMenu Scenes contain SceneSwitchers that need paths to the *.tscn files to work.
-Also be aware of node order for Player_HUD and PauseMenu. Player_HUD node should be above PauseMenu node, so PauseMenu is "on top". 
+To enable transitioning between scenes, your scene root node needs to have cogito_scene.gd attached and connector nodes defined (see demo scene). You can read more about this in [Scene Transitions](#scene_transitions).
 
-## Save states and Scene Management
+
+### --- OLD DOCUMENTATION BEYOND THIS POINT ---
+
+## Saving, Loading and Persistence - Scene Management
 - Save states are saved per default in dir "user://"
 - Player state and scene states are saved separately. That way the player save doesn't bloat with game size and there's some other minor comforts. 
 - Currently the following objects are saved:
