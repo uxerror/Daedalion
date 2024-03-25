@@ -2,14 +2,12 @@ extends Control
 signal resume
 signal back_to_main_pressed
 
-@onready var content : VBoxContainer = $%Content
-@onready var tab_container: TabContainer = $Content/TabContainer
 @onready var resume_game_button: Button = %ResumeGameButton
-@onready var tab_menu_options: TabMenuOptions = %TabMenuOptions
 @onready var save_button: CogitoUiButton = %SaveButton
 @onready var load_button: CogitoUiButton = %LoadButton
 @onready var label_active_slot: Label = %Label_ActiveSlot
-
+@onready var options_tab_menu: OptionsTabMenu = $Content/OptionsTabMenu
+@onready var game_menu: MarginContainer = $Content/GameMenu
 
 @export var nodes_to_focus: Array[Control]
 
@@ -61,10 +59,17 @@ func open_pause_menu():
 	#save_button.text = "Save Slot " + CogitoSceneManager._active_slot
 	#load_button.text = "Load Slot " + CogitoSceneManager._active_slot
 	temp_screenshot = grab_temp_screenshot()
-	tab_container.set_current_tab(0)
 	show()
+	game_menu.show()
+	options_tab_menu.hide()
 	load_current_slot_data()
 	resume_game_button.grab_focus.call_deferred()
+
+
+func open_options_menu():
+	options_tab_menu.show()
+	options_tab_menu.nodes_to_focus[0].grab_focus.call_deferred()
+	game_menu.hide()
 
 
 func grab_temp_screenshot() -> Image:
@@ -112,30 +117,17 @@ func _on_back_to_menu_button_pressed():
 
 
 func _input(event):
+	if (event.is_action_pressed("ui_cancel") or event.is_action_pressed("pause")) and !game_menu.visible:
+		accept_event()
+		options_tab_menu.hide()
+		game_menu.show()
+		resume_game_button.grab_focus.call_deferred()
+		return
+		
 	if (event.is_action_pressed("ui_cancel") or event.is_action_pressed("pause")) and visible:
 		accept_event()
 		close_pause_menu()
-	
-	#Tab navigation
-	if (event.is_action_pressed("ui_next_tab")):
-		if tab_container.current_tab + 1 == tab_container.get_tab_count():
-			tab_container.current_tab = 0
-		else:
-			tab_container.current_tab += 1
-			
-		if nodes_to_focus[tab_container.current_tab]:
-			#print("Grabbing focus of : ", tab_container.current_tab, " - ", nodes_to_focus[tab_container.current_tab])
-			nodes_to_focus[tab_container.current_tab].grab_focus.call_deferred()
-		
-	if (event.is_action_pressed("ui_prev_tab")):
-		if tab_container.current_tab  == 0:
-			tab_container.current_tab = tab_container.get_tab_count()-1
-		else:
-			tab_container.current_tab -= 1
-			
-		if nodes_to_focus[tab_container.current_tab]:
-			#print("Grabbing focus of : ", tab_container.current_tab, " - ", nodes_to_focus[tab_container.current_tab])
-			nodes_to_focus[tab_container.current_tab].grab_focus.call_deferred()
+
 
 
 func _on_save_button_pressed() -> void:
@@ -155,4 +147,3 @@ func _on_load_button_pressed() -> void:
 	CogitoSceneManager.loading_saved_game(CogitoSceneManager._active_slot)
 	
 	_on_resume_game_button_pressed()
-	
