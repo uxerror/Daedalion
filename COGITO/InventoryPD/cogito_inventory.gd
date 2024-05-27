@@ -1,9 +1,9 @@
 extends Resource
-class_name InventoryPD
+class_name CogitoInventory
 
-signal inventory_interact(inventory_data: InventoryPD, index: int, mouse_button: int)
-signal inventory_button_press(inventory_data: InventoryPD, index: int, action: String)
-signal inventory_updated(inventory_data: InventoryPD)
+signal inventory_interact(inventory_data: CogitoInventory, index: int, mouse_button: int)
+signal inventory_button_press(inventory_data: CogitoInventory, index: int, action: String)
+signal inventory_updated(inventory_data: CogitoInventory)
 
 @export var inventory_slots : Array[InventorySlotPD]
 @export var first_slot : InventorySlotPD
@@ -161,7 +161,7 @@ func pick_up_slot_data(slot_data: InventorySlotPD) -> bool:
 
 
 # Function to attempt to take all the items in a given inventory.
-func take_all_items(target_inventory: InventoryPD):
+func take_all_items(target_inventory: CogitoInventory):
 	for slot in inventory_slots:
 		if slot != null:
 			#grab item in slot and add it to target inventory

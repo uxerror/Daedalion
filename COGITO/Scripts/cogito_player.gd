@@ -22,7 +22,7 @@ var is_showing_ui : bool
 @export var fall_damage_threshold : float = -5
 
 ## Inventory resource that stores the player inventory.
-@export var inventory_data : InventoryPD
+@export var inventory_data : CogitoInventory
 
 @export_group("Audio")
 ## AudioStream that gets played when the player jumps.

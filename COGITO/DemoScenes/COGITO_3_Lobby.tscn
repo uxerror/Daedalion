@@ -2,8 +2,8 @@
 
 [ext_resource type="Script" path="res://COGITO/SceneManagement/cogito_scene.gd" id="1_dracg"]
 [ext_resource type="Texture2D" uid="uid://sdcljx8f5dhj" path="res://COGITO/Assets/hdris/kloofendal_48d_partly_cloudy_puresky_2k.hdr" id="2_a8imk"]
-[ext_resource type="PackedScene" uid="uid://kicjwmh02uwf" path="res://COGITO/PrefabScenes/player.tscn" id="3_mgle8"]
-[ext_resource type="Script" path="res://COGITO/InventoryPD/InventoryPD.gd" id="4_0kggm"]
+[ext_resource type="PackedScene" uid="uid://kicjwmh02uwf" path="res://COGITO/PackedScenes/cogito_player.tscn" id="3_mgle8"]
+[ext_resource type="Script" path="res://COGITO/InventoryPD/cogito_inventory.gd" id="4_0kggm"]
 [ext_resource type="Script" path="res://COGITO/QuestSystemPD/Components/QuestUpdater.gd" id="7_a40bd"]
 [ext_resource type="Resource" uid="uid://drmtc0tqmwquk" path="res://COGITO/QuestSystemPD/Quests/DemoSceneQuests/Demo_AccessArchive.tres" id="8_5xvfv"]
 [ext_resource type="PackedScene" uid="uid://p3f16jxrcxdt" path="res://COGITO/Assets/Models/Kenney/Furniture/GLTF format/floorFull.glb" id="9_ec70c"]
@@ -34,13 +34,13 @@
 [ext_resource type="PackedScene" uid="uid://bkxux3pftqxvq" path="res://COGITO/DemoScenes/DemoPrefabs/books.tscn" id="30_yjder"]
 [ext_resource type="PackedScene" uid="uid://cmqx5jkkx5yas" path="res://COGITO/DemoScenes/DemoPrefabs/cardboard_box_closed.tscn" id="31_7fexb"]
 [ext_resource type="PackedScene" uid="uid://dbgj5mylfslsg" path="res://COGITO/DemoScenes/DemoPrefabs/cardboard_box_open.tscn" id="32_ue52t"]
-[ext_resource type="PackedScene" uid="uid://i4rqcx7lyrfd" path="res://COGITO/PrefabScenes/keypad_prefab.tscn" id="33_3mvl6"]
+[ext_resource type="PackedScene" uid="uid://i4rqcx7lyrfd" path="res://COGITO/PackedScenes/keypad_prefab.tscn" id="33_3mvl6"]
 [ext_resource type="PackedScene" uid="uid://daeim2lleyosd" path="res://COGITO/DemoScenes/DemoPrefabs/kitchen_cabinet.tscn" id="34_hroir"]
 [ext_resource type="PackedScene" uid="uid://clm1mupo8arco" path="res://COGITO/DemoScenes/DemoPrefabs/kitchen_cabinet_corner_round.tscn" id="35_hjrfy"]
 [ext_resource type="PackedScene" uid="uid://5iifh2dc07ai" path="res://COGITO/DemoScenes/DemoPrefabs/laptop_real.tscn" id="35_s7tgx"]
 [ext_resource type="PackedScene" uid="uid://sutia1bej2vw" path="res://COGITO/Assets/Models/Kenney/Furniture/GLTF format/ceilingFan.glb" id="36_ocqx6"]
 [ext_resource type="PackedScene" uid="uid://cjpwgjokey5cq" path="res://COGITO/DemoScenes/DemoPrefabs/side_table.tscn" id="37_ic45t"]
-[ext_resource type="Script" path="res://COGITO/Scripts/Cogito_RotatorTool.gd" id="37_tg426"]
+[ext_resource type="Script" path="res://COGITO/Scripts/cogito_rotator_tool.gd" id="37_tg426"]
 [ext_resource type="PackedScene" uid="uid://dh4srvw372cf5" path="res://COGITO/DemoScenes/DemoPrefabs/stool_bar_square.tscn" id="38_byfc0"]
 [ext_resource type="PackedScene" uid="uid://bm6px536i18b3" path="res://COGITO/DemoScenes/DemoPrefabs/cabinet_television_doors.tscn" id="39_tdvyy"]
 [ext_resource type="PackedScene" uid="uid://crehxwgpwoblf" path="res://COGITO/DemoScenes/DemoPrefabs/television_modern.tscn" id="40_oaaxs"]
@@ -48,7 +48,7 @@
 [ext_resource type="PackedScene" uid="uid://w6hpf431lt3l" path="res://COGITO/DemoScenes/DemoPrefabs/chair_cushion.tscn" id="42_ys0cu"]
 [ext_resource type="PackedScene" uid="uid://cse4e4f61awy2" path="res://COGITO/Assets/Models/Kenney/Furniture/GLTF format/kitchenMicrowave.glb" id="43_rl17a"]
 [ext_resource type="PackedScene" uid="uid://u2b6ss4xaxp8" path="res://COGITO/DemoScenes/DemoPrefabs/coffee_mug.tscn" id="44_harbr"]
-[ext_resource type="PackedScene" uid="uid://bab56bf0vqfss" path="res://COGITO/PrefabScenes/Pickups/pickup_battery.tscn" id="45_628oc"]
+[ext_resource type="PackedScene" uid="uid://bab56bf0vqfss" path="res://COGITO/PackedScenes/Pickups/pickup_battery.tscn" id="45_628oc"]
 [ext_resource type="PackedScene" uid="uid://cs6raqlyejqul" path="res://COGITO/DemoScenes/DemoPrefabs/generic_button.tscn" id="45_mglg7"]
 [ext_resource type="PackedScene" uid="uid://cxof5rvjpgx1l" path="res://COGITO/DemoScenes/DemoPrefabs/door_basic.tscn" id="45_xp8oa"]
 [ext_resource type="PackedScene" uid="uid://b8t65a0tc7uq0" path="res://COGITO/DemoScenes/DemoPrefabs/bathroom_mirror.tscn" id="46_dfquo"]
@@ -73,7 +73,7 @@
 [ext_resource type="AudioStream" uid="uid://bnqnuewmntcyp" path="res://COGITO/Assets/Audio/Kenney/UiAudio/error_008.ogg" id="65_cw5kp"]
 [ext_resource type="PackedScene" uid="uid://6k5rvlwcpys1" path="res://COGITO/DemoScenes/DemoPrefabs/generic_switch.tscn" id="66_4pwwj"]
 [ext_resource type="PackedScene" uid="uid://qxbx5yllijej" path="res://COGITO/DemoScenes/DemoPrefabs/chair_modern_frame_cushion.tscn" id="67_qkgep"]
-[ext_resource type="PackedScene" uid="uid://8wkt5k4dl40u" path="res://COGITO/PrefabScenes/Pickups/pickup_key.tscn" id="68_8mqrf"]
+[ext_resource type="PackedScene" uid="uid://8wkt5k4dl40u" path="res://COGITO/PackedScenes/Pickups/pickup_key.tscn" id="68_8mqrf"]
 [ext_resource type="PackedScene" uid="uid://cik703x8nr8uj" path="res://COGITO/Assets/Models/Kenney/Furniture/GLTF format/rugSquare.glb" id="70_rt25y"]
 [ext_resource type="PackedScene" uid="uid://csmk1jgnppq7b" path="res://COGITO/Assets/Models/Kenney/Furniture/GLTF format/pillowBlue.glb" id="71_7r41f"]
 [ext_resource type="PackedScene" uid="uid://bmvweggv8f5p1" path="res://COGITO/DemoScenes/DemoPrefabs/laptop.tscn" id="72_fpgjy"]
@@ -89,10 +89,10 @@
 [ext_resource type="PackedScene" uid="uid://cj0yaeh3yg7tu" path="res://COGITO/Components/Properties/CogitoProperties.tscn" id="89_vc84d"]
 [ext_resource type="PackedScene" uid="uid://dqw7n4i3g4b7g" path="res://COGITO/Assets/Models/Kenney/SpaceInterior/GLTF format/KSI_ledge_painted.glb" id="90_0bo26"]
 [ext_resource type="PackedScene" uid="uid://ctr7n0w3hgys7" path="res://COGITO/Components/LightzoneComponent.tscn" id="91_1svd8"]
-[ext_resource type="PackedScene" uid="uid://cwd3g16ep0idw" path="res://COGITO/PrefabScenes/Pickups/pickup_flashlight.tscn" id="91_fk2yu"]
-[ext_resource type="PackedScene" uid="uid://c0yox8yh1bexx" path="res://COGITO/PrefabScenes/Pickups/ripped_page_a_pickup.tscn" id="91_qq2p0"]
-[ext_resource type="PackedScene" uid="uid://uoru03g0vtp" path="res://COGITO/PrefabScenes/Pickups/ripped_page_b_pickup.tscn" id="92_11u5w"]
-[ext_resource type="PackedScene" uid="uid://dqlue11vwpc5y" path="res://COGITO/CogitoObjects/Cogito_SecurityCamera.tscn" id="92_nldkd"]
+[ext_resource type="PackedScene" uid="uid://cwd3g16ep0idw" path="res://COGITO/PackedScenes/Pickups/pickup_flashlight.tscn" id="91_fk2yu"]
+[ext_resource type="PackedScene" uid="uid://c0yox8yh1bexx" path="res://COGITO/PackedScenes/Pickups/ripped_page_a_pickup.tscn" id="91_qq2p0"]
+[ext_resource type="PackedScene" uid="uid://uoru03g0vtp" path="res://COGITO/PackedScenes/Pickups/ripped_page_b_pickup.tscn" id="92_11u5w"]
+[ext_resource type="PackedScene" uid="uid://dqlue11vwpc5y" path="res://COGITO/CogitoObjects/cogito_security_camera.tscn" id="92_nldkd"]
 
 [sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_wjbty"]
 panorama = ExtResource("2_a8imk")
@@ -2613,6 +2613,57 @@ size = Vector3(0.861453, 1.97272, 0.0606445)
 [sub_resource type="BoxShape3D" id="BoxShape3D_nxgco"]
 size = Vector3(1.06353, 0.998169, 0.031488)
 
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_rb24w"]
+noise_type = 3
+fractal_type = 2
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_xty2f"]
+seamless = true
+as_normal_map = true
+bump_strength = 1.5
+noise = SubResource("FastNoiseLite_rb24w")
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_mu74q"]
+noise_type = 3
+seed = 10
+fractal_type = 2
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_acxul"]
+seamless = true
+as_normal_map = true
+bump_strength = 1.5
+noise = SubResource("FastNoiseLite_mu74q")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_wu1y3"]
+render_priority = 0
+shader = ExtResource("84_b4yjg")
+shader_parameter/albedo = Color(0.0509804, 0.196078, 0.243137, 1)
+shader_parameter/albedo_fresnel = Color(0.407843, 0.772549, 0.898039, 1)
+shader_parameter/metallic = 0.0
+shader_parameter/roughness = 0.02
+shader_parameter/transparency = 0.99
+shader_parameter/wave_direction = Vector2(5, 0)
+shader_parameter/wave_direction2 = Vector2(1, 3)
+shader_parameter/time_scale = 0.025
+shader_parameter/texture_normal = SubResource("NoiseTexture2D_xty2f")
+shader_parameter/texture_normal2 = SubResource("NoiseTexture2D_acxul")
+
+[sub_resource type="ConcavePolygonShape3D" id="ConcavePolygonShape3D_lqpxh"]
+data = PackedVector3Array(0.6507, 1.2298, -0.0446, 0.6507, 0.0984, -0.0446, 0.0984, 0.0984, -0.0446, 0.0984, 0.0984, -0.0446, 0.0984, 1.2298, -0.0446, 0.6507, 1.2298, -0.0446, 0.6507, 0.0984, -0.0446, 0.6507, 1.2298, -0.0446, 0.0984, 0.0984, -0.0446, 0.0984, 1.2298, -0.0446, 0.0984, 0.0984, -0.0446, 0.6507, 1.2298, -0.0446, 0.6507, 1.2298, -0.0446, 0.6507, 1.2298, -0.02, 0.6507, 0.0984, -0.02, 0.6507, 0.0984, -0.02, 0.6507, 0.0984, -0.0446, 0.6507, 1.2298, -0.0446, 0.6507, 1.2298, -0.0691, 0.6507, 1.2298, -0.0446, 0.6507, 0.0984, -0.0446, 0.6507, 0.0984, -0.0446, 0.6507, 0.0984, -0.0691, 0.6507, 1.2298, -0.0691, 0.6507, 1.2298, -0.0446, 0.0984, 1.2298, -0.0446, 0.0984, 1.2298, -0.02, 0.0984, 1.2298, -0.02, 0.6507, 1.2298, -0.02, 0.6507, 1.2298, -0.0446, 0.0984, 1.2298, -0.0446, 0.6507, 1.2298, -0.0446, 0.6507, 1.2298, -0.0691, 0.6507, 1.2298, -0.0691, 0.0984, 1.2298, -0.0691, 0.0984, 1.2298, -0.0446, 0.0984, 0.0984, -0.0446, 0.0984, 0.0984, -0.02, 0.0984, 1.2298, -0.02, 0.0984, 1.2298, -0.02, 0.0984, 1.2298, -0.0446, 0.0984, 0.0984, -0.0446, 0.0984, 0.0984, -0.0691, 0.0984, 0.0984, -0.0446, 0.0984, 1.2298, -0.0446, 0.0984, 1.2298, -0.0446, 0.0984, 1.2298, -0.0691, 0.0984, 0.0984, -0.0691, 0.6507, 0.0984, -0.02, 0.0984, 0.0984, -0.02, 0.0984, 0.0984, -0.0446, 0.0984, 0.0984, -0.0446, 0.6507, 0.0984, -0.0446, 0.6507, 0.0984, -0.02, 0.6507, 0.0984, -0.0446, 0.0984, 0.0984, -0.0446, 0.0984, 0.0984, -0.0691, 0.0984, 0.0984, -0.0691, 0.6507, 0.0984, -0.0691, 0.6507, 0.0984, -0.0446, 0.7492, 0, -0.0691, 0.7492, 0, -0.02, 0.7492, 1.3282, -0.02, 0.7492, 1.3282, -0.02, 0.7492, 1.3282, -0.0691, 0.7492, 0, -0.0691, 0.7492, 1.3282, -0.02, 0, 1.3282, -0.02, 0, 1.3282, -0.0691, 0, 1.3282, -0.0691, 0.7492, 1.3282, -0.0691, 0.7492, 1.3282, -0.02, 0, 0, -0.0691, 0.7492, 0, -0.0691, 0.0984, 0.0984, -0.0691, 0.0984, 0.0984, -0.0691, 0, 1.3282, -0.0691, 0, 0, -0.0691, 0.0984, 0.0984, -0.0691, 0.0984, 1.2298, -0.0691, 0, 1.3282, -0.0691, 0.0984, 1.2298, -0.0691, 0.6507, 1.2298, -0.0691, 0, 1.3282, -0.0691, 0.6507, 0.0984, -0.0691, 0.0984, 0.0984, -0.0691, 0.7492, 0, -0.0691, 0.7492, 0, -0.0691, 0.7492, 1.3282, -0.0691, 0.6507, 0.0984, -0.0691, 0.7492, 1.3282, -0.0691, 0.6507, 1.2298, -0.0691, 0.6507, 0.0984, -0.0691, 0.7492, 1.3282, -0.0691, 0, 1.3282, -0.0691, 0.6507, 1.2298, -0.0691, 0.7492, 0, -0.02, 0, 0, -0.02, 0.6507, 0.0984, -0.02, 0.6507, 0.0984, -0.02, 0.7492, 1.3282, -0.02, 0.7492, 0, -0.02, 0.6507, 0.0984, -0.02, 0.6507, 1.2298, -0.02, 0.7492, 1.3282, -0.02, 0.6507, 1.2298, -0.02, 0.0984, 1.2298, -0.02, 0.7492, 1.3282, -0.02, 0.0984, 0.0984, -0.02, 0.6507, 0.0984, -0.02, 0, 0, -0.02, 0, 0, -0.02, 0, 1.3282, -0.02, 0.0984, 0.0984, -0.02, 0, 1.3282, -0.02, 0.0984, 1.2298, -0.02, 0.0984, 0.0984, -0.02, 0, 1.3282, -0.02, 0.7492, 1.3282, -0.02, 0.0984, 1.2298, -0.02, 0.7492, 0, -0.0691, 0, 0, -0.0691, 0, 0, -0.02, 0, 0, -0.02, 0.7492, 0, -0.02, 0.7492, 0, -0.0691, 0, 1.3282, -0.0691, 0, 1.3282, -0.02, 0, 0, -0.02, 0, 0, -0.02, 0, 0, -0.0691, 0, 1.3282, -0.0691)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hqhpt"]
+transparency = 1
+blend_mode = 1
+albedo_color = Color(1, 1, 1, 0)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_30jej"]
+resource_name = "metalLight"
+albedo_color = Color(0.918013, 0.929502, 0.9647, 1)
+emission_enabled = true
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_3kuvd"]
+size = Vector3(2.52411, 1.05029, 2.18591)
+
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_7pgte"]
 resource_name = "carpetBlue"
 albedo_color = Color(0.631193, 0.746212, 0.939535, 1)
@@ -3191,57 +3242,6 @@ size = Vector3(1, 3, 1)
 [sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_n4app"]
 points = PackedVector3Array(0.5, 1.45426, 0.5, -0.5, -1.45426, -0.5, -0.5, -1.45426, 0.5, -0.5, 1.45426, -0.5, 0.5, -1.45426, -0.5, 0.5, -1.45426, 0.5, -0.5, 1.45426, 0.5, 0.5, 1.45426, -0.5)
 
-[sub_resource type="FastNoiseLite" id="FastNoiseLite_rb24w"]
-noise_type = 3
-fractal_type = 2
-
-[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_xty2f"]
-seamless = true
-as_normal_map = true
-bump_strength = 1.5
-noise = SubResource("FastNoiseLite_rb24w")
-
-[sub_resource type="FastNoiseLite" id="FastNoiseLite_mu74q"]
-noise_type = 3
-seed = 10
-fractal_type = 2
-
-[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_acxul"]
-seamless = true
-as_normal_map = true
-bump_strength = 1.5
-noise = SubResource("FastNoiseLite_mu74q")
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_wu1y3"]
-render_priority = 0
-shader = ExtResource("84_b4yjg")
-shader_parameter/albedo = Color(0.0509804, 0.196078, 0.243137, 1)
-shader_parameter/albedo_fresnel = Color(0.407843, 0.772549, 0.898039, 1)
-shader_parameter/metallic = 0.0
-shader_parameter/roughness = 0.02
-shader_parameter/transparency = 0.99
-shader_parameter/wave_direction = Vector2(5, 0)
-shader_parameter/wave_direction2 = Vector2(1, 3)
-shader_parameter/time_scale = 0.025
-shader_parameter/texture_normal = SubResource("NoiseTexture2D_xty2f")
-shader_parameter/texture_normal2 = SubResource("NoiseTexture2D_acxul")
-
-[sub_resource type="ConcavePolygonShape3D" id="ConcavePolygonShape3D_lqpxh"]
-data = PackedVector3Array(0.6507, 1.2298, -0.0446, 0.6507, 0.0984, -0.0446, 0.0984, 0.0984, -0.0446, 0.0984, 0.0984, -0.0446, 0.0984, 1.2298, -0.0446, 0.6507, 1.2298, -0.0446, 0.6507, 0.0984, -0.0446, 0.6507, 1.2298, -0.0446, 0.0984, 0.0984, -0.0446, 0.0984, 1.2298, -0.0446, 0.0984, 0.0984, -0.0446, 0.6507, 1.2298, -0.0446, 0.6507, 1.2298, -0.0446, 0.6507, 1.2298, -0.02, 0.6507, 0.0984, -0.02, 0.6507, 0.0984, -0.02, 0.6507, 0.0984, -0.0446, 0.6507, 1.2298, -0.0446, 0.6507, 1.2298, -0.0691, 0.6507, 1.2298, -0.0446, 0.6507, 0.0984, -0.0446, 0.6507, 0.0984, -0.0446, 0.6507, 0.0984, -0.0691, 0.6507, 1.2298, -0.0691, 0.6507, 1.2298, -0.0446, 0.0984, 1.2298, -0.0446, 0.0984, 1.2298, -0.02, 0.0984, 1.2298, -0.02, 0.6507, 1.2298, -0.02, 0.6507, 1.2298, -0.0446, 0.0984, 1.2298, -0.0446, 0.6507, 1.2298, -0.0446, 0.6507, 1.2298, -0.0691, 0.6507, 1.2298, -0.0691, 0.0984, 1.2298, -0.0691, 0.0984, 1.2298, -0.0446, 0.0984, 0.0984, -0.0446, 0.0984, 0.0984, -0.02, 0.0984, 1.2298, -0.02, 0.0984, 1.2298, -0.02, 0.0984, 1.2298, -0.0446, 0.0984, 0.0984, -0.0446, 0.0984, 0.0984, -0.0691, 0.0984, 0.0984, -0.0446, 0.0984, 1.2298, -0.0446, 0.0984, 1.2298, -0.0446, 0.0984, 1.2298, -0.0691, 0.0984, 0.0984, -0.0691, 0.6507, 0.0984, -0.02, 0.0984, 0.0984, -0.02, 0.0984, 0.0984, -0.0446, 0.0984, 0.0984, -0.0446, 0.6507, 0.0984, -0.0446, 0.6507, 0.0984, -0.02, 0.6507, 0.0984, -0.0446, 0.0984, 0.0984, -0.0446, 0.0984, 0.0984, -0.0691, 0.0984, 0.0984, -0.0691, 0.6507, 0.0984, -0.0691, 0.6507, 0.0984, -0.0446, 0.7492, 0, -0.0691, 0.7492, 0, -0.02, 0.7492, 1.3282, -0.02, 0.7492, 1.3282, -0.02, 0.7492, 1.3282, -0.0691, 0.7492, 0, -0.0691, 0.7492, 1.3282, -0.02, 0, 1.3282, -0.02, 0, 1.3282, -0.0691, 0, 1.3282, -0.0691, 0.7492, 1.3282, -0.0691, 0.7492, 1.3282, -0.02, 0, 0, -0.0691, 0.7492, 0, -0.0691, 0.0984, 0.0984, -0.0691, 0.0984, 0.0984, -0.0691, 0, 1.3282, -0.0691, 0, 0, -0.0691, 0.0984, 0.0984, -0.0691, 0.0984, 1.2298, -0.0691, 0, 1.3282, -0.0691, 0.0984, 1.2298, -0.0691, 0.6507, 1.2298, -0.0691, 0, 1.3282, -0.0691, 0.6507, 0.0984, -0.0691, 0.0984, 0.0984, -0.0691, 0.7492, 0, -0.0691, 0.7492, 0, -0.0691, 0.7492, 1.3282, -0.0691, 0.6507, 0.0984, -0.0691, 0.7492, 1.3282, -0.0691, 0.6507, 1.2298, -0.0691, 0.6507, 0.0984, -0.0691, 0.7492, 1.3282, -0.0691, 0, 1.3282, -0.0691, 0.6507, 1.2298, -0.0691, 0.7492, 0, -0.02, 0, 0, -0.02, 0.6507, 0.0984, -0.02, 0.6507, 0.0984, -0.02, 0.7492, 1.3282, -0.02, 0.7492, 0, -0.02, 0.6507, 0.0984, -0.02, 0.6507, 1.2298, -0.02, 0.7492, 1.3282, -0.02, 0.6507, 1.2298, -0.02, 0.0984, 1.2298, -0.02, 0.7492, 1.3282, -0.02, 0.0984, 0.0984, -0.02, 0.6507, 0.0984, -0.02, 0, 0, -0.02, 0, 0, -0.02, 0, 1.3282, -0.02, 0.0984, 0.0984, -0.02, 0, 1.3282, -0.02, 0.0984, 1.2298, -0.02, 0.0984, 0.0984, -0.02, 0, 1.3282, -0.02, 0.7492, 1.3282, -0.02, 0.0984, 1.2298, -0.02, 0.7492, 0, -0.0691, 0, 0, -0.0691, 0, 0, -0.02, 0, 0, -0.02, 0.7492, 0, -0.02, 0.7492, 0, -0.0691, 0, 1.3282, -0.0691, 0, 1.3282, -0.02, 0, 0, -0.02, 0, 0, -0.02, 0, 0, -0.0691, 0, 1.3282, -0.0691)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hqhpt"]
-transparency = 1
-blend_mode = 1
-albedo_color = Color(1, 1, 1, 0)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_30jej"]
-resource_name = "metalLight"
-albedo_color = Color(0.918013, 0.929502, 0.9647, 1)
-emission_enabled = true
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_3kuvd"]
-size = Vector3(2.52411, 1.05029, 2.18591)
-
 [sub_resource type="BoxShape3D" id="BoxShape3D_mq6up"]
 size = Vector3(16.4526, 6.84363, 36.7433)
 
@@ -3325,6 +3325,7 @@ shape = SubResource("BoxShape3D_dtdhi")
 [node name="FloorUnit11" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -14, 0, 1)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="floorFull" parent="MAIN_LOBBY/LAB_CONNECTOR/FloorUnit11" instance=ExtResource("9_ec70c")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
@@ -3387,6 +3388,7 @@ shape = SubResource("BoxShape3D_1q44t")
 [node name="FloorUnit12" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -14, 2.68, 1)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="floorFull" parent="MAIN_LOBBY/LAB_CONNECTOR/FloorUnit12" instance=ExtResource("9_ec70c")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
@@ -3449,6 +3451,7 @@ shape = SubResource("BoxShape3D_1q44t")
 [node name="Wall7" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(1, 0, -1.74846e-07, 0, 1, 0, 1.74846e-07, 0, 1, -10, 0, -2)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="MAIN_LOBBY/LAB_CONNECTOR/Wall7"]
 mesh = SubResource("ArrayMesh_wjscr")
@@ -3461,6 +3464,7 @@ shape = SubResource("BoxShape3D_ecok4")
 [node name="Wall79" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(-1, 0, 8.74226e-08, 0, 1, 0, -8.74226e-08, 0, -1, -8, 0, 2)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="MAIN_LOBBY/LAB_CONNECTOR/Wall79"]
 mesh = SubResource("ArrayMesh_wjscr")
@@ -3473,6 +3477,7 @@ shape = SubResource("BoxShape3D_ecok4")
 [node name="Wall80" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(-1, 0, 8.74226e-08, 0, 1, 0, -8.74226e-08, 0, -1, -10, 0, 2)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="MAIN_LOBBY/LAB_CONNECTOR/Wall80"]
 mesh = SubResource("ArrayMesh_wjscr")
@@ -3485,6 +3490,7 @@ shape = SubResource("BoxShape3D_ecok4")
 [node name="Wall82" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(-1, 0, 8.74226e-08, 0, 1, 0, -8.74226e-08, 0, -1, -12, 0, 2)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="MAIN_LOBBY/LAB_CONNECTOR/Wall82"]
 mesh = SubResource("ArrayMesh_wjscr")
@@ -3497,6 +3503,7 @@ shape = SubResource("BoxShape3D_ecok4")
 [node name="Wall83" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(-1, 0, 8.74226e-08, 0, 1, 0, -8.74226e-08, 0, -1, -14, 0, 2)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="MAIN_LOBBY/LAB_CONNECTOR/Wall83"]
 mesh = SubResource("ArrayMesh_wjscr")
@@ -3509,6 +3516,7 @@ shape = SubResource("BoxShape3D_ecok4")
 [node name="Wall84" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(1.31134e-07, 0, 1, 0, 1, 0, -1, 0, 1.31134e-07, -14, 0, 2)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="MAIN_LOBBY/LAB_CONNECTOR/Wall84"]
 mesh = SubResource("ArrayMesh_wjscr")
@@ -3521,6 +3529,7 @@ shape = SubResource("BoxShape3D_ecok4")
 [node name="Wall85" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(1.31134e-07, 0, 1, 0, 1, 0, -1, 0, 1.31134e-07, -14, 0, 0)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="MAIN_LOBBY/LAB_CONNECTOR/Wall85"]
 mesh = SubResource("ArrayMesh_wjscr")
@@ -3533,6 +3542,7 @@ shape = SubResource("BoxShape3D_ecok4")
 [node name="Wall86" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(1.31134e-07, 0, 1, 0, 1, 0, -1, 0, 1.31134e-07, -14, 0, -2)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="MAIN_LOBBY/LAB_CONNECTOR/Wall86"]
 mesh = SubResource("ArrayMesh_wjscr")
@@ -3545,6 +3555,7 @@ shape = SubResource("BoxShape3D_ecok4")
 [node name="Wall89" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(-1, 0, 8.74226e-08, 0, 1, 0, -8.74226e-08, 0, -1, -14.1, 0, -4)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="MAIN_LOBBY/LAB_CONNECTOR/Wall89"]
 mesh = SubResource("ArrayMesh_wjscr")
@@ -3557,6 +3568,7 @@ shape = SubResource("BoxShape3D_ecok4")
 [node name="Wall81" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(1, 0, -1.06581e-14, 0, 1, 0, 1.06581e-14, 0, 1, -12, 0, -2)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="MAIN_LOBBY/LAB_CONNECTOR/Wall81"]
 mesh = SubResource("ArrayMesh_wjscr")
@@ -3569,6 +3581,7 @@ shape = SubResource("BoxShape3D_ecok4")
 [node name="Wall87" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -11.922, 0, -2)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="MAIN_LOBBY/LAB_CONNECTOR/Wall87"]
 mesh = SubResource("ArrayMesh_wjscr")
@@ -3581,6 +3594,7 @@ shape = SubResource("BoxShape3D_ecok4")
 [node name="Wall88" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -11.922, 0, -4)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="MAIN_LOBBY/LAB_CONNECTOR/Wall88"]
 mesh = SubResource("ArrayMesh_wjscr")
@@ -3593,6 +3607,7 @@ shape = SubResource("BoxShape3D_ecok4")
 [node name="wallHalf7" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(-2.18557e-07, 0, 1, 0, 1, 0, -1, 0, -2.18557e-07, -11.922, 0, 2)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wallHalf(Clone)" type="MeshInstance3D" parent="MAIN_LOBBY/LAB_CONNECTOR/wallHalf7"]
 mesh = SubResource("ArrayMesh_ob0uh")
@@ -3604,6 +3619,7 @@ shape = SubResource("ConvexPolygonShape3D_par6p")
 [node name="wallHalf8" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(-2.18557e-07, 0, 1, 0, 1, 0, -1, 0, -2.18557e-07, -11.922, 0, -1)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wallHalf(Clone)" type="MeshInstance3D" parent="MAIN_LOBBY/LAB_CONNECTOR/wallHalf8"]
 mesh = SubResource("ArrayMesh_ob0uh")
@@ -3615,6 +3631,7 @@ shape = SubResource("ConvexPolygonShape3D_par6p")
 [node name="wallDoorway2" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -11.922, 0, 1)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wallDoorway(Clone)" type="MeshInstance3D" parent="MAIN_LOBBY/LAB_CONNECTOR/wallDoorway2"]
 mesh = SubResource("ArrayMesh_4o3ql")
@@ -3627,6 +3644,7 @@ shape = SubResource("ConcavePolygonShape3D_7qjcy")
 [node name="Wall90" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(1, 0, -1.74845e-07, 0, 1, 0, 1.74845e-07, 0, 1, -16, 0, -7)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="MAIN_LOBBY/LAB_CONNECTOR/Wall90"]
 mesh = SubResource("ArrayMesh_qi3vy")
@@ -3639,6 +3657,7 @@ shape = SubResource("BoxShape3D_auxff")
 [node name="Wall91" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(1, 0, -1.74845e-07, 0, 1, 0, 1.74845e-07, 0, 1, -14, 0, -7)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="MAIN_LOBBY/LAB_CONNECTOR/Wall91"]
 mesh = SubResource("ArrayMesh_qi3vy")
@@ -3651,6 +3670,7 @@ shape = SubResource("BoxShape3D_auxff")
 [node name="wallHalf9" type="StaticBody3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(-2.18557e-07, 0, 1, 0, 1, 0, -1, 0, -2.18557e-07, -11.922, 0, -6)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wallHalf(Clone)" type="MeshInstance3D" parent="MAIN_LOBBY/LAB_CONNECTOR/wallHalf9"]
 mesh = SubResource("ArrayMesh_dgvue")
@@ -3662,7 +3682,7 @@ shape = SubResource("ConvexPolygonShape3D_6kwp2")
 [node name="TransitionZone_LAB" type="Area3D" parent="MAIN_LOBBY/LAB_CONNECTOR"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.043, 1.5, -2.85195)
 script = ExtResource("10_wbxwm")
-path_to_new_scene = "res://COGITO/DemoScenes/COGITO_05_Demo_Laboratory.tscn"
+path_to_new_scene = "res://COGITO/DemoScenes/COGITO_4_Laboratory.tscn"
 target_connector = "ConnectorFromLobby"
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="MAIN_LOBBY/LAB_CONNECTOR/TransitionZone_LAB"]
@@ -7310,6 +7330,121 @@ transform = Transform3D(-1, 0, 8.74228e-08, 0, 1, 0, -8.74228e-08, 0, -1, 2.1150
 [node name="KSI_ledge_painted2" parent="CUBICLE_AREA" instance=ExtResource("90_0bo26")]
 transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 4.83499, -0.7, 3.9)
 
+[node name="WaterFeature" type="Node3D" parent="CUBICLE_AREA"]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 6.2, -0.5, -3.4)
+
+[node name="WaterPlane" parent="CUBICLE_AREA/WaterFeature" instance=ExtResource("83_j65tm")]
+transform = Transform3D(2.6, 0, 0, 0, 2.6, 0, 0, 0, 2.3, 1.56007, 0.549033, 0.189197)
+
+[node name="WaterFall" parent="CUBICLE_AREA/WaterFeature" instance=ExtResource("83_j65tm")]
+transform = Transform3D(3.15263e-15, 4.37114e-08, -1, 1.65, -4.37114e-08, -2.11758e-22, -7.21238e-08, -1, -4.37114e-08, 1.60445, 1.36318, 0.0597897)
+surface_material_override/0 = SubResource("ShaderMaterial_wu1y3")
+
+[node name="WaterFall2" parent="CUBICLE_AREA/WaterFeature" instance=ExtResource("83_j65tm")]
+transform = Transform3D(-5.4452e-15, -7.54979e-08, 1, 1.65, -4.37114e-08, 4.23516e-22, 7.21238e-08, 1, 7.54979e-08, 1.60445, 1.36277, 0.0874755)
+surface_material_override/0 = SubResource("ShaderMaterial_wu1y3")
+
+[node name="KSI_ledge_painted_corner_double" parent="CUBICLE_AREA/WaterFeature" instance=ExtResource("83_igxpg")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0534334, 0, 1.47072)
+
+[node name="KSI_ledge_painted_corner_double2" parent="CUBICLE_AREA/WaterFeature" instance=ExtResource("83_igxpg")]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 3.05343, 0, -1.14096)
+
+[node name="WaterImpact" parent="CUBICLE_AREA/WaterFeature" instance=ExtResource("86_70b6h")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.65283, 0.706182, -0.151815)
+
+[node name="WaterImpact2" parent="CUBICLE_AREA/WaterFeature" instance=ExtResource("86_70b6h")]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 1.65283, 0.683885, 0.364897)
+
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="CUBICLE_AREA/WaterFeature"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.62155, 0.66305, 0.127122)
+stream = ExtResource("87_ibv1p")
+volume_db = 16.0
+autoplay = true
+max_distance = 8.0
+bus = &"SFX"
+
+[node name="Waterfall_Frame" type="StaticBody3D" parent="CUBICLE_AREA/WaterFeature"]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CUBICLE_AREA/WaterFeature/Waterfall_Frame"]
+transform = Transform3D(-1.6, 2.09815e-07, 2.08616e-07, 2.09815e-07, 1.6, 5.55204e-16, -2.08616e-07, 3.01981e-14, -1.6, 2.20634, 0.2, 4.76837e-07)
+shape = SubResource("ConcavePolygonShape3D_lqpxh")
+
+[node name="window2" type="MeshInstance3D" parent="CUBICLE_AREA/WaterFeature/Waterfall_Frame"]
+transform = Transform3D(-1.6, 2.09815e-07, 2.08616e-07, 2.09815e-07, 1.6, 5.55204e-16, -2.08616e-07, 3.01981e-14, -1.6, 2.20634, 0.2, 4.76837e-07)
+mesh = SubResource("ArrayMesh_yswb2")
+skeleton = NodePath("")
+surface_material_override/0 = SubResource("StandardMaterial3D_hqhpt")
+surface_material_override/1 = SubResource("StandardMaterial3D_30jej")
+
+[node name="WetZone" type="Area3D" parent="CUBICLE_AREA/WaterFeature"]
+script = ExtResource("59_7mr36")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CUBICLE_AREA/WaterFeature/WetZone"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.55772, 0.0251465, 0.168274)
+shape = SubResource("BoxShape3D_3kuvd")
+
+[node name="CogitoProperties" parent="CUBICLE_AREA/WaterFeature/WetZone" instance=ExtResource("89_vc84d")]
+elemental_properties = 4
+
+[node name="WaterFeature2" type="Node3D" parent="CUBICLE_AREA"]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 6.2, -0.5, 6.6)
+
+[node name="WaterPlane" parent="CUBICLE_AREA/WaterFeature2" instance=ExtResource("83_j65tm")]
+transform = Transform3D(2.6, 0, 0, 0, 2.6, 0, 0, 0, 2.3, 1.56007, 0.549033, 0.189197)
+
+[node name="WaterFall" parent="CUBICLE_AREA/WaterFeature2" instance=ExtResource("83_j65tm")]
+transform = Transform3D(3.15263e-15, 4.37114e-08, -1, 1.65, -4.37114e-08, -2.11758e-22, -7.21238e-08, -1, -4.37114e-08, 1.60445, 1.36318, 0.0597897)
+surface_material_override/0 = SubResource("ShaderMaterial_wu1y3")
+
+[node name="WaterFall2" parent="CUBICLE_AREA/WaterFeature2" instance=ExtResource("83_j65tm")]
+transform = Transform3D(-5.4452e-15, -7.54979e-08, 1, 1.65, -4.37114e-08, 4.23516e-22, 7.21238e-08, 1, 7.54979e-08, 1.60445, 1.36277, 0.0874755)
+surface_material_override/0 = SubResource("ShaderMaterial_wu1y3")
+
+[node name="KSI_ledge_painted_corner_double" parent="CUBICLE_AREA/WaterFeature2" instance=ExtResource("83_igxpg")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0534334, 0, 1.47072)
+
+[node name="KSI_ledge_painted_corner_double2" parent="CUBICLE_AREA/WaterFeature2" instance=ExtResource("83_igxpg")]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 3.05343, 0, -1.14096)
+
+[node name="WaterImpact" parent="CUBICLE_AREA/WaterFeature2" instance=ExtResource("86_70b6h")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.65283, 0.706182, -0.151815)
+
+[node name="WaterImpact2" parent="CUBICLE_AREA/WaterFeature2" instance=ExtResource("86_70b6h")]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 1.65283, 0.683885, 0.364897)
+
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="CUBICLE_AREA/WaterFeature2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.62155, 0.66305, 0.127122)
+stream = ExtResource("87_ibv1p")
+volume_db = 16.0
+autoplay = true
+max_distance = 8.0
+bus = &"SFX"
+
+[node name="Waterfall_Frame" type="StaticBody3D" parent="CUBICLE_AREA/WaterFeature2"]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CUBICLE_AREA/WaterFeature2/Waterfall_Frame"]
+transform = Transform3D(-1.6, 2.09815e-07, 2.08616e-07, 2.09815e-07, 1.6, 5.55204e-16, -2.08616e-07, 3.01981e-14, -1.6, 2.20634, 0.2, 4.76837e-07)
+shape = SubResource("ConcavePolygonShape3D_lqpxh")
+
+[node name="window2" type="MeshInstance3D" parent="CUBICLE_AREA/WaterFeature2/Waterfall_Frame"]
+transform = Transform3D(-1.6, 2.09815e-07, 2.08616e-07, 2.09815e-07, 1.6, 5.55204e-16, -2.08616e-07, 3.01981e-14, -1.6, 2.20634, 0.2, 4.76837e-07)
+mesh = SubResource("ArrayMesh_yswb2")
+skeleton = NodePath("")
+surface_material_override/0 = SubResource("StandardMaterial3D_hqhpt")
+surface_material_override/1 = SubResource("StandardMaterial3D_30jej")
+
+[node name="WetZone2" type="Area3D" parent="CUBICLE_AREA/WaterFeature2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0208797, 0, 0)
+script = ExtResource("59_7mr36")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CUBICLE_AREA/WaterFeature2/WetZone2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.55772, 0.0251465, 0.168274)
+shape = SubResource("BoxShape3D_3kuvd")
+
+[node name="CogitoProperties" parent="CUBICLE_AREA/WaterFeature2/WetZone2" instance=ExtResource("89_vc84d")]
+elemental_properties = 4
+
 [node name="ENTRANCE_AREA" type="Node3D" parent="."]
 
 [node name="pottedPlant" parent="ENTRANCE_AREA" instance=ExtResource("56_hferh")]
@@ -7620,121 +7755,6 @@ surface_material_override/0 = SubResource("StandardMaterial3D_ewq1u")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1, -1.5, -1)
 shape = SubResource("ConvexPolygonShape3D_n4app")
 
-[node name="WaterFeature" type="Node3D" parent="."]
-transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 6.2, 0, -3.4)
-
-[node name="WaterPlane" parent="WaterFeature" instance=ExtResource("83_j65tm")]
-transform = Transform3D(2.6, 0, 0, 0, 2.6, 0, 0, 0, 2.3, 1.56007, 0.549033, 0.189197)
-
-[node name="WaterFall" parent="WaterFeature" instance=ExtResource("83_j65tm")]
-transform = Transform3D(3.15263e-15, 4.37114e-08, -1, 1.65, -4.37114e-08, -2.11758e-22, -7.21238e-08, -1, -4.37114e-08, 1.60445, 1.36318, 0.0597897)
-surface_material_override/0 = SubResource("ShaderMaterial_wu1y3")
-
-[node name="WaterFall2" parent="WaterFeature" instance=ExtResource("83_j65tm")]
-transform = Transform3D(-5.4452e-15, -7.54979e-08, 1, 1.65, -4.37114e-08, 4.23516e-22, 7.21238e-08, 1, 7.54979e-08, 1.60445, 1.36277, 0.0874755)
-surface_material_override/0 = SubResource("ShaderMaterial_wu1y3")
-
-[node name="KSI_ledge_painted_corner_double" parent="WaterFeature" instance=ExtResource("83_igxpg")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0534334, 0, 1.47072)
-
-[node name="KSI_ledge_painted_corner_double2" parent="WaterFeature" instance=ExtResource("83_igxpg")]
-transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 3.05343, 0, -1.14096)
-
-[node name="WaterImpact" parent="WaterFeature" instance=ExtResource("86_70b6h")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.65283, 0.706182, -0.151815)
-
-[node name="WaterImpact2" parent="WaterFeature" instance=ExtResource("86_70b6h")]
-transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 1.65283, 0.683885, 0.364897)
-
-[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="WaterFeature"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.62155, 0.66305, 0.127122)
-stream = ExtResource("87_ibv1p")
-volume_db = 16.0
-autoplay = true
-max_distance = 8.0
-bus = &"SFX"
-
-[node name="Waterfall_Frame" type="StaticBody3D" parent="WaterFeature"]
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="WaterFeature/Waterfall_Frame"]
-transform = Transform3D(-1.6, 2.09815e-07, 2.08616e-07, 2.09815e-07, 1.6, 5.55204e-16, -2.08616e-07, 3.01981e-14, -1.6, 2.20634, 0.2, 4.76837e-07)
-shape = SubResource("ConcavePolygonShape3D_lqpxh")
-
-[node name="window2" type="MeshInstance3D" parent="WaterFeature/Waterfall_Frame"]
-transform = Transform3D(-1.6, 2.09815e-07, 2.08616e-07, 2.09815e-07, 1.6, 5.55204e-16, -2.08616e-07, 3.01981e-14, -1.6, 2.20634, 0.2, 4.76837e-07)
-mesh = SubResource("ArrayMesh_yswb2")
-skeleton = NodePath("")
-surface_material_override/0 = SubResource("StandardMaterial3D_hqhpt")
-surface_material_override/1 = SubResource("StandardMaterial3D_30jej")
-
-[node name="WetZone" type="Area3D" parent="WaterFeature"]
-script = ExtResource("59_7mr36")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="WaterFeature/WetZone"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.55772, 0.0251465, 0.168274)
-shape = SubResource("BoxShape3D_3kuvd")
-
-[node name="CogitoProperties" parent="WaterFeature/WetZone" instance=ExtResource("89_vc84d")]
-elemental_properties = 4
-
-[node name="WaterFeature2" type="Node3D" parent="."]
-transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 6.2, 0, 6.6)
-
-[node name="WaterPlane" parent="WaterFeature2" instance=ExtResource("83_j65tm")]
-transform = Transform3D(2.6, 0, 0, 0, 2.6, 0, 0, 0, 2.3, 1.56007, 0.549033, 0.189197)
-
-[node name="WaterFall" parent="WaterFeature2" instance=ExtResource("83_j65tm")]
-transform = Transform3D(3.15263e-15, 4.37114e-08, -1, 1.65, -4.37114e-08, -2.11758e-22, -7.21238e-08, -1, -4.37114e-08, 1.60445, 1.36318, 0.0597897)
-surface_material_override/0 = SubResource("ShaderMaterial_wu1y3")
-
-[node name="WaterFall2" parent="WaterFeature2" instance=ExtResource("83_j65tm")]
-transform = Transform3D(-5.4452e-15, -7.54979e-08, 1, 1.65, -4.37114e-08, 4.23516e-22, 7.21238e-08, 1, 7.54979e-08, 1.60445, 1.36277, 0.0874755)
-surface_material_override/0 = SubResource("ShaderMaterial_wu1y3")
-
-[node name="KSI_ledge_painted_corner_double" parent="WaterFeature2" instance=ExtResource("83_igxpg")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0534334, 0, 1.47072)
-
-[node name="KSI_ledge_painted_corner_double2" parent="WaterFeature2" instance=ExtResource("83_igxpg")]
-transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 3.05343, 0, -1.14096)
-
-[node name="WaterImpact" parent="WaterFeature2" instance=ExtResource("86_70b6h")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.65283, 0.706182, -0.151815)
-
-[node name="WaterImpact2" parent="WaterFeature2" instance=ExtResource("86_70b6h")]
-transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 1.65283, 0.683885, 0.364897)
-
-[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="WaterFeature2"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.62155, 0.66305, 0.127122)
-stream = ExtResource("87_ibv1p")
-volume_db = 16.0
-autoplay = true
-max_distance = 8.0
-bus = &"SFX"
-
-[node name="Waterfall_Frame" type="StaticBody3D" parent="WaterFeature2"]
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="WaterFeature2/Waterfall_Frame"]
-transform = Transform3D(-1.6, 2.09815e-07, 2.08616e-07, 2.09815e-07, 1.6, 5.55204e-16, -2.08616e-07, 3.01981e-14, -1.6, 2.20634, 0.2, 4.76837e-07)
-shape = SubResource("ConcavePolygonShape3D_lqpxh")
-
-[node name="window2" type="MeshInstance3D" parent="WaterFeature2/Waterfall_Frame"]
-transform = Transform3D(-1.6, 2.09815e-07, 2.08616e-07, 2.09815e-07, 1.6, 5.55204e-16, -2.08616e-07, 3.01981e-14, -1.6, 2.20634, 0.2, 4.76837e-07)
-mesh = SubResource("ArrayMesh_yswb2")
-skeleton = NodePath("")
-surface_material_override/0 = SubResource("StandardMaterial3D_hqhpt")
-surface_material_override/1 = SubResource("StandardMaterial3D_30jej")
-
-[node name="WetZone2" type="Area3D" parent="WaterFeature2"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0208797, 0, 0)
-script = ExtResource("59_7mr36")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="WaterFeature2/WetZone2"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.55772, 0.0251465, 0.168274)
-shape = SubResource("BoxShape3D_3kuvd")
-
-[node name="CogitoProperties" parent="WaterFeature2/WetZone2" instance=ExtResource("89_vc84d")]
-elemental_properties = 4
-
 [node name="Pickup_Flashlight" parent="." instance=ExtResource("91_fk2yu")]
 transform = Transform3D(-0.379472, 0, -0.925203, 0, 1, 0, 0.925203, 0, -0.379472, 4.70889, 1.33737, -0.00629956)
 
@@ -7793,8 +7813,8 @@ shape = SubResource("BoxShape3D_4k13h")
 [connection signal="body_entered" from="QUESTS/Laptop_QuestStarter" to="QUESTS/Laptop_QuestStarter" method="_on_body_entered"]
 [connection signal="body_entered" from="QUESTS/Archive_QuestEnder" to="QUESTS/Archive_QuestEnder" method="_on_body_entered"]
 [connection signal="pressed" from="ARCHIVE/CameraButton" to="ARCHIVE/SecurityCamera" method="turn_off"]
-[connection signal="body_entered" from="WaterFeature/WetZone" to="WaterFeature/WetZone" method="_on_body_entered"]
-[connection signal="body_entered" from="WaterFeature2/WetZone2" to="WaterFeature2/WetZone2" method="_on_body_entered"]
+[connection signal="body_entered" from="CUBICLE_AREA/WaterFeature/WetZone" to="CUBICLE_AREA/WaterFeature/WetZone" method="_on_body_entered"]
+[connection signal="body_entered" from="CUBICLE_AREA/WaterFeature2/WetZone2" to="CUBICLE_AREA/WaterFeature2/WetZone2" method="_on_body_entered"]
 
 [editable path="UPPER_OFFICE_CEO/WindowedDoor"]
 [editable path="ARCHIVE/ArchiveDoor"]

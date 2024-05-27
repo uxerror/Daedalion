@@ -1,6 +1,6 @@
 [gd_scene load_steps=25 format=3 uid="uid://0c32kepv0ahx"]
 
-[ext_resource type="Script" path="res://COGITO/Scripts/Player_Hud_Manager.gd" id="1_0wdkf"]
+[ext_resource type="Script" path="res://COGITO/Scripts/player_hud_manager.gd" id="1_0wdkf"]
 [ext_resource type="PackedScene" uid="uid://dhlrhobg5d4dj" path="res://COGITO/Components/UI/UI_PromptComponent.tscn" id="3_06ipe"]
 [ext_resource type="Texture2D" uid="uid://cqlqo6ga2f71s" path="res://COGITO/Assets/Graphics/Crosshair.png" id="3_ahile"]
 [ext_resource type="PackedScene" uid="uid://dtdjlu4dtm6wh" path="res://COGITO/InventoryPD/UiScenes/InventoryUI.tscn" id="3_krf2d"]
@@ -10,7 +10,7 @@
 [ext_resource type="Theme" uid="uid://leudtt5jh16a" path="res://COGITO/Theme/Cogito_Theme_A.tres" id="5_j6s1a"]
 [ext_resource type="PackedScene" uid="uid://cg41w2fijcp4q" path="res://COGITO/InventoryPD/UiScenes/Slot.tscn" id="5_juyvt"]
 [ext_resource type="PackedScene" uid="uid://bf2qmquc7ys81" path="res://COGITO/InventoryPD/UiScenes/HotBarInventoryUi.tscn" id="6_8odro"]
-[ext_resource type="Script" path="res://COGITO/Scripts/UI_WieldableHUD.gd" id="8_2nbvg"]
+[ext_resource type="Script" path="res://COGITO/Scripts/ui_wieldable_hud.gd" id="8_2nbvg"]
 [ext_resource type="AudioStream" uid="uid://bnqnuewmntcyp" path="res://COGITO/Assets/Audio/Kenney/UiAudio/error_008.ogg" id="8_bxpra"]
 [ext_resource type="Texture2D" uid="uid://78js4558o61m" path="res://COGITO/Assets/Graphics/ItemIcons/Cogito_Pistol.png" id="9_1l2nt"]
 [ext_resource type="Texture2D" uid="uid://cxvxq8hy53ih5" path="res://COGITO/Assets/Graphics/ItemIcons/Cogito_FoamBullets.png" id="10_bnneb"]

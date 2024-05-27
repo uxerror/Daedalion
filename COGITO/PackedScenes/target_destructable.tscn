@@ -4,7 +4,7 @@
 [ext_resource type="Script" path="res://COGITO/CogitoObjects/Cogito_Object.gd" id="1_e8c88"]
 [ext_resource type="PackedScene" uid="uid://k28yrbg3k3pw" path="res://COGITO/Components/HitboxComponent.tscn" id="3_4xfw8"]
 [ext_resource type="AudioStream" uid="uid://cn3yrske0mwlf" path="res://COGITO/Assets/Audio/Kenney/jingles-pizzicato_14.ogg" id="4_k2oo6"]
-[ext_resource type="PackedScene" uid="uid://bc2hryr610vgo" path="res://COGITO/PrefabScenes/simple_particle_puff.tscn" id="4_rjxm0"]
+[ext_resource type="PackedScene" uid="uid://bc2hryr610vgo" path="res://COGITO/PackedScenes/simple_particle_puff.tscn" id="4_rjxm0"]
 [ext_resource type="PackedScene" uid="uid://cj0yaeh3yg7tu" path="res://COGITO/Components/Properties/CogitoProperties.tscn" id="6_3b4ij"]
 
 [sub_resource type="PortableCompressedTexture2D" id="PortableCompressedTexture2D_gi6as"]

@@ -5,7 +5,7 @@ extends Resource
 var player_state_dir : String = CogitoSceneManager.cogito_state_dir + CogitoSceneManager.cogito_player_state_prefix
 
 @export var version : int = 1
-@export var player_inventory : InventoryPD
+@export var player_inventory : CogitoInventory
 @export var saved_wieldable_charges : Array
 
 @export var player_current_scene : String

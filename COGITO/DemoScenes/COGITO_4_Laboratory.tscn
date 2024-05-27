@@ -2,8 +2,8 @@
 
 [ext_resource type="Script" path="res://COGITO/SceneManagement/cogito_scene.gd" id="1_4dqq6"]
 [ext_resource type="Texture2D" uid="uid://sdcljx8f5dhj" path="res://COGITO/Assets/hdris/kloofendal_48d_partly_cloudy_puresky_2k.hdr" id="1_ponqc"]
-[ext_resource type="PackedScene" uid="uid://kicjwmh02uwf" path="res://COGITO/PrefabScenes/player.tscn" id="2_7qwrr"]
-[ext_resource type="Script" path="res://COGITO/InventoryPD/InventoryPD.gd" id="4_hlewe"]
+[ext_resource type="PackedScene" uid="uid://kicjwmh02uwf" path="res://COGITO/PackedScenes/cogito_player.tscn" id="2_7qwrr"]
+[ext_resource type="Script" path="res://COGITO/InventoryPD/cogito_inventory.gd" id="4_hlewe"]
 [ext_resource type="PackedScene" uid="uid://p3f16jxrcxdt" path="res://COGITO/Assets/Models/Kenney/Furniture/GLTF format/floorFull.glb" id="5_ihscj"]
 [ext_resource type="PackedScene" uid="uid://b6yj5prtsl7hy" path="res://COGITO/DemoScenes/DemoPrefabs/floor_3x_3_00.tscn" id="6_bedlu"]
 [ext_resource type="PackedScene" uid="uid://bavlamv6h43uw" path="res://COGITO/DemoScenes/DemoPrefabs/ksi_wall_painted.tscn" id="6_yj0h7"]
@@ -19,28 +19,28 @@
 [ext_resource type="PackedScene" uid="uid://cs6raqlyejqul" path="res://COGITO/DemoScenes/DemoPrefabs/generic_button.tscn" id="14_6k3d5"]
 [ext_resource type="FontFile" uid="uid://bu5on5evfoljs" path="res://COGITO/Assets/Fonts/Montserrat/Montserrat-Bold.ttf" id="15_buvip"]
 [ext_resource type="PackedScene" uid="uid://c2r7ib4rrrdfj" path="res://COGITO/DemoScenes/DemoPrefabs/ksi_table_long.tscn" id="15_lsmut"]
-[ext_resource type="PackedScene" uid="uid://bho0nwh5rlnua" path="res://COGITO/PrefabScenes/target_destructable.tscn" id="15_n0vqj"]
-[ext_resource type="PackedScene" uid="uid://b5ukfmvoxa33e" path="res://COGITO/PrefabScenes/Pickups/pickup_laser_ammo.tscn" id="17_l2vbg"]
-[ext_resource type="PackedScene" uid="uid://o0xgl5obc551" path="res://COGITO/PrefabScenes/Pickups/pickup_pistol.tscn" id="19_1ce0p"]
+[ext_resource type="PackedScene" uid="uid://bho0nwh5rlnua" path="res://COGITO/PackedScenes/target_destructable.tscn" id="15_n0vqj"]
+[ext_resource type="PackedScene" uid="uid://b5ukfmvoxa33e" path="res://COGITO/PackedScenes/Pickups/pickup_laser_ammo.tscn" id="17_l2vbg"]
+[ext_resource type="PackedScene" uid="uid://o0xgl5obc551" path="res://COGITO/PackedScenes/Pickups/pickup_pistol.tscn" id="19_1ce0p"]
 [ext_resource type="PackedScene" uid="uid://nqyrraqwixxy" path="res://COGITO/DemoScenes/DemoPrefabs/sliding_door.tscn" id="20_t5vwn"]
-[ext_resource type="PackedScene" uid="uid://ciil8mli32kuk" path="res://COGITO/PrefabScenes/Pickups/pickup_laser_rifle.tscn" id="23_ex3ej"]
+[ext_resource type="PackedScene" uid="uid://ciil8mli32kuk" path="res://COGITO/PackedScenes/Pickups/pickup_laser_rifle.tscn" id="23_ex3ej"]
 [ext_resource type="PackedScene" uid="uid://7osjlj17ntxb" path="res://COGITO/DemoScenes/DemoPrefabs/ksi_wall_window_painted.tscn" id="23_qd03d"]
-[ext_resource type="PackedScene" uid="uid://i7fum2jx3ac3" path="res://COGITO/PrefabScenes/ladder.tscn" id="27_1lvv6"]
-[ext_resource type="Script" path="res://COGITO/Scripts/Cogito_Spawnzone.gd" id="28_5k0xi"]
-[ext_resource type="PackedScene" uid="uid://c1umit2vtv22v" path="res://COGITO/PrefabScenes/projectile_pistol.tscn" id="28_fsk2l"]
-[ext_resource type="PackedScene" uid="uid://cgce75ts2twkp" path="res://COGITO/PrefabScenes/Pickups/pickup_pickaxe.tscn" id="29_ai41f"]
+[ext_resource type="PackedScene" uid="uid://i7fum2jx3ac3" path="res://COGITO/PackedScenes/ladder.tscn" id="27_1lvv6"]
+[ext_resource type="Script" path="res://COGITO/Scripts/cogito_spawnzone.gd" id="28_5k0xi"]
+[ext_resource type="PackedScene" uid="uid://c1umit2vtv22v" path="res://COGITO/PackedScenes/projectile_pistol.tscn" id="28_fsk2l"]
+[ext_resource type="PackedScene" uid="uid://cgce75ts2twkp" path="res://COGITO/PackedScenes/Pickups/pickup_pickaxe.tscn" id="29_ai41f"]
 [ext_resource type="PackedScene" uid="uid://co1opmwyvl27" path="res://COGITO/DemoScenes/DemoPrefabs/barrel.tscn" id="31_c4s3c"]
 [ext_resource type="PackedScene" uid="uid://b76etfjjltnts" path="res://COGITO/DemoScenes/DemoPrefabs/ceiling_fan_lab.tscn" id="32_j2alh"]
 [ext_resource type="PackedScene" uid="uid://c7ft55rxa0rum" path="res://COGITO/DemoScenes/DemoPrefabs/ksi_steps_flat.tscn" id="33_01501"]
 [ext_resource type="PackedScene" uid="uid://crh8d5v2dqakq" path="res://COGITO/DemoScenes/DemoPrefabs/ksi_steps_flat_corner.tscn" id="34_6q0uf"]
-[ext_resource type="PackedScene" uid="uid://d3m4ni301eso7" path="res://COGITO/PrefabScenes/carriable_box.tscn" id="35_hegwd"]
-[ext_resource type="PackedScene" uid="uid://8h462cd7whew" path="res://COGITO/PrefabScenes/hazard_zone.tscn" id="35_mda7y"]
-[ext_resource type="PackedScene" uid="uid://cjs44e1ow53rv" path="res://COGITO/PrefabScenes/heal_zone.tscn" id="36_fryka"]
-[ext_resource type="PackedScene" uid="uid://0fj068bj0csc" path="res://COGITO/PrefabScenes/Pickups/pickup_health_potion.tscn" id="37_0wxqc"]
-[ext_resource type="PackedScene" uid="uid://sfypssn0rllo" path="res://COGITO/PrefabScenes/Pickups/pickup_stamina_extension.tscn" id="38_ayqrv"]
-[ext_resource type="PackedScene" uid="uid://bekq2c16juwa1" path="res://COGITO/PrefabScenes/Pickups/pickup_dart.tscn" id="40_hi3jw"]
+[ext_resource type="PackedScene" uid="uid://d3m4ni301eso7" path="res://COGITO/PackedScenes/carriable_box.tscn" id="35_hegwd"]
+[ext_resource type="PackedScene" uid="uid://8h462cd7whew" path="res://COGITO/PackedScenes/hazard_zone.tscn" id="35_mda7y"]
+[ext_resource type="PackedScene" uid="uid://cjs44e1ow53rv" path="res://COGITO/PackedScenes/heal_zone.tscn" id="36_fryka"]
+[ext_resource type="PackedScene" uid="uid://0fj068bj0csc" path="res://COGITO/PackedScenes/Pickups/pickup_health_potion.tscn" id="37_0wxqc"]
+[ext_resource type="PackedScene" uid="uid://sfypssn0rllo" path="res://COGITO/PackedScenes/Pickups/pickup_stamina_extension.tscn" id="38_ayqrv"]
+[ext_resource type="PackedScene" uid="uid://bekq2c16juwa1" path="res://COGITO/PackedScenes/Pickups/pickup_dart.tscn" id="40_hi3jw"]
 [ext_resource type="PackedScene" uid="uid://611llvxrvq88" path="res://COGITO/CogitoObjects/Cogito_Pressureplate.tscn" id="41_0755m"]
-[ext_resource type="PackedScene" uid="uid://lsun1f1wjfxl" path="res://COGITO/PrefabScenes/ceiling_lamp.tscn" id="42_3rq3h"]
+[ext_resource type="PackedScene" uid="uid://lsun1f1wjfxl" path="res://COGITO/PackedScenes/ceiling_lamp.tscn" id="42_3rq3h"]
 
 [sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_wjbty"]
 panorama = ExtResource("1_ponqc")
@@ -945,6 +945,7 @@ inventory_data = SubResource("Resource_g8fa5")
 
 [node name="FloorUnit11" type="StaticBody3D" parent="CONNECTOR_TO_LOBBY"]
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 11, 0, 1)
+metadata/_edit_lock_ = true
 
 [node name="floorFull3" parent="CONNECTOR_TO_LOBBY/FloorUnit11" instance=ExtResource("5_ihscj")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 2)
@@ -994,6 +995,7 @@ shape = SubResource("BoxShape3D_w6kc6")
 
 [node name="FloorUnit12" type="StaticBody3D" parent="CONNECTOR_TO_LOBBY"]
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 11, 2.6, 1)
+metadata/_edit_lock_ = true
 
 [node name="floorFull3" parent="CONNECTOR_TO_LOBBY/FloorUnit12" instance=ExtResource("5_ihscj")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 2)
@@ -1044,6 +1046,7 @@ shape = SubResource("BoxShape3D_w6kc6")
 [node name="Wall82" type="StaticBody3D" parent="CONNECTOR_TO_LOBBY"]
 transform = Transform3D(-1, 0, 8.74226e-08, 0, 1, 0, -8.74226e-08, 0, -1, 13, 0, 2)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="CONNECTOR_TO_LOBBY/Wall82"]
 mesh = SubResource("ArrayMesh_xrfxq")
@@ -1056,6 +1059,7 @@ shape = SubResource("BoxShape3D_gm6re")
 [node name="Wall83" type="StaticBody3D" parent="CONNECTOR_TO_LOBBY"]
 transform = Transform3D(-1, 0, 8.74226e-08, 0, 1, 0, -8.74226e-08, 0, -1, 15, 0, 2)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="CONNECTOR_TO_LOBBY/Wall83"]
 mesh = SubResource("ArrayMesh_xrfxq")
@@ -1068,6 +1072,7 @@ shape = SubResource("BoxShape3D_gm6re")
 [node name="Wall84" type="StaticBody3D" parent="CONNECTOR_TO_LOBBY"]
 transform = Transform3D(1.31134e-07, 0, 1, 0, 1, 0, -1, 0, 1.31134e-07, 11, 0, 2)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="CONNECTOR_TO_LOBBY/Wall84"]
 mesh = SubResource("ArrayMesh_xrfxq")
@@ -1080,6 +1085,7 @@ shape = SubResource("BoxShape3D_gm6re")
 [node name="Wall85" type="StaticBody3D" parent="CONNECTOR_TO_LOBBY"]
 transform = Transform3D(1.31134e-07, 0, 1, 0, 1, 0, -1, 0, 1.31134e-07, 11, 0, 0)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="CONNECTOR_TO_LOBBY/Wall85"]
 mesh = SubResource("ArrayMesh_xrfxq")
@@ -1092,6 +1098,7 @@ shape = SubResource("BoxShape3D_gm6re")
 [node name="Wall89" type="StaticBody3D" parent="CONNECTOR_TO_LOBBY"]
 transform = Transform3D(1.31134e-07, 0, 1, 0, 1, 0, -1, 0, 1.31134e-07, 11, 0, -2)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="CONNECTOR_TO_LOBBY/Wall89"]
 mesh = SubResource("ArrayMesh_xrfxq")
@@ -1104,6 +1111,7 @@ shape = SubResource("BoxShape3D_gm6re")
 [node name="Wall86" type="StaticBody3D" parent="CONNECTOR_TO_LOBBY"]
 transform = Transform3D(-1, 0, 8.74226e-08, 0, 1, 0, -8.74226e-08, 0, -1, 11, 0, -4)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="CONNECTOR_TO_LOBBY/Wall86"]
 mesh = SubResource("ArrayMesh_xrfxq")
@@ -1116,6 +1124,7 @@ shape = SubResource("BoxShape3D_gm6re")
 [node name="Wall90" type="StaticBody3D" parent="CONNECTOR_TO_LOBBY"]
 transform = Transform3D(1, 0, -1.74845e-07, 0, 1, 0, 1.74845e-07, 0, 1, 9, 0, -7)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="CONNECTOR_TO_LOBBY/Wall90"]
 mesh = SubResource("ArrayMesh_xrfxq")
@@ -1128,6 +1137,7 @@ shape = SubResource("BoxShape3D_gm6re")
 [node name="Wall91" type="StaticBody3D" parent="CONNECTOR_TO_LOBBY"]
 transform = Transform3D(1, 0, -1.74845e-07, 0, 1, 0, 1.74845e-07, 0, 1, 11, 0, -7)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="CONNECTOR_TO_LOBBY/Wall91"]
 mesh = SubResource("ArrayMesh_xrfxq")
@@ -1140,6 +1150,7 @@ shape = SubResource("BoxShape3D_gm6re")
 [node name="wallHalf7" type="StaticBody3D" parent="CONNECTOR_TO_LOBBY"]
 transform = Transform3D(-2.18557e-07, 0, 1, 0, 1, 0, -1, 0, -2.18557e-07, 13.078, 0, 2)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wallHalf(Clone)" type="MeshInstance3D" parent="CONNECTOR_TO_LOBBY/wallHalf7"]
 mesh = SubResource("ArrayMesh_ayh1v")
@@ -1151,6 +1162,7 @@ shape = SubResource("ConvexPolygonShape3D_wtx52")
 [node name="wallHalf8" type="StaticBody3D" parent="CONNECTOR_TO_LOBBY"]
 transform = Transform3D(-2.18557e-07, 0, 1, 0, 1, 0, -1, 0, -2.18557e-07, 13.078, 0, -1)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wallHalf(Clone)" type="MeshInstance3D" parent="CONNECTOR_TO_LOBBY/wallHalf8"]
 mesh = SubResource("ArrayMesh_ayh1v")
@@ -1162,6 +1174,7 @@ shape = SubResource("ConvexPolygonShape3D_wtx52")
 [node name="wallHalf9" type="StaticBody3D" parent="CONNECTOR_TO_LOBBY"]
 transform = Transform3D(-2.18557e-07, 0, 1, 0, 1, 0, -1, 0, -2.18557e-07, 13.078, 0, -6)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wallHalf(Clone)" type="MeshInstance3D" parent="CONNECTOR_TO_LOBBY/wallHalf9"]
 mesh = SubResource("ArrayMesh_ayh1v")
@@ -1173,6 +1186,7 @@ shape = SubResource("ConvexPolygonShape3D_wtx52")
 [node name="wallDoorway2" type="StaticBody3D" parent="CONNECTOR_TO_LOBBY"]
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 13.078, 0, 1)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wallDoorway(Clone)" type="MeshInstance3D" parent="CONNECTOR_TO_LOBBY/wallDoorway2"]
 mesh = SubResource("ArrayMesh_mxl3f")
@@ -1185,6 +1199,7 @@ shape = SubResource("ConcavePolygonShape3D_n6v3w")
 [node name="Wall87" type="StaticBody3D" parent="CONNECTOR_TO_LOBBY"]
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 13.078, 0, -2)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="CONNECTOR_TO_LOBBY/Wall87"]
 mesh = SubResource("ArrayMesh_5oua8")
@@ -1197,6 +1212,7 @@ shape = SubResource("BoxShape3D_ho6pp")
 [node name="Wall88" type="StaticBody3D" parent="CONNECTOR_TO_LOBBY"]
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 13.078, 0, -4)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="CONNECTOR_TO_LOBBY/Wall88"]
 mesh = SubResource("ArrayMesh_5oua8")
@@ -1220,7 +1236,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 1.1, -3.8)
 [node name="TransitionZone_LOBBY" type="Area3D" parent="CONNECTOR_TO_LOBBY"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 1.5, -1.2)
 script = ExtResource("8_psdfg")
-path_to_new_scene = "res://COGITO/DemoScenes/COGITO_04_Demo_Lobby.tscn"
+path_to_new_scene = "res://COGITO/DemoScenes/COGITO_3_Lobby.tscn"
 target_connector = "ConnectorFromLab"
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="CONNECTOR_TO_LOBBY/TransitionZone_LOBBY"]
@@ -1230,6 +1246,7 @@ shape = SubResource("BoxShape3D_egkin")
 [node name="Wall79" type="StaticBody3D" parent="CONNECTOR_TO_LOBBY"]
 transform = Transform3D(-1, 0, 8.74226e-08, 0, 1, 0, -8.74226e-08, 0, -1, 17, 0, 2)
 metadata/_edit_group_ = true
+metadata/_edit_lock_ = true
 
 [node name="wall(Clone)" type="MeshInstance3D" parent="CONNECTOR_TO_LOBBY/Wall79"]
 mesh = SubResource("ArrayMesh_v40ak")

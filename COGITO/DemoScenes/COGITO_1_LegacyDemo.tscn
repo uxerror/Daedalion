@@ -1,48 +1,48 @@
 [gd_scene load_steps=140 format=3 uid="uid://cud7jwvomj24d"]
 
-[ext_resource type="PackedScene" uid="uid://kicjwmh02uwf" path="res://COGITO/PrefabScenes/player.tscn" id="1_7d2n7"]
+[ext_resource type="PackedScene" uid="uid://kicjwmh02uwf" path="res://COGITO/PackedScenes/cogito_player.tscn" id="1_7d2n7"]
 [ext_resource type="Script" path="res://COGITO/SceneManagement/cogito_scene.gd" id="1_b15oo"]
 [ext_resource type="Material" uid="uid://dkbgl3p3ffd1" path="res://COGITO/Assets/Materials/Prototype_DarkGrey.tres" id="1_lsda4"]
-[ext_resource type="PackedScene" uid="uid://cwd3g16ep0idw" path="res://COGITO/PrefabScenes/Pickups/pickup_flashlight.tscn" id="1_oweej"]
+[ext_resource type="PackedScene" uid="uid://cwd3g16ep0idw" path="res://COGITO/PackedScenes/Pickups/pickup_flashlight.tscn" id="1_oweej"]
 [ext_resource type="Material" uid="uid://hhhudvarh7gk" path="res://COGITO/Assets/Materials/Prototype_Orange.tres" id="2_4ig6i"]
-[ext_resource type="Script" path="res://COGITO/InventoryPD/InventoryPD.gd" id="2_chxar"]
-[ext_resource type="PackedScene" uid="uid://d3m4ni301eso7" path="res://COGITO/PrefabScenes/carriable_box.tscn" id="6_cy1m6"]
-[ext_resource type="PackedScene" uid="uid://lsun1f1wjfxl" path="res://COGITO/PrefabScenes/ceiling_lamp.tscn" id="7_3y6g2"]
-[ext_resource type="PackedScene" uid="uid://bho0nwh5rlnua" path="res://COGITO/PrefabScenes/target_destructable.tscn" id="8_tk621"]
+[ext_resource type="Script" path="res://COGITO/InventoryPD/cogito_inventory.gd" id="2_chxar"]
+[ext_resource type="PackedScene" uid="uid://d3m4ni301eso7" path="res://COGITO/PackedScenes/carriable_box.tscn" id="6_cy1m6"]
+[ext_resource type="PackedScene" uid="uid://lsun1f1wjfxl" path="res://COGITO/PackedScenes/ceiling_lamp.tscn" id="7_3y6g2"]
+[ext_resource type="PackedScene" uid="uid://bho0nwh5rlnua" path="res://COGITO/PackedScenes/target_destructable.tscn" id="8_tk621"]
 [ext_resource type="PackedScene" uid="uid://l61jtpfxu5x5" path="res://COGITO/Components/Interactions/BasicInteraction.tscn" id="8_wnjgg"]
-[ext_resource type="PackedScene" uid="uid://bdyukj85qkut0" path="res://COGITO/PrefabScenes/door.tscn" id="8_xabdk"]
+[ext_resource type="PackedScene" uid="uid://bdyukj85qkut0" path="res://COGITO/PackedScenes/door.tscn" id="8_xabdk"]
 [ext_resource type="Resource" uid="uid://d4gdqvqsiiqs5" path="res://COGITO/InventoryPD/Items/Cogito_Key.tres" id="9_g1bqh"]
-[ext_resource type="PackedScene" uid="uid://8wkt5k4dl40u" path="res://COGITO/PrefabScenes/Pickups/pickup_key.tscn" id="9_qv8nx"]
-[ext_resource type="PackedScene" uid="uid://0fj068bj0csc" path="res://COGITO/PrefabScenes/Pickups/pickup_health_potion.tscn" id="12_2vt2n"]
-[ext_resource type="PackedScene" uid="uid://bab56bf0vqfss" path="res://COGITO/PrefabScenes/Pickups/pickup_battery.tscn" id="13_6m0er"]
-[ext_resource type="PackedScene" uid="uid://3okedyf5glns" path="res://COGITO/PrefabScenes/container.tscn" id="14_d7sxi"]
+[ext_resource type="PackedScene" uid="uid://8wkt5k4dl40u" path="res://COGITO/PackedScenes/Pickups/pickup_key.tscn" id="9_qv8nx"]
+[ext_resource type="PackedScene" uid="uid://0fj068bj0csc" path="res://COGITO/PackedScenes/Pickups/pickup_health_potion.tscn" id="12_2vt2n"]
+[ext_resource type="PackedScene" uid="uid://bab56bf0vqfss" path="res://COGITO/PackedScenes/Pickups/pickup_battery.tscn" id="13_6m0er"]
+[ext_resource type="PackedScene" uid="uid://3okedyf5glns" path="res://COGITO/PackedScenes/container.tscn" id="14_d7sxi"]
 [ext_resource type="Resource" uid="uid://cpqxudfjtjw66" path="res://COGITO/InventoryPD/Items/Cogito_HealthPotion.tres" id="15_86b07"]
 [ext_resource type="Script" path="res://COGITO/InventoryPD/CustomResources/InventorySlotPD.gd" id="16_fg1wi"]
 [ext_resource type="Resource" uid="uid://cupby6uqaftvv" path="res://COGITO/InventoryPD/Items/Cogito_Battery.tres" id="17_nl6sa"]
-[ext_resource type="PackedScene" uid="uid://d1rq8gm20sjo1" path="res://COGITO/PrefabScenes/lamp_standing.tscn" id="18_oxm1j"]
-[ext_resource type="PackedScene" uid="uid://sfypssn0rllo" path="res://COGITO/PrefabScenes/Pickups/pickup_stamina_extension.tscn" id="18_pobhb"]
-[ext_resource type="PackedScene" uid="uid://cjs44e1ow53rv" path="res://COGITO/PrefabScenes/heal_zone.tscn" id="19_2mngh"]
-[ext_resource type="PackedScene" uid="uid://8h462cd7whew" path="res://COGITO/PrefabScenes/hazard_zone.tscn" id="20_dgnbq"]
-[ext_resource type="PackedScene" uid="uid://bnygtkw3tvet6" path="res://COGITO/PrefabScenes/press_and_hold_wheel.tscn" id="22_ni6um"]
+[ext_resource type="PackedScene" uid="uid://d1rq8gm20sjo1" path="res://COGITO/PackedScenes/lamp_standing.tscn" id="18_oxm1j"]
+[ext_resource type="PackedScene" uid="uid://sfypssn0rllo" path="res://COGITO/PackedScenes/Pickups/pickup_stamina_extension.tscn" id="18_pobhb"]
+[ext_resource type="PackedScene" uid="uid://cjs44e1ow53rv" path="res://COGITO/PackedScenes/heal_zone.tscn" id="19_2mngh"]
+[ext_resource type="PackedScene" uid="uid://8h462cd7whew" path="res://COGITO/PackedScenes/hazard_zone.tscn" id="20_dgnbq"]
+[ext_resource type="PackedScene" uid="uid://bnygtkw3tvet6" path="res://COGITO/PackedScenes/press_and_hold_wheel.tscn" id="22_ni6um"]
 [ext_resource type="Script" path="res://COGITO/CogitoObjects/Cogito_Door.gd" id="23_rfav8"]
-[ext_resource type="PackedScene" uid="uid://3gwo23kpr58f" path="res://COGITO/PrefabScenes/lightzone_lamp.tscn" id="24_p17c7"]
+[ext_resource type="PackedScene" uid="uid://3gwo23kpr58f" path="res://COGITO/PackedScenes/lightzone_lamp.tscn" id="24_p17c7"]
 [ext_resource type="AudioStream" uid="uid://ftl7je6blfwq" path="res://COGITO/Assets/Audio/Kenney/stoneDrag4.ogg" id="25_3nnou"]
-[ext_resource type="PackedScene" uid="uid://bc52bohkbf1yp" path="res://COGITO/PrefabScenes/Pickups/pickup_diamond_key_a.tscn" id="25_w5f1m"]
-[ext_resource type="PackedScene" uid="uid://djfg6ea5cbhyv" path="res://COGITO/PrefabScenes/Pickups/pickup_diamond_key_b.tscn" id="26_1prk2"]
+[ext_resource type="PackedScene" uid="uid://bc52bohkbf1yp" path="res://COGITO/PackedScenes/Pickups/pickup_diamond_key_a.tscn" id="25_w5f1m"]
+[ext_resource type="PackedScene" uid="uid://djfg6ea5cbhyv" path="res://COGITO/PackedScenes/Pickups/pickup_diamond_key_b.tscn" id="26_1prk2"]
 [ext_resource type="Texture2D" uid="uid://cgcrwmu2bs4se" path="res://COGITO/Assets/Textures/Prototype Textures/PNG/Green/texture_01.png" id="27_0a6c2"]
 [ext_resource type="Script" path="res://COGITO/CogitoObjects/Cogito_Switch.gd" id="27_r5oie"]
 [ext_resource type="Resource" uid="uid://gu1buq254o4l" path="res://COGITO/InventoryPD/Items/Cogito_DiamondKey_Combine.tres" id="28_3r4lg"]
 [ext_resource type="AudioStream" uid="uid://bfmqga66x7l1k" path="res://COGITO/Assets/Audio/Kenney/rockHit2.ogg" id="30_42jtk"]
-[ext_resource type="PackedScene" uid="uid://o0xgl5obc551" path="res://COGITO/PrefabScenes/Pickups/pickup_pistol.tscn" id="30_a7v26"]
-[ext_resource type="PackedScene" uid="uid://dbtarejfetahc" path="res://COGITO/PrefabScenes/Cabinet_prefab.tscn" id="35_ee66c"]
+[ext_resource type="PackedScene" uid="uid://o0xgl5obc551" path="res://COGITO/PackedScenes/Pickups/pickup_pistol.tscn" id="30_a7v26"]
+[ext_resource type="PackedScene" uid="uid://dbtarejfetahc" path="res://COGITO/PackedScenes/Cabinet_prefab.tscn" id="35_ee66c"]
 [ext_resource type="Script" path="res://COGITO/Scripts/hazard_zone.gd" id="35_hq7gn"]
 [ext_resource type="Texture2D" uid="uid://cg5knuav7df4o" path="res://COGITO/Assets/Graphics/HintIcons/Hint_X.png" id="36_7nev7"]
 [ext_resource type="AudioStream" uid="uid://b6wdy2102jymr" path="res://COGITO/Assets/Audio/Kenney/UiAudio/switch2.ogg" id="36_42jeg"]
 [ext_resource type="Material" uid="uid://dhg1uhiq7ywn2" path="res://COGITO/Assets/Materials/Prototype_Green.tres" id="38_l5vpp"]
-[ext_resource type="PackedScene" uid="uid://i7fum2jx3ac3" path="res://COGITO/PrefabScenes/ladder.tscn" id="41_q27ev"]
+[ext_resource type="PackedScene" uid="uid://i7fum2jx3ac3" path="res://COGITO/PackedScenes/ladder.tscn" id="41_q27ev"]
 [ext_resource type="Script" path="res://COGITO/Scripts/scene_transition_zone.gd" id="43_bchdf"]
-[ext_resource type="PackedScene" uid="uid://bhj146kxvb3s5" path="res://COGITO/PrefabScenes/document.tscn" id="44_im51b"]
-[ext_resource type="PackedScene" uid="uid://i4rqcx7lyrfd" path="res://COGITO/PrefabScenes/keypad_prefab.tscn" id="48_150m3"]
+[ext_resource type="PackedScene" uid="uid://bhj146kxvb3s5" path="res://COGITO/PackedScenes/document.tscn" id="44_im51b"]
+[ext_resource type="PackedScene" uid="uid://i4rqcx7lyrfd" path="res://COGITO/PackedScenes/keypad_prefab.tscn" id="48_150m3"]
 [ext_resource type="Script" path="res://COGITO/QuestSystemPD/Components/QuestUpdater.gd" id="49_obvm3"]
 [ext_resource type="Resource" uid="uid://yb7k8evveqdp" path="res://COGITO/QuestSystemPD/Quests/QuestA.tres" id="50_blav1"]
 [ext_resource type="Resource" uid="uid://bmkcm7tkpqjwb" path="res://COGITO/QuestSystemPD/Quests/QuestB.tres" id="51_cmhea"]
@@ -266,7 +266,7 @@ script = ExtResource("16_fg1wi")
 inventory_item = ExtResource("17_nl6sa")
 quantity = 2
 
-[sub_resource type="Resource" id="Resource_74c1c"]
+[sub_resource type="Resource" id="Resource_5sbm0"]
 resource_local_to_scene = true
 script = ExtResource("2_chxar")
 inventory_slots = Array[ExtResource("16_fg1wi")]([SubResource("Resource_v7b11"), SubResource("Resource_eku8j"), null, null])
@@ -1242,7 +1242,7 @@ transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 
 [node name="Chest" parent="INTERACTIVE_OBJECTS" groups=["external_inventory"] instance=ExtResource("14_d7sxi")]
 transform = Transform3D(0.686504, 0, -0.727126, 0, 1, 0, 0.727126, 0, 0.686504, -4.38933, 0.0425703, 5.97176)
 inventory_name = "Chest"
-inventory_data = SubResource("Resource_74c1c")
+inventory_data = SubResource("Resource_5sbm0")
 uses_animation = true
 open_animation = "open"
 
@@ -1671,7 +1671,7 @@ material = ExtResource("38_l5vpp")
 [node name="TransitionZone" type="Area3D" parent="."]
 transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, -10.4, 1.25, -11.6)
 script = ExtResource("43_bchdf")
-path_to_new_scene = "res://COGITO/DemoScenes/COGITO_02_SceneTransitions.tscn"
+path_to_new_scene = "res://COGITO/DemoScenes/COGITO_2_LegacySceneTransitions.tscn"
 target_connector = "ConnectorA"
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="TransitionZone"]
