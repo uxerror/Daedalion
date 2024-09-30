@@ -1,6 +1,6 @@
 [gd_scene load_steps=4 format=3 uid="uid://d1tj50tt4hw2j"]
 
-[ext_resource type="Script" path="res://COGITO/SceneManagement/loading_screen.gd" id="1_eqjm8"]
+[ext_resource type="Script" path="res://addons/cogito_plugin/SceneManagement/loading_screen.gd" id="1_eqjm8"]
 
 [sub_resource type="Gradient" id="Gradient_mxr7g"]
 offsets = PackedFloat32Array(0, 0.995283)
