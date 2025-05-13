@@ -21,6 +21,8 @@ enum DropType {
 	#},
 ]
 
+@export var drops: Array[LootDrop] = []
+
 	
 func _init() -> void:
 	pass
