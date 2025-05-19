@@ -1,4 +1,4 @@
-[gd_resource type="Theme" load_steps=119 format=4 uid="uid://by44nnjeu6u4n"]
+[gd_resource type="Theme" load_steps=120 format=4 uid="uid://by44nnjeu6u4n"]
 
 [ext_resource type="FontFile" uid="uid://dllp5pnr6bxj7" path="res://addons/cogito/Assets/Fonts/Montserrat/Montserrat-Light.ttf" id="1_t48qp"]
 [ext_resource type="FontFile" uid="uid://bu5on5evfoljs" path="res://addons/cogito/Assets/Fonts/Montserrat/Montserrat-Bold.ttf" id="2_kcowo"]
@@ -2468,6 +2468,14 @@ corner_radius_top_right = 3
 corner_radius_bottom_right = 3
 corner_radius_bottom_left = 3
 corner_detail = 5
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_s4wma"]
+content_margin_left = 4.0
+content_margin_top = 4.0
+content_margin_right = 4.0
+content_margin_bottom = 4.0
+bg_color = Color(0.1, 0.1, 0.1, 0.3)
+corner_detail = 12
 
 [sub_resource type="Image" id="Image_pa1ah"]
 data = {
@@ -5203,6 +5211,7 @@ PopupMenu/styles/labeled_separator_left = SubResource("StyleBoxLine_w55md")
 PopupMenu/styles/labeled_separator_right = SubResource("StyleBoxLine_w55md")
 PopupMenu/styles/panel = SubResource("StyleBoxFlat_0g5y4")
 PopupMenu/styles/separator = SubResource("StyleBoxLine_w55md")
+ProgressBar/styles/background = SubResource("StyleBoxFlat_s4wma")
 PromptLabel/base_type = &"Label"
 PromptLabel/font_sizes/font_size = 18
 PromptLabel/fonts/font = ExtResource("3_ibk0v")
