@@ -1,4 +1,4 @@
-[gd_resource type="Theme" load_steps=120 format=4 uid="uid://by44nnjeu6u4n"]
+[gd_resource type="Theme" load_steps=123 format=4 uid="uid://by44nnjeu6u4n"]
 
 [ext_resource type="FontFile" uid="uid://dllp5pnr6bxj7" path="res://addons/cogito/Assets/Fonts/Montserrat/Montserrat-Light.ttf" id="1_t48qp"]
 [ext_resource type="FontFile" uid="uid://bu5on5evfoljs" path="res://addons/cogito/Assets/Fonts/Montserrat/Montserrat-Bold.ttf" id="2_kcowo"]
@@ -183,10 +183,6 @@ border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
-corner_radius_top_left = 3
-corner_radius_top_right = 3
-corner_radius_bottom_right = 3
-corner_radius_bottom_left = 3
 corner_detail = 5
 expand_margin_left = 2.0
 expand_margin_top = 2.0
@@ -223,10 +219,6 @@ content_margin_top = 4.0
 content_margin_right = 21.0
 content_margin_bottom = 4.0
 bg_color = Color(0.1, 0.1, 0.1, 0.6)
-corner_radius_top_left = 3
-corner_radius_top_right = 3
-corner_radius_bottom_right = 3
-corner_radius_bottom_left = 3
 corner_detail = 5
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_f72m2"]
@@ -235,10 +227,6 @@ content_margin_top = 4.0
 content_margin_right = 8.0
 content_margin_bottom = 4.0
 bg_color = Color(0.1, 0.1, 0.1, 0.6)
-corner_radius_top_left = 3
-corner_radius_top_right = 3
-corner_radius_bottom_right = 3
-corner_radius_bottom_left = 3
 corner_detail = 5
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_dp4k4"]
@@ -247,10 +235,6 @@ content_margin_top = 4.0
 content_margin_right = 21.0
 content_margin_bottom = 4.0
 bg_color = Color(0, 0, 0, 0.6)
-corner_radius_top_left = 3
-corner_radius_top_right = 3
-corner_radius_bottom_right = 3
-corner_radius_bottom_left = 3
 corner_detail = 5
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_wgydj"]
@@ -259,10 +243,6 @@ content_margin_top = 4.0
 content_margin_right = 8.0
 content_margin_bottom = 4.0
 bg_color = Color(0, 0, 0, 0.6)
-corner_radius_top_left = 3
-corner_radius_top_right = 3
-corner_radius_bottom_right = 3
-corner_radius_bottom_left = 3
 corner_detail = 5
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_vuh02"]
@@ -5097,6 +5077,13 @@ content_margin_top = 0.0
 content_margin_right = 0.0
 content_margin_bottom = 0.0
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_evovn"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_olkso"]
+bg_color = Color(0.8, 0.8, 0.8, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_nxwq6"]
+
 [resource]
 Button/colors/font_color = Color(0.875, 0.875, 0.875, 1)
 Button/colors/font_disabled_color = Color(0.875, 0.875, 0.875, 0.5)
@@ -5161,6 +5148,7 @@ OptionButton/colors/font_outline_color = Color(1, 1, 1, 1)
 OptionButton/colors/font_pressed_color = Color(1, 1, 1, 1)
 OptionButton/constants/arrow_margin = 4
 OptionButton/constants/h_separation = 4
+OptionButton/constants/icon_max_width = 40
 OptionButton/constants/modulate_arrow = 0
 OptionButton/constants/outline_size = 0
 OptionButton/font_sizes/font_size = 16
@@ -5185,7 +5173,7 @@ PopupMenu/colors/font_outline_color = Color(1, 1, 1, 1)
 PopupMenu/colors/font_separator_color = Color(0.875, 0.875, 0.875, 1)
 PopupMenu/colors/font_separator_outline_color = Color(1, 1, 1, 1)
 PopupMenu/constants/h_separation = 4
-PopupMenu/constants/icon_max_width = 0
+PopupMenu/constants/icon_max_width = 40
 PopupMenu/constants/indent = 10
 PopupMenu/constants/item_end_padding = 2
 PopupMenu/constants/item_start_padding = 2
@@ -5295,3 +5283,6 @@ TabContainer/styles/tab_selected = SubResource("StyleBoxFlat_6ekx4")
 TabContainer/styles/tab_unselected = SubResource("StyleBoxFlat_0bedl")
 TabContainer/styles/tabbar_background = SubResource("StyleBoxEmpty_wrmum")
 VBoxContainer/constants/separation = 1
+VScrollBar/styles/grabber = SubResource("StyleBoxFlat_evovn")
+VScrollBar/styles/grabber_highlight = SubResource("StyleBoxFlat_olkso")
+VScrollBar/styles/grabber_pressed = SubResource("StyleBoxFlat_nxwq6")
