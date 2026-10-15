@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="CogitoMusicState" format=3]
+
+[ext_resource type="Script" uid="uid://lg0bujp81s8d" path="res://addons/cogito/Scripts/cogito_music_state.gd" id="1_state"]
+[ext_resource type="Script" uid="uid://g0c846pk6f2c" path="res://addons/cogito/Scripts/cogito_music_layer.gd" id="2_layer"]
+[ext_resource type="AudioStream" uid="uid://lr1efmq0q16k" path="res://addons/cogito/Assets/Audio/Phazorknight/CogitoAmbience_v02.ogg" id="3_stream"]
+
+[sub_resource type="Resource" id="Resource_layer"]
+script = ExtResource("2_layer")
+stream = ExtResource("3_stream")
+volume_db = -8.0
+sync_playback = false
+
+[resource]
+script = ExtResource("1_state")
+layers = Array[ExtResource("2_layer")]([SubResource("Resource_layer")])
+priority = 0
+fade_in_time = 4.0
+fade_out_time = 3.0

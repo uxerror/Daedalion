@@ -4,6 +4,8 @@ signal start_game_pressed
 
 @export var first_focus_button: Button
 @export var credits_packed_scene : PackedScene
+## Music played in the main menu. Leave empty for no music.
+@export var music_state : CogitoMusicState
 @onready var v_box_container_title: VBoxContainer = %VBoxContainerTitle
 @onready var game_menu: MarginContainer = $ContentMain/GameMenu
 @onready var options_tab_menu: OptionsTabMenu = $ContentMain/OptionsTabMenu
@@ -21,6 +23,8 @@ var playback : AudioStreamPlaybackPolyphonic
 
 
 func _enter_tree() -> void:
+	CogitoAudio.set_scene_music_state(music_state)
+	
 	# Create an audio player
 	var player = AudioStreamPlayer.new()
 	player.bus = OptionsConstants.sfx_bus_name
