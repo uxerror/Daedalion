@@ -6117,6 +6117,7 @@ shape = SubResource("ConcavePolygonShape3D_c03ni")
 
 [node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="UPPER_OFFICE_CEO/deskCorner/Drawer" unique_id=263571667]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.272675, 0.554159, -1.26853)
+bus = &"SFX"
 
 [node name="BasicInteraction" parent="UPPER_OFFICE_CEO/deskCorner/Drawer" unique_id=363224607 instance=ExtResource("14_qtguo")]
 

@@ -47,8 +47,7 @@ func setup_bgm() -> void:
 		CogitoGlobals.debug_log(true, "cogito_scene.gd", "Scene Music Demo script is lacking a \"bgm_combat\". Set it in the inspector on the node: {0}".format([get_path()]))
 		valid = false
 	if valid:
-		music_player = Audio.play_sound(bgm_neutral,false)
-		music_player.set_bus("Music")
+		music_player = Audio.play_sound(bgm_neutral, false, OptionsConstants.music_bus_name)
 		music_player.volume_db = -80.0 #Start at mute
 		music_fade_in(music_player, 4, music_max_volume_db)
 		music_player.play()

@@ -39,7 +39,7 @@ theme = ExtResource("1_6plem")
 theme_override_fonts/font = ExtResource("5_23wn5")
 current_tab = 1
 script = ExtResource("4_h483w")
-nodes_to_focus = [NodePath("TAB_GAMEPLAY/ScrollContainer/VBoxContainer/HBoxContainer_Headbob/HeadbobOptionButton"), NodePath("TAB_GRAPHICS/ScrollContainer/VBoxContainer/VBoxContainer_Resolution/HBoxContainer_Resolution/WindowedResolutionOptionButton"), NodePath("TAB_AUDIO/ScrollContainer/VBoxContainer/HBoxContainer_SFXVolumeSlider/HSlider"), null]
+nodes_to_focus = [NodePath("TAB_GAMEPLAY/ScrollContainer/VBoxContainer/HBoxContainer_Headbob/HeadbobOptionButton"), NodePath("TAB_GRAPHICS/ScrollContainer/VBoxContainer/VBoxContainer_Resolution/HBoxContainer_Resolution/WindowedResolutionOptionButton"), NodePath("TAB_AUDIO/ScrollContainer/VBoxContainer/HBoxContainer_MasterVolumeSlider/HSlider"), null]
 tab_index_of_bindings = 3
 bindings_container_node = NodePath("TAB_BINDINGS/ScrollContainer/MarginContainer/BindingsContainer")
 
@@ -429,6 +429,35 @@ layout_mode = 2
 theme_override_constants/margin_left = 100
 theme_override_constants/margin_right = 100
 
+[node name="HBoxContainer_MasterVolumeSlider" type="HBoxContainer" parent="VBoxContainer/TabContainer/TAB_AUDIO/ScrollContainer/VBoxContainer" unique_id=355808012]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 40)
+layout_mode = 2
+script = ExtResource("9_3avtv")
+show_percentage = true
+title = "Master Volume"
+
+[node name="Title" type="Label" parent="VBoxContainer/TabContainer/TAB_AUDIO/ScrollContainer/VBoxContainer/HBoxContainer_MasterVolumeSlider" unique_id=786087736]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+text = "Master Volume"
+
+[node name="HSlider" type="HSlider" parent="VBoxContainer/TabContainer/TAB_AUDIO/ScrollContainer/VBoxContainer/HBoxContainer_MasterVolumeSlider" unique_id=1179144365]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+mouse_force_pass_scroll_events = false
+max_value = 1.0
+step = 0.1
+
+[node name="CurrentValue" type="Label" parent="VBoxContainer/TabContainer/TAB_AUDIO/ScrollContainer/VBoxContainer/HBoxContainer_MasterVolumeSlider" unique_id=2142992638]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "0 %"
+horizontal_alignment = 1
+
 [node name="HBoxContainer_SFXVolumeSlider" type="HBoxContainer" parent="VBoxContainer/TabContainer/TAB_AUDIO/ScrollContainer/VBoxContainer" unique_id=945230783]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(400, 40)
@@ -546,6 +575,7 @@ text = "BTN_APPLY_CHANGES"
 script = ExtResource("6_rlben")
 
 [connection signal="value_changed" from="VBoxContainer/TabContainer/TAB_GRAPHICS/ScrollContainer/VBoxContainer/VBoxContainer_Resolution/HBoxContainer_Resolution/FullscreenResolutionSlider" to="." method="_on_fullscreen_resolution_slider_value_changed"]
+[connection signal="value_changed" from="VBoxContainer/TabContainer/TAB_AUDIO/ScrollContainer/VBoxContainer/HBoxContainer_MasterVolumeSlider/HSlider" to="VBoxContainer/TabContainer/TAB_AUDIO/ScrollContainer/VBoxContainer/HBoxContainer_MasterVolumeSlider" method="_on_h_slider_value_changed"]
 [connection signal="value_changed" from="VBoxContainer/TabContainer/TAB_AUDIO/ScrollContainer/VBoxContainer/HBoxContainer_SFXVolumeSlider/HSlider" to="VBoxContainer/TabContainer/TAB_AUDIO/ScrollContainer/VBoxContainer/HBoxContainer_SFXVolumeSlider" method="_on_h_slider_value_changed"]
 [connection signal="value_changed" from="VBoxContainer/TabContainer/TAB_AUDIO/ScrollContainer/VBoxContainer/HBoxContainer_MusicVolumeSlider/HSlider" to="VBoxContainer/TabContainer/TAB_AUDIO/ScrollContainer/VBoxContainer/HBoxContainer_MusicVolumeSlider" method="_on_h_slider_value_changed"]
 [connection signal="pressed" from="VBoxContainer/MarginContainer/HBoxContainer/ApplyChanges" to="." method="_on_apply_changes_pressed"]

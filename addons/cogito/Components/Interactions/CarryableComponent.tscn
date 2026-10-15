@@ -9,3 +9,4 @@ interaction_text = "INTERACT_carry"
 ignore_open_gui = false
 
 [node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="." unique_id=1596737438]
+bus = &"SFX"

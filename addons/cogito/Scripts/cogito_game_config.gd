@@ -23,8 +23,10 @@ var HEADBOB_DICTIONARY: Dictionary = {
 }
 
 # AUDIO
+var master_bus_index
 var sfx_bus_index
 var music_bus_index
+var master_volume
 var sfx_volume
 var music_volume
 
@@ -78,6 +80,7 @@ func _ready() -> void:
 	resolutions_min_y = get_resolutions_min_y()
 	
 	# AUDIO
+	master_bus_index = AudioServer.get_bus_index(OptionsConstants.master_bus_name)
 	sfx_bus_index = AudioServer.get_bus_index(OptionsConstants.sfx_bus_name)
 	music_bus_index = AudioServer.get_bus_index(OptionsConstants.music_bus_name)
 	
@@ -180,6 +183,8 @@ func _on_resolution_selected(index: int) -> void:
 func set_volume(bus_index, value):
 	AudioServer.set_bus_volume_db(bus_index, linear_to_db(value))
 	match bus_index:
+		master_bus_index:
+			master_volume = value
 		music_bus_index:
 			music_volume = value
 		sfx_bus_index:
@@ -207,6 +212,7 @@ func save_options():
 	if config.has_section_key(OptionsConstants.section_name, "render_scale"):
 		config.erase_section_key(OptionsConstants.section_name, "render_scale")
 
+	config.set_value(OptionsConstants.section_name, OptionsConstants.master_volume_key_name, master_volume)
 	config.set_value(OptionsConstants.section_name, OptionsConstants.sfx_volume_key_name, sfx_volume)
 	config.set_value(OptionsConstants.section_name, OptionsConstants.music_volume_key_name, music_volume)
 	
@@ -251,8 +257,14 @@ func load_options(skip_applying: bool = false):
 	msaa_2d = config.get_value(OptionsConstants.section_name, OptionsConstants.msaa_2d_key, 0)
 	msaa_3d = config.get_value(OptionsConstants.section_name, OptionsConstants.msaa_3d_key, 0)
 
+	master_volume = config.get_value(OptionsConstants.section_name, OptionsConstants.master_volume_key_name, 1)
 	sfx_volume = config.get_value(OptionsConstants.section_name, OptionsConstants.sfx_volume_key_name, 1)
 	music_volume = config.get_value(OptionsConstants.section_name, OptionsConstants.music_volume_key_name, 1)
+	# Applying volumes here instead of relying on the options menu sliders: a slider only emits
+	# value_changed if the loaded value differs from its current one, and it might not exist at all.
+	AudioServer.set_bus_volume_db(master_bus_index, linear_to_db(master_volume))
+	AudioServer.set_bus_volume_db(sfx_bus_index, linear_to_db(sfx_volume))
+	AudioServer.set_bus_volume_db(music_bus_index, linear_to_db(music_volume))
 	
 	# Sending signal so any post options-loaded actions can be taken.
 	options_loaded.emit(skip_applying)

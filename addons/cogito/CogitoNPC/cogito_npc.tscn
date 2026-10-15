@@ -18434,6 +18434,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.36119, 0)
 
 [node name="Barker" type="AudioStreamPlayer3D" parent="." unique_id=782403998]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5801824, -0.18113711)
+bus = &"SFX"
 
 [node name="HearingDetection" type="Node3D" parent="." unique_id=345308978 node_paths=PackedStringArray("collision_shape", "npc", "noise_suspicion_indicator")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7172368, 0)

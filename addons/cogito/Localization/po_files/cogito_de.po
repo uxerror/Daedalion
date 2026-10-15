@@ -128,6 +128,10 @@ msgid "TAB_AUDIO"
 msgstr "Audio"
 
 #: addons/cogito/EasyMenus/Scenes/OptionsTabMenu.tscn
+msgid "Master Volume"
+msgstr "Gesamtlautstärke"
+
+#: addons/cogito/EasyMenus/Scenes/OptionsTabMenu.tscn
 msgid "SFX Volume"
 msgstr "SFX Lautstärke"
 

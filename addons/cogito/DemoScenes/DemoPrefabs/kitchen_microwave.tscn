@@ -235,6 +235,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.196551, 0.138989, 0.0008248
 shape = SubResource("BoxShape3D_xy8kc")
 
 [node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="kitchenMicrowave(Clone)/AnimatableBody3D" unique_id=1952999863]
+bus = &"SFX"
 
 [node name="BasicInteraction" parent="kitchenMicrowave(Clone)/AnimatableBody3D" unique_id=1450392490 instance=ExtResource("4_lbhvj")]
 

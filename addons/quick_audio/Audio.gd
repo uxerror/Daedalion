@@ -5,26 +5,29 @@ extends Node
 
 @onready var tree := get_tree() # Gets the slightest of performance improvements by caching the SceneTree
 
-func _play_sound(sound: AudioStream, player, autoplay := true):
+# Sounds go to the "SFX" bus by default so the volume options apply to them.
+# A bus name that doesn't exist in the bus layout falls back to "Master".
+func _play_sound(sound: AudioStream, player, autoplay := true, bus := &"SFX"):
 	player.stream = sound
 	player.autoplay = autoplay
+	player.bus = bus
 	player.finished.connect(func(): player.queue_free())
 	tree.current_scene.add_child(player)
 	return player
 
 # Use this for non-diagetic music or UI sounds which have no position
-func play_sound(sound: AudioStream, autoplay := true) -> AudioStreamPlayer:
-	return _play_sound(sound, AudioStreamPlayer.new(), autoplay)
+func play_sound(sound: AudioStream, autoplay := true, bus := &"SFX") -> AudioStreamPlayer:
+	return _play_sound(sound, AudioStreamPlayer.new(), autoplay, bus)
 
 # Use this for 2D gameplay sounds which should fade with distance
 # Note: Remember to set the global_position or reparent(new_parent, false)!
-func play_sound_2d(sound: AudioStream, autoplay := true) -> AudioStreamPlayer2D:
-	return _play_sound(sound, AudioStreamPlayer2D.new(), autoplay)
+func play_sound_2d(sound: AudioStream, autoplay := true, bus := &"SFX") -> AudioStreamPlayer2D:
+	return _play_sound(sound, AudioStreamPlayer2D.new(), autoplay, bus)
 
 # Use this for 3D gameplay sounds which should fade with distance
 # Note: Remember to set the global_position or reparent(new_parent, false)!
-func play_sound_3d(sound: AudioStream, autoplay := true) -> AudioStreamPlayer3D:
-	return _play_sound(sound, AudioStreamPlayer3D.new(), autoplay)
+func play_sound_3d(sound: AudioStream, autoplay := true, bus := &"SFX") -> AudioStreamPlayer3D:
+	return _play_sound(sound, AudioStreamPlayer3D.new(), autoplay, bus)
 	
 	
 #########################################

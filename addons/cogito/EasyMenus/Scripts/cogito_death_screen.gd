@@ -21,6 +21,7 @@ var temp_screenshot : Image
 func _enter_tree() -> void:
 	# Create an audio player
 	var player = AudioStreamPlayer.new()
+	player.bus = OptionsConstants.sfx_bus_name
 	add_child(player)
 
 	# Create a polyphonic stream so we can play sounds directly from it

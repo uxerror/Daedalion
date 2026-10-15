@@ -89,6 +89,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0041995, -0.0154781, -0.001
 shape = SubResource("BoxShape3D_nti18")
 
 [node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="." unique_id=2048123066]
+bus = &"SFX"
 
 [node name="BasicInteraction" parent="." unique_id=1158470451 instance=ExtResource("3_v8dn1")]
 
