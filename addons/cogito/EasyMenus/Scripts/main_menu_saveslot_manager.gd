@@ -10,10 +10,6 @@ func _ready() -> void:
 
 
 func load_all_save_slots(auto_scroll=true):
-	var last_active_slot = ""
-	if CogitoSceneManager._player_state:
-		last_active_slot = CogitoSceneManager._player_state.player_state_slot_name
-	
 	if %VBoxContainer.get_children().size() == 0:
 		var max_slot_number = CogitoSceneManager.max_saved_slot_nubmer()
 		var slots_count = max(minimum_slots_count, max_slot_number)
@@ -46,12 +42,6 @@ func load_all_save_slots(auto_scroll=true):
 			for i in range(empty_slots_count):
 				var empty_slot = save_slots.pop_back()
 				%VBoxContainer.remove_child(empty_slot)
-	
-	if last_active_slot:
-		if last_active_slot != "temp":
-			CogitoSceneManager.switch_active_slot_to(last_active_slot)
-		else:
-			CogitoSceneManager.switch_active_slot_to(CogitoSceneManager.get_last_saved_slot())
 	
 	if auto_scroll:
 		await get_tree().process_frame
@@ -86,12 +76,7 @@ func focus_slot_on_save():
 
 
 func load_slot_data(save_slot: String) -> CogitoPlayerState:
-	# Set CSM active slot to slot to load
-	CogitoSceneManager.switch_active_slot_to(save_slot)
-	if CogitoSceneManager._player_state == null:
-		return null
-	else:
-		return CogitoSceneManager._player_state
+	return CogitoSceneManager.get_existing_player_state(save_slot)
 	
 
 func start_new_game():
