@@ -80,6 +80,7 @@
 [ext_resource type="PackedScene" uid="uid://byb1y44thne6i" path="res://addons/cogito/PackedScenes/gravity_zone.tscn" id="68_kt1ow"]
 [ext_resource type="Shader" uid="uid://bqurxcbvm4a7a" path="res://addons/cogito/Assets/Shader/water_and_under.gdshader" id="68_r8380"]
 [ext_resource type="PackedScene" uid="uid://b2cccsfb5tikx" path="res://addons/cogito/CogitoNPC/cogito_npc.tscn" id="68_wxy0x"]
+[ext_resource type="Resource" path="res://addons/cogito/DemoScenes/DemoMusic/combat_music.tres" id="99_combat"]
 
 [sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_wjbty"]
 panorama = ExtResource("2_akrjl")
@@ -3942,6 +3943,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0454833, 0)
 transform = Transform3D(1, 0, 0, 0, 0.99999994, 0, 0, 0, 0.99999994, -3.634597, -2.6999998, 14.386071)
 patrol_path = NodePath("../EnemyPatrolpath")
 response_to_player = "Hostile"
+combat_music_state = ExtResource("99_combat")
 
 [node name="EnemyPatrolpath" type="Node3D" parent="." unique_id=1372882621 node_paths=PackedStringArray("starting_patrol_point", "simulate_with")]
 script = ExtResource("62_u5q7m")
@@ -3981,6 +3983,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.99269, 0.532, 6.01611)
 transform = Transform3D(-0.0073078657, 0, 0.9999733, 0, 1, 0, -0.9999733, 0, -0.0073078657, -17.9769, 3.07015, 19.6502)
 patrol_path = NodePath("../EnemyPatrolpath2")
 response_to_player = "Hostile"
+combat_music_state = ExtResource("99_combat")
 weapon = NodePath("NpcBlaster")
 
 [node name="NpcBlaster" parent="CogitoNPC" unique_id=879862749 instance=ExtResource("68_gg4s8")]

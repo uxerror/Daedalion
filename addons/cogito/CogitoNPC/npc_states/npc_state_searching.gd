@@ -66,6 +66,7 @@ func _enter_tree() -> void:
 	
 
 func _on_searching_state_entered() -> void:
+	super.enter_state()
 	if show_search_points and not search_point_one_label.is_inside_tree():
 			get_tree().current_scene.add_child(search_point_one_label)
 			get_tree().current_scene.add_child(search_point_two_label)
