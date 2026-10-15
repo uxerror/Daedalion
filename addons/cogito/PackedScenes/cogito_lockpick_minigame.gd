@@ -151,7 +151,7 @@ func jiggle_lock(delta: float, distance_to_unlock: float) -> void:
 		return
 	
 	is_jiggling = true
-	Audio.play_sound(jiggle_sound)
+	CogitoAudio.play_sound(jiggle_sound)
 
 	var  lockpick_damage_range : float = lockpick_damage_per_second_max - lockpick_damage_per_second_min
 	var lockpick_damage : float = remap(distance_to_unlock, 0, 10, lockpick_damage_per_second_min, lockpick_damage_per_second_max)
@@ -188,7 +188,7 @@ func set_attribute_dependencies() -> void:
 
 
 func unlock_lock() -> void:
-	Audio.play_sound(unlock_sound)
+	CogitoAudio.play_sound(unlock_sound)
 	
 	is_unlocked = true
 	
@@ -203,7 +203,7 @@ func unlock_lock() -> void:
 func on_lockpick_break() -> void:
 	is_changing_lockpicks = true
 	
-	Audio.play_sound(lockpick_break_sound)
+	CogitoAudio.play_sound(lockpick_break_sound)
 	
 	if lockpick_break_animation:
 		animation_player.play(lockpick_break_animation)

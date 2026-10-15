@@ -337,15 +337,18 @@ func create_new_state() -> CogitoPlayerState:
 
 func slide_audio_init():
 	#setup sound effect for sliding
-	slide_audio_player = Audio.play_sound_3d(slide_sound, false)
-	slide_audio_player.reparent(self, false)
+	slide_audio_player = AudioStreamPlayer3D.new()
+	slide_audio_player.stream = slide_sound
+	slide_audio_player.bus = OptionsConstants.sfx_bus_name
+	add_child(slide_audio_player)
 
 
 func swim_audio_init():
 	#setup sound effect for swimming
-	swim_under_water_audio_player = Audio.play_sound_3d(swim_under_water_sound, false)
-	swim_under_water_audio_player.bus = "SFX"
-	swim_under_water_audio_player.reparent(self, false)
+	swim_under_water_audio_player = AudioStreamPlayer3D.new()
+	swim_under_water_audio_player.stream = swim_under_water_sound
+	swim_under_water_audio_player.bus = OptionsConstants.sfx_bus_name
+	add_child(swim_under_water_audio_player)
 
 
 # Use these functions to manipulate player attributes.
@@ -987,9 +990,7 @@ func _jump(_jump_target_speed) -> void:
 		decrease_attribute("stamina",stamina_attribute.jump_exhaustion)
 	
 	animationPlayer.play("jump")
-	var audio_player = Audio.play_sound(jump_sound, false)
-	audio_player.bus = "SFX"
-	audio_player.play()
+	CogitoAudio.play_sound(jump_sound)
 	
 	if current_moving_state != MovingState.LadderClimbing:
 		main_velocity.y = jump_vel
@@ -1017,7 +1018,7 @@ func _sliding_jump(_jump_target_speed) -> void:
 		decrease_attribute("stamina",stamina_attribute.jump_exhaustion)
 	
 	animationPlayer.play("jump")
-	Audio.play_sound(jump_sound)
+	CogitoAudio.play_sound(jump_sound)
 
 	main_velocity.y = JUMP_VELOCITY * SLIDE_JUMP_MOD
 	
@@ -2023,10 +2024,7 @@ func _handle_water_physics(delta) -> void:
 	
 	if is_moving and main_velocity.length() >= 0.2:
 		if can_play_swim_movement && wiggle_vector.y > 0.9:
-			var audio_player = Audio.play_sound_3d(swim_movement_sound, false)
-			audio_player.reparent(self, false)
-			audio_player.bus = "SFX"
-			audio_player.play()
+			CogitoAudio.play_sound_3d_attached(swim_movement_sound, self)
 			can_play_swim_movement = false
 		
 		if !can_play_swim_movement && wiggle_vector.y < 0.9:

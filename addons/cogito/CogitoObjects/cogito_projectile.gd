@@ -122,7 +122,7 @@ func deal_damage(collider: Node,bullet_direction,bullet_position):
 
 func die():
 	if sound_on_death:
-		Audio.play_sound_3d(sound_on_death).global_position = global_position
+		CogitoAudio.play_sound_3d(sound_on_death, global_position)
 		
 	for scene in spawn_on_death:
 		if scene:

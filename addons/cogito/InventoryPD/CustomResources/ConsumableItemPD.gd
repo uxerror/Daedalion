@@ -21,7 +21,7 @@ func use(target) -> bool:
 	
 	if target.increase_attribute(attribute_name, attribute_change_amount,value_to_change):
 		print("Inventory item: Target ", target, " is using ", self)
-		Audio.play_sound(sound_use)
+		CogitoAudio.play_sound(sound_use)
 		if hint_text_on_use != "":
 			target.player_interaction_component.send_hint(hint_icon_on_use,hint_text_on_use)
 			

@@ -210,8 +210,7 @@ func set_on_fire():
 		is_on_fire = true
 		if spawn_on_ignite:
 			spawn_elemental_vfx(spawn_on_ignite) 
-			var audio_player: AudioStreamPlayer3D = Audio.play_sound_3d(audio_igniting)
-			audio_player.reparent(self)
+			CogitoAudio.play_sound_3d_attached(audio_igniting, self)
 		has_ignited.emit()
 		
 		if burn_damage_amount > 0:
@@ -244,7 +243,7 @@ func extinguish():
 	if !damage_timer.is_stopped():
 		damage_timer.stop()
 	audio_stream_player_3d.stop()
-	Audio.play_sound_3d(audio_extinguishing).position = self.position
+	CogitoAudio.play_sound_3d(audio_extinguishing, global_position)
 	clear_spawned_effects()
 	has_been_extinguished.emit()
 

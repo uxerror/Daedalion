@@ -299,7 +299,7 @@ func on_inventory_button_press(inventory_data: CogitoInventory, index: int, acti
 			# Check if item is being wielded before grabbing it.
 			var temp_slot_data = inventory_data.get_slot_data(index)
 			if temp_slot_data and temp_slot_data.inventory_item and temp_slot_data.inventory_item.is_being_wielded:
-					Audio.play_sound(sound_error)
+					CogitoAudio.play_sound(sound_error)
 					CogitoGlobals.debug_log(true, "inventory_interface.gd", "Can't move item while its being wielded.")
 			else:
 				grabbed_slot_data = inventory_data.grab_slot_data(index)
@@ -315,19 +315,19 @@ func on_inventory_button_press(inventory_data: CogitoInventory, index: int, acti
 			if grabbed_slot_data:
 				if !grabbed_slot_data.inventory_item.is_droppable:
 					CogitoGlobals.debug_log(true, "inventory_interface.gd", "Item is not droppable.")
-					Audio.play_sound(sound_error)
+					CogitoAudio.play_sound(sound_error)
 					grabbed_slot_data = null
 					return
 				if grabbed_slot_data.inventory_item.has_method("update_wieldable_data") and grabbed_slot_data.inventory_item.is_being_wielded:
 				#if grabbed_slot_data.inventory_item.ItemType.WIELDABLE and grabbed_slot_data.inventory_item.is_being_wielded:
-					Audio.play_sound(sound_error)
+					CogitoAudio.play_sound(sound_error)
 					CogitoGlobals.debug_log(true, "inventory_interface.gd", "Can't drop while wielding this item.")
 					grabbed_slot_data = null
 				else:
 					CogitoGlobals.debug_log(true, "inventory_interface.gd", "Dropping slot data via gamepad ")
 					grabbed_slot_data = inventory_data.grab_single_slot_data(index)
 					if not _drop_item(grabbed_slot_data):
-						Audio.play_sound(sound_error)
+						CogitoAudio.play_sound(sound_error)
 						get_parent().player.player_interaction_component.send_hint(null, "Not enough space to drop item.")
 						CogitoGlobals.debug_log(true, "inventory_interface.gd", "Can't drop because there isn't enough space.")
 					else:
@@ -345,7 +345,7 @@ func on_inventory_button_press(inventory_data: CogitoInventory, index: int, acti
 			update_grabbed_slot()
 		
 		[_, "inventory_drop_item"]:
-			Audio.play_sound(sound_error)
+			CogitoAudio.play_sound(sound_error)
 			CogitoGlobals.debug_log(true, "inventory_interface.gd", "Can't drop while moving an item.")
 
 	# When connecting to the signal, we have bind the inventory_ui so we can use that to set focus.
@@ -431,7 +431,7 @@ func mouse_button_check(event):
 
 
 func error_log(error: String):
-	Audio.play_sound(sound_error)
+	CogitoAudio.play_sound(sound_error)
 	CogitoGlobals.debug_log(true, "inventory_interface.gd", error)
 
 
@@ -513,7 +513,7 @@ func _drop_item(slot_data: InventorySlotPD) -> bool:
 	dropped_item.global_rotation = player.body.global_rotation
 	dropped_item.position = shape_cast.global_position + (safe_drop_distance - item_length / 2) * -camera_basis_z
 		
-	Audio.play_sound(slot_data.inventory_item.sound_drop)
+	CogitoAudio.play_sound(slot_data.inventory_item.sound_drop)
 	
 	if item_length < player_radius:
 		dropped_item.position = shape_cast.global_position + (safe_drop_distance - item_length / 2) * -camera_basis_z

@@ -23,7 +23,7 @@ func pick_up(_player_interaction_component: PlayerInteractionComponent):
 	if slot_data.inventory_item is CurrencyItemPD and slot_data.inventory_item.add_on_pickup:
 		if slot_data.inventory_item.use(_player_interaction_component.get_parent()):
 			#_player_interaction_component.send_hint(slot_data.inventory_item.hint_icon_on_use, slot_data.inventory_item.hint_text_on_use)
-			Audio.play_sound(slot_data.inventory_item.sound_pickup)
+			CogitoAudio.play_sound(slot_data.inventory_item.sound_pickup)
 			was_interacted_with.emit(interaction_text, input_map_action)
 			self.get_parent().queue_free()
 			return
@@ -46,5 +46,5 @@ func pick_up(_player_interaction_component: PlayerInteractionComponent):
 
 	_player_interaction_component.send_hint(slot_data.inventory_item.square_icon, tr(slot_data.inventory_item.name) + " " + tr("INVENTORY_add_item") )
 	was_interacted_with.emit(interaction_text, input_map_action)
-	Audio.play_sound(slot_data.inventory_item.sound_pickup)
+	CogitoAudio.play_sound(slot_data.inventory_item.sound_pickup)
 	self.get_parent().queue_free()

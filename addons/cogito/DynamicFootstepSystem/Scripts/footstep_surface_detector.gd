@@ -192,13 +192,6 @@ func _play_footstep(profile : AudioStreamRandomizer, interaction_type: String):
 		play()
 
 	elif interaction_type == "landing":
-		#Setup QuickAudio landing player so that it can use its own pitch/volume parameters
+		# Separate one-shot player so landing can use its own pitch/volume parameters
 		var player_node = get_parent()
-		var landing_volume = player_node.landing_volume
-		var landing_pitch = player_node.landing_pitch
-		var landing_player = Audio.play_sound_3d(profile, false)
-		landing_player.bus = "SFX"
-		landing_player.pitch_scale = landing_pitch
-		landing_player.volume_db = landing_volume
-		landing_player.global_position = global_position
-		landing_player.play()
+		CogitoAudio.play_sound_3d(profile, global_position, player_node.landing_volume, player_node.landing_pitch)

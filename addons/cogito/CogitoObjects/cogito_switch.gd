@@ -114,7 +114,7 @@ func interact(_player_interaction_component):
 			
 		else:
 			if check_for_item():
-				Audio.play_sound_3d(switch_sound).global_position = global_position
+				CogitoAudio.play_sound_3d(switch_sound, global_position)
 				is_holding_item = true
 				if is_on: switch_off()
 				else: switch_on()

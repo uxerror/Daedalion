@@ -13,7 +13,7 @@ func interact(_player_interaction_component:PlayerInteractionComponent):
 	update_player_inventory(_player_interaction_component.player)
 	
 	if sound_on_use:
-		Audio.play_sound(sound_on_use)
+		CogitoAudio.play_sound(sound_on_use)
 		
 	get_parent().queue_free()
 
