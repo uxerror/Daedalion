@@ -43,7 +43,7 @@ var msaa_2d: int
 var msaa_3d: int
 
 const window_operations_delay = 0.25
-const max_gui_scale_ratio = 1.00
+const max_gui_scale_ratio = 0.75
 
 var RESOLUTION_DICTIONARY: Dictionary = {
 	"800x600 (4:3)": Vector2i(800, 600),
@@ -243,7 +243,10 @@ func load_options(skip_applying: bool = false):
 	headbob_strength = config.get_value(OptionsConstants.section_name, OptionsConstants.head_bobble_key, 2)
 	fullscreen_mode = config.get_value(OptionsConstants.section_name, OptionsConstants.fullscreen_mode_key_name, is_fullscreen())
 	# current_resolution_index := windowed_resolution_option_button.selected
-	current_resolution_index = config.get_value(OptionsConstants.section_name, OptionsConstants.resolution_index_key_name, 0)
+	var window_resolution_index := get_resolution_index_for_window_size(get_window().size)
+	if window_resolution_index == -1:
+		window_resolution_index = 0
+	current_resolution_index = config.get_value(OptionsConstants.section_name, OptionsConstants.resolution_index_key_name, window_resolution_index)
 	fullscreen_resolution_scale_val = config.get_value(OptionsConstants.section_name, OptionsConstants.fullscreen_resolution_scale_key, 1.0)
 	gui_scale = config.get_value(OptionsConstants.section_name, OptionsConstants.gui_scale_key, 1)
 	vsync = config.get_value(OptionsConstants.section_name, OptionsConstants.vsync_key, true)
@@ -253,6 +256,10 @@ func load_options(skip_applying: bool = false):
 
 	sfx_volume = config.get_value(OptionsConstants.section_name, OptionsConstants.sfx_volume_key_name, 1)
 	music_volume = config.get_value(OptionsConstants.section_name, OptionsConstants.music_volume_key_name, 1)
+	
+	if have_cfg:
+		windowed_resolution = RESOLUTION_DICTIONARY.values()[current_resolution_index]
+		prev_windowed_resolution = windowed_resolution
 	
 	# Sending signal so any post options-loaded actions can be taken.
 	options_loaded.emit(skip_applying)
@@ -284,6 +291,11 @@ func set_vsync(is_enabled:bool):
 
 
 func set_msaa(mode, index):
+	if mode == "msaa_2d":
+		msaa_2d = index
+	elif mode == "msaa_3d":
+		msaa_3d = index
+	
 	match index:
 		0:
 			get_viewport().set(mode, Viewport.MSAA_DISABLED)
