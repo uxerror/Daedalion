@@ -29,7 +29,7 @@ func _process(_delta: float) -> void:
 		progress_wheel.current_value = 1 - (hold_timer.time_left / hold_interaction.hold_time)
 		
 		var interaction_distance = (hold_interaction.parent_node.global_position - player_interaction_component.global_position).length()
-		if interaction_distance >= player_interaction_component.interaction_raycast.target_position.length() :
+		if interaction_distance >= player_interaction_component.targeting.get_reach() :
 			stop_holding()
 	elif hold_interaction:
 		stop_holding()

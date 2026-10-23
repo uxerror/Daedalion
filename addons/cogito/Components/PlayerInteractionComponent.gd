@@ -74,7 +74,7 @@ func _process(_delta):
 func on_input(event: InputEvent) -> void:
 	if event.is_action_pressed("interact") or event.is_action_pressed("interact2"):
 		var action: String = "interact" if event.is_action_pressed("interact") else "interact2"
-		_handle_interaction(action)
+		start_interaction(action)
 
 	if event.is_action_pressed("action_primary"):
 		wieldables.primary_action_held = true
@@ -111,7 +111,9 @@ func on_input(event: InputEvent) -> void:
 			if targeting.interactable == null:
 				wieldables.attempt_reload()
 
-func _handle_interaction(action: String) -> void:
+## Interacts with the current target (targeting.interactable) using the given input action, like pressing that action does.
+## Lets other controllers trigger interactions, for example after walking to an object that was clicked.
+func start_interaction(action: String) -> void:
 	# if carrying an object, drop it.
 	if carrying.is_carrying:
 		if is_instance_valid(carrying.carried_object):
@@ -299,6 +301,11 @@ var auto_equip_wieldable_after_carrying: bool:
 var primary_action_held: bool:
 	get: return wieldables.primary_action_held
 	set(value): wieldables.primary_action_held = value
+
+
+## @deprecated: Use [method start_interaction] instead.
+func _handle_interaction(action: String) -> void:
+	await start_interaction(action)
 
 
 ## @deprecated: Use [code]targeting.is_interaction_raycast_colliding()[/code] instead.

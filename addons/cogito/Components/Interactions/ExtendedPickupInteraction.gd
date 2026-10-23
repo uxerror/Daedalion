@@ -89,7 +89,7 @@ func set_disabled(player: CogitoPlayer) -> bool:
 ## Called if the PickupComponent item is a ConsumableItem type
 func consume(consumable: ConsumableItemPD) -> void:
 	consumable.use(player_interaction_component.player)
-	player_interaction_component.interaction_raycast._set_interactable(null)
+	player_interaction_component.targeting.clear_interactable()
 	was_interacted_with.emit(interaction_text, input_map_action)
 	CogitoAudio.play_sound(consumable.sound_pickup)
 	get_parent().queue_free()
@@ -146,7 +146,7 @@ func attempt_reload_current_wieldable(ammo: AmmoItemPD) -> void:
 	CogitoAudio.play_sound(ammo.sound_pickup)
 	
 	if free_ammo:
-		player_interaction_component.interaction_raycast._set_interactable(null)
+		player_interaction_component.targeting.clear_interactable()
 		get_parent().queue_free()
 #endregion
 
@@ -164,7 +164,7 @@ func attempt_wield(wieldable: WieldableItemPD) -> void:
 		wieldable.use(player_interaction_component.player)
 		was_interacted_with.emit(interaction_text, input_map_action)
 		CogitoAudio.play_sound(wieldable.sound_pickup)
-		player_interaction_component.interaction_raycast._set_interactable(null)
+		player_interaction_component.targeting.clear_interactable()
 		get_parent().queue_free()
 	else:
 		player_interaction_component.send_hint(wieldable.square_icon, wieldable.name + " couldn't be picked up.")

@@ -15,6 +15,26 @@ func is_interaction_raycast_colliding() -> bool:
 		return false
 
 
+## Makes the target detection ignore this object, for example while it is carried.
+func add_exception(object: CollisionObject3D) -> void:
+	pic.interaction_raycast.add_exception(object)
+
+
+func remove_exception(object: CollisionObject3D) -> void:
+	pic.interaction_raycast.remove_exception(object)
+
+
+## Drops the current target right away, for example when it is about to be freed.
+func clear_interactable() -> void:
+	# Through the raycast, so it forgets the target too and reports it as unseen.
+	pic.interaction_raycast._set_interactable(null)
+
+
+## How far away interactables can be targeted.
+func get_reach() -> float:
+	return pic.interaction_raycast.target_position.length()
+
+
 ## Helper function to always get raycast destination point
 func get_interaction_raycast_tip(distance_offset: float) -> Vector3:
 	var interaction_raycast := pic.interaction_raycast

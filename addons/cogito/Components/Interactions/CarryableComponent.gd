@@ -141,7 +141,7 @@ func hold():
 			parent_object.set_lock_rotation_enabled(true)
 		parent_object.freeze = false
 	player_interaction_component.carrying.start_carrying(self)
-	player_interaction_component.interaction_raycast.add_exception(parent_object)
+	player_interaction_component.targeting.add_exception(parent_object)
 	
 	# Play Pick up sound.
 	if audio_stream_player_3d and pick_up_sound != null:
@@ -163,7 +163,7 @@ func leave():
 	if player_interaction_component and is_instance_valid(player_interaction_component):
 		player_interaction_component.carrying.stop_carrying()
 		player_interaction_component.wieldables.auto_equip_last_wieldable()
-		player_interaction_component.interaction_raycast.remove_exception(parent_object)
+		player_interaction_component.targeting.remove_exception(parent_object)
 	is_being_carried = false
 	carrier = null
 	carry_state_changed.emit(is_being_carried)
