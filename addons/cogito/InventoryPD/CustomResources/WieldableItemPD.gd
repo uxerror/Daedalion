@@ -45,12 +45,12 @@ func use(target) -> bool:
 		return false
 	
 	player_interaction_component = target.player_interaction_component
-	if player_interaction_component.carried_object != null and !player_interaction_component.carried_object.is_carryable_while_wielding:
+	if player_interaction_component.carrying.carried_object != null and !player_interaction_component.carrying.carried_object.is_carryable_while_wielding:
 		# Automatically drop the carried object when selecting a wieldable via quickslot, or inventory
-		if !player_interaction_component.is_wielding:
-			CogitoGlobals.debug_log(true,"WieldableItemPD.gd", player_interaction_component.name + " is dropping " + (player_interaction_component.carried_object.get_parent() as CogitoObject).cogito_name + " to take out wieldable " + name )
-			player_interaction_component.setup_wieldable_to_auto_equip(self)
-			player_interaction_component._drop_carried_object()
+		if !player_interaction_component.wieldables.is_wielding:
+			CogitoGlobals.debug_log(true,"WieldableItemPD.gd", player_interaction_component.name + " is dropping " + (player_interaction_component.carrying.carried_object.get_parent() as CogitoObject).cogito_name + " to take out wieldable " + name )
+			player_interaction_component.wieldables.setup_wieldable_to_auto_equip(self)
+			player_interaction_component.carrying.drop_carried_object()
 			take_out()
 			return true
 		
@@ -68,21 +68,21 @@ func use(target) -> bool:
 
 # Functions for WIELDABLES
 func take_out():
-	if player_interaction_component.is_changing_wieldables:
+	if player_interaction_component.wieldables.is_changing_wieldables:
 		return
 	
 	is_being_wielded = true
 	update_wieldable_data(player_interaction_component)
-	player_interaction_component.change_wieldable_to(self)
+	player_interaction_component.wieldables.change_wieldable_to(self)
 
 
 func put_away():
-	if player_interaction_component.is_changing_wieldables:
+	if player_interaction_component.wieldables.is_changing_wieldables:
 		return
 	
 	is_being_wielded = false
 	update_wieldable_data(player_interaction_component)
-	player_interaction_component.change_wieldable_to(null)
+	player_interaction_component.wieldables.change_wieldable_to(null)
 
 
 func update_wieldable_data(_player_interaction_component : PlayerInteractionComponent):

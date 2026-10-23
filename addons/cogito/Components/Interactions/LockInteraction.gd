@@ -31,7 +31,7 @@ func _lock_state_updated(lock_interaction_text: String):
 	interaction_text = tr(lock_interaction_text)
 	
 	if player_interaction_component:
-		player_interaction_component._rebuild_interaction_prompts()
+		player_interaction_component.targeting.rebuild_interaction_prompts()
 
 func check_for_item(interactor, item) -> bool:
 	var inventory = interactor.get_inventory()

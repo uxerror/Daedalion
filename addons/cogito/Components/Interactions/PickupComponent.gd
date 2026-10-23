@@ -36,12 +36,12 @@ func pick_up(_player_interaction_component: PlayerInteractionComponent):
 		return
 
 	# Update wieldable UI if we have picked up ammo for current wieldable
-	if _player_interaction_component.is_wielding:
+	if _player_interaction_component.wieldables.is_wielding:
 		var is_ammo: bool = slot_data.inventory_item.has_method("is_ammo_item")
-		var is_current_ammo: bool = _player_interaction_component.equipped_wieldable_item.get_current_ammo().name == slot_data.inventory_item.name
+		var is_current_ammo: bool = _player_interaction_component.wieldables.equipped_wieldable_item.get_current_ammo().name == slot_data.inventory_item.name
 		if is_ammo and is_current_ammo:
-			var equipped_wieldable = _player_interaction_component.equipped_wieldable_item
-			_player_interaction_component.equipped_wieldable_item.update_wieldable_data(_player_interaction_component)
+			var equipped_wieldable = _player_interaction_component.wieldables.equipped_wieldable_item
+			_player_interaction_component.wieldables.equipped_wieldable_item.update_wieldable_data(_player_interaction_component)
 
 
 	_player_interaction_component.send_hint(slot_data.inventory_item.square_icon, tr(slot_data.inventory_item.name) + " " + tr("INVENTORY_add_item") )

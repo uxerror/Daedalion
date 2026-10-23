@@ -64,7 +64,7 @@ func attempt_action_primary(is_released: bool):
 
 
 func _apply_held_primary_action() -> void:
-	if primary_action_held and Input.is_action_pressed("action_primary") and is_wielding and !pic.is_carrying:
+	if primary_action_held and Input.is_action_pressed("action_primary") and is_wielding and !pic.carrying.is_carrying:
 		attempt_action_primary(false)
 
 

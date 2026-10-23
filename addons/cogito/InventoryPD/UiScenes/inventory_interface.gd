@@ -355,7 +355,7 @@ func on_inventory_button_press(inventory_data: CogitoInventory, index: int, acti
 
 
 func update_wieldable_if_equipped():
-	CogitoSceneManager._current_player_node.player_interaction_component.update_equipped()
+	CogitoSceneManager._current_player_node.player_interaction_component.wieldables.update_equipped()
 
 
 func update_grabbed_slot():

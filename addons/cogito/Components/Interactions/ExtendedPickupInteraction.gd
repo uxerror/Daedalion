@@ -71,13 +71,13 @@ func set_disabled(player: CogitoPlayer) -> bool:
 			elif consumable.value_to_change == ConsumableItemPD.ValueType.MAX:
 				is_disabled = false # Since there's no limit to max, always allow it
 	elif item is AmmoItemPD:
-		if player_interaction_component.is_wielding:
+		if player_interaction_component.wieldables.is_wielding:
 			is_disabled = cant_reload_current_wieldable()
 		else:
 			is_disabled = true
 	elif item is WieldableItemPD:
 		# Disable if no space in inventory
-		is_disabled = player_interaction_component.is_carrying or !player_interaction_component.get_inventory().can_pick_up_slot_data(pickup.slot_data)
+		is_disabled = player_interaction_component.carrying.is_carrying or !player_interaction_component.get_inventory().can_pick_up_slot_data(pickup.slot_data)
 	
 	# Invert pickup is_disabled state based on this disabled state
 	pickup.is_disabled = !is_disabled
@@ -99,32 +99,32 @@ func consume(consumable: ConsumableItemPD) -> void:
 #region Ammos
 ## Called if the PickupComponent item is an AmmoItem type
 func cant_reload_current_wieldable() -> bool:
-	if player_interaction_component.equipped_wieldable_node.animation_player.is_playing():
+	if player_interaction_component.wieldables.equipped_wieldable_node.animation_player.is_playing():
 		return true
-	if player_interaction_component.equipped_wieldable_item.get_current_ammo().name != pickup.slot_data.inventory_item.name:
+	if player_interaction_component.wieldables.equipped_wieldable_item.get_current_ammo().name != pickup.slot_data.inventory_item.name:
 		return true
-	if player_interaction_component.equipped_wieldable_item.no_reload:
+	if player_interaction_component.wieldables.equipped_wieldable_item.no_reload:
 		return true
 	
-	var ammo_needed: int = abs(player_interaction_component.equipped_wieldable_item.charge_max - player_interaction_component.equipped_wieldable_item.charge_current)
+	var ammo_needed: int = abs(player_interaction_component.wieldables.equipped_wieldable_item.charge_max - player_interaction_component.wieldables.equipped_wieldable_item.charge_current)
 	return ammo_needed <= 0
 
 
 ## Called if the PickupComponent item is an AmmoItem type. 
 ## Based on the attempt_reload function in PIC, but doesn't reference player inventory and just looks at the pickup itself
 func attempt_reload_current_wieldable(ammo: AmmoItemPD) -> void:
-	if player_interaction_component.equipped_wieldable_node.animation_player.is_playing():
+	if player_interaction_component.wieldables.equipped_wieldable_node.animation_player.is_playing():
 		return
-	if player_interaction_component.equipped_wieldable_item.get_current_ammo().name != ammo.name:
+	if player_interaction_component.wieldables.equipped_wieldable_item.get_current_ammo().name != ammo.name:
 		return
-	if player_interaction_component.equipped_wieldable_item.no_reload:
+	if player_interaction_component.wieldables.equipped_wieldable_item.no_reload:
 		return
 	
-	var ammo_needed: int = abs(player_interaction_component.equipped_wieldable_item.charge_max - player_interaction_component.equipped_wieldable_item.charge_current)
+	var ammo_needed: int = abs(player_interaction_component.wieldables.equipped_wieldable_item.charge_max - player_interaction_component.wieldables.equipped_wieldable_item.charge_current)
 	if ammo_needed <= 0:
 		return
 	
-	player_interaction_component.equipped_wieldable_node.reload()
+	player_interaction_component.wieldables.equipped_wieldable_node.reload()
 	
 	var quantity_needed: int = ceili(float(ammo_needed) / ammo.reload_amount)
 	var ammo_used: int = 0
@@ -138,10 +138,10 @@ func attempt_reload_current_wieldable(ammo: AmmoItemPD) -> void:
 			ammo_used = ammo.reload_amount * quantity_needed
 			pickup.slot_data.quantity -= quantity_needed
 	
-	player_interaction_component.equipped_wieldable_item.add(ammo_used)
+	player_interaction_component.wieldables.equipped_wieldable_item.add(ammo_used)
 	ammo_needed -= ammo_used
 	
-	player_interaction_component.equipped_wieldable_item.update_wieldable_data(player_interaction_component)
+	player_interaction_component.wieldables.equipped_wieldable_item.update_wieldable_data(player_interaction_component)
 	was_interacted_with.emit(interaction_text, input_map_action)
 	CogitoAudio.play_sound(ammo.sound_pickup)
 	
@@ -153,13 +153,13 @@ func attempt_reload_current_wieldable(ammo: AmmoItemPD) -> void:
 
 #region Wieldables
 func attempt_wield(wieldable: WieldableItemPD) -> void:
-	if player_interaction_component.is_changing_wieldables:
+	if player_interaction_component.wieldables.is_changing_wieldables:
 		return
 	
 	if player_interaction_component.get_inventory().pick_up_slot_data(pickup.slot_data):
-		if player_interaction_component.is_wielding:
-			player_interaction_component.equipped_wieldable_item.put_away()
-			await get_tree().create_timer(player_interaction_component.equipped_wieldable_node.animation_player.current_animation_length).timeout 
+		if player_interaction_component.wieldables.is_wielding:
+			player_interaction_component.wieldables.equipped_wieldable_item.put_away()
+			await get_tree().create_timer(player_interaction_component.wieldables.equipped_wieldable_node.animation_player.current_animation_length).timeout 
 	
 		wieldable.use(player_interaction_component.player)
 		was_interacted_with.emit(interaction_text, input_map_action)

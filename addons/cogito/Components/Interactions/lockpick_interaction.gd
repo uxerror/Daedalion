@@ -81,7 +81,7 @@ func on_lock_picked() -> void:
 
 	lockpick_success.emit()
 	spawned_lockpick_game.queue_free()
-	player_interaction_component._rebuild_interaction_prompts()
+	player_interaction_component.targeting.rebuild_interaction_prompts()
 
 
 func on_cancel() -> void:

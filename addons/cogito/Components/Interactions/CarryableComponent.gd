@@ -61,18 +61,18 @@ func interact(_player_interaction_component:PlayerInteractionComponent):
 
 func carry(_player_interaction_component:PlayerInteractionComponent):
 	player_interaction_component = _player_interaction_component
-	#if player_interaction_component.is_wielding and not is_carryable_while_wielding:
+	#if player_interaction_component.wieldables.is_wielding and not is_carryable_while_wielding:
 		#player_interaction_component.send_hint(null, tr("HINT_cant_carry") )
 		#return
 	
 	if is_being_carried:
 		leave()
-	elif player_interaction_component.is_wielding:
+	elif player_interaction_component.wieldables.is_wielding:
 		if is_carryable_while_wielding:
 			hold()
-		elif !player_interaction_component.is_changing_wieldables:
+		elif !player_interaction_component.wieldables.is_changing_wieldables:
 			# Unequip and store the current wieldable when carrying, and automatically reequip it after carrying
-			player_interaction_component.setup_wieldable_to_auto_equip()
+			player_interaction_component.wieldables.setup_wieldable_to_auto_equip()
 			hold()
 	else:
 		hold()
@@ -80,8 +80,8 @@ func carry(_player_interaction_component:PlayerInteractionComponent):
 
 func _physics_process(_delta):
 	if is_being_carried:
-		#carry_position = player_interaction_component.get_interaction_raycast_tip(carry_distance_offset)
-		carry_position = player_interaction_component.get_carryable_destination_point(carry_distance_offset)
+		#carry_position = player_interaction_component.targeting.get_interaction_raycast_tip(carry_distance_offset)
+		carry_position = player_interaction_component.carrying.get_carryable_destination_point(carry_distance_offset)
 		parent_object.set_linear_velocity((carry_position - parent_object.global_position) * carrying_velocity_multiplier)
 		
 		if Input.is_action_pressed("action_secondary") and enable_manual_rotating:
@@ -140,7 +140,7 @@ func hold():
 		if lock_rotation_when_carried:
 			parent_object.set_lock_rotation_enabled(true)
 		parent_object.freeze = false
-	player_interaction_component.start_carrying(self)
+	player_interaction_component.carrying.start_carrying(self)
 	player_interaction_component.interaction_raycast.add_exception(parent_object)
 	
 	# Play Pick up sound.
@@ -161,8 +161,8 @@ func leave():
 	if parent_object is RigidBody3D and lock_rotation_when_carried:
 		parent_object.set_lock_rotation_enabled(false)
 	if player_interaction_component and is_instance_valid(player_interaction_component):
-		player_interaction_component.stop_carrying()
-		player_interaction_component.auto_equip_last_wieldable()
+		player_interaction_component.carrying.stop_carrying()
+		player_interaction_component.wieldables.auto_equip_last_wieldable()
 		player_interaction_component.interaction_raycast.remove_exception(parent_object)
 	is_being_carried = false
 	carrier = null
@@ -174,7 +174,7 @@ func throw(power):
 	if audio_stream_player_3d and drop_sound:
 		audio_stream_player_3d.stream = drop_sound
 		audio_stream_player_3d.play()
-	var impulse = player_interaction_component.get_look_direction() * power
+	var impulse = player_interaction_component.targeting.get_look_direction() * power
 	if parent_object is CogitoObject:
 		parent_object.was_thrown = true
 		parent_object.throw_point = parent_object.global_position

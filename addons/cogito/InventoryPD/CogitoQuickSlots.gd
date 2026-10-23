@@ -178,15 +178,15 @@ func set_quickslot_focus(enabled:bool) -> void:
 
 
 func _cycle_through_quickslotted_wieldables(cycle_up: bool) -> void:
-	if player_interaction_component.is_changing_wieldables:
+	if player_interaction_component.wieldables.is_changing_wieldables:
 		return
 		
-	if player_interaction_component.is_carrying:
+	if player_interaction_component.carrying.is_carrying:
 		CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "Can't cycle wieldables while carrying.")
 		return
 	
-	if player_interaction_component.interactable:
-		for node: InteractionComponent in player_interaction_component.interactable.interaction_nodes:
+	if player_interaction_component.targeting.interactable:
+		for node: InteractionComponent in player_interaction_component.targeting.interactable.interaction_nodes:
 			if node.input_map_action == "interact2" and not node.is_disabled:
 				CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "Looking at an interactable that" +
 				" uses this input action eventdon't attempt to cycle wieldables")
@@ -194,7 +194,7 @@ func _cycle_through_quickslotted_wieldables(cycle_up: bool) -> void:
 
 	var quickslotted_wieldable_indexes: Array[int] = []
 	var current_wieldable_quickslot_index: int = -1
-	var current_equipped_wieldable: WieldableItemPD = player_interaction_component.equipped_wieldable_item
+	var current_equipped_wieldable: WieldableItemPD = player_interaction_component.wieldables.equipped_wieldable_item
 	for i in range(quickslot_containers.size()):
 		if !quickslot_containers[i].item_reference:
 			continue

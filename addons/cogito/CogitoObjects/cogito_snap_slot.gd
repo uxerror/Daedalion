@@ -120,8 +120,8 @@ func place_carryable(world_carryable: Node3D):
 		return
 		
 	CogitoAudio.play_sound_3d(object_placement_sound, self.global_position)
-	if player_interaction_component and player_interaction_component.carried_object:
-		player_interaction_component.carried_object.leave()
+	if player_interaction_component and player_interaction_component.carrying.carried_object:
+		player_interaction_component.carrying.carried_object.leave()
 	is_holding_object = true
 	world_carryable.set_freeze_mode(0)
 	world_carryable.freeze = true

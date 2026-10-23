@@ -31,4 +31,4 @@ func interact(_player_interaction_component: PlayerInteractionComponent):
 func _on_object_state_change(_interaction_text: String):
 	interaction_text = _interaction_text
 	if player_interaction_component:
-		player_interaction_component._rebuild_interaction_prompts()
+		player_interaction_component.targeting.rebuild_interaction_prompts()

@@ -43,8 +43,8 @@ func _ready():
 func _process(delta):
 	if is_on:
 		# Drain battery when flashlight is on
-		player_interaction_component.equipped_wieldable_item.subtract(delta * drain_rate)
-		if player_interaction_component.equipped_wieldable_item.charge_current == 0:
+		player_interaction_component.wieldables.equipped_wieldable_item.subtract(delta * drain_rate)
+		if player_interaction_component.wieldables.equipped_wieldable_item.charge_current == 0:
 			toggle_flashlight(false)
 	
 	# Handle toggle cooldown
@@ -99,10 +99,10 @@ func toggle_on_off():
 	
 	if is_on:
 		toggle_flashlight(false)
-	elif player_interaction_component.equipped_wieldable_item.charge_current > 0:
+	elif player_interaction_component.wieldables.equipped_wieldable_item.charge_current > 0:
 		toggle_flashlight(true)
 	else:
-		player_interaction_component.equipped_wieldable_item.send_empty_hint()
+		player_interaction_component.wieldables.equipped_wieldable_item.send_empty_hint()
 
 # Function to set the flashlight state
 func toggle_flashlight(new_state: bool):

@@ -78,50 +78,50 @@ func on_input(event: InputEvent) -> void:
 
 	if event.is_action_pressed("action_primary"):
 		wieldables.primary_action_held = true
-		if is_carrying and is_instance_valid(carried_object):
+		if carrying.is_carrying and is_instance_valid(carrying.carried_object):
 			carrying.attempt_throw()
 			get_viewport().set_input_as_handled()
-		elif is_wielding:
+		elif wieldables.is_wielding:
 			wieldables.attempt_action_primary(false)
 			get_viewport().set_input_as_handled()
 
 	elif event.is_action_released("action_primary"):
 		wieldables.primary_action_held = false
-		if is_wielding and !is_carrying:
+		if wieldables.is_wielding and !carrying.is_carrying:
 			wieldables.attempt_action_primary(true)
 			get_viewport().set_input_as_handled()
 
 	if event.is_action_pressed("action_secondary"):
-		if is_wielding:
+		if wieldables.is_wielding:
 			wieldables.attempt_action_secondary(false)
 			get_viewport().set_input_as_handled()
 	elif event.is_action_released("action_secondary"):
-		if is_wielding:
+		if wieldables.is_wielding:
 			wieldables.attempt_action_secondary(true)
 			get_viewport().set_input_as_handled()
 
-	if event.is_action_pressed("change_ammo_type") and is_wielding:
+	if event.is_action_pressed("change_ammo_type") and wieldables.is_wielding:
 		wieldables.attempt_change_ammo()
 
-	if event.is_action_pressed("reload") and is_wielding:
+	if event.is_action_pressed("reload") and wieldables.is_wielding:
 		# The below is a fix to avoid triggering reload when player attempts to interact and both actions are bound to same (gamepad) button
 		if InputHelper.device_index == -1: # If mouse/keyboard
 			wieldables.attempt_reload()
 		else:
-			if interactable == null:
+			if targeting.interactable == null:
 				wieldables.attempt_reload()
 
 func _handle_interaction(action: String) -> void:
 	# if carrying an object, drop it.
-	if is_carrying:
-		if is_instance_valid(carried_object):
-			if carried_object.input_map_action == action:
+	if carrying.is_carrying:
+		if is_instance_valid(carrying.carried_object):
+			if carrying.carried_object.input_map_action == action:
 				carrying.drop_carried_object()
 				#carried_object.throw(1)
 				return
 			else:
 				# Allow 'take' input actions for the carried object
-				var carry_parent: CogitoObject = carried_object.get_parent() as CogitoObject
+				var carry_parent: CogitoObject = carrying.carried_object.get_parent() as CogitoObject
 				if carry_parent:
 					for node: InteractionComponent in carry_parent.interaction_nodes:
 						if node.input_map_action == action and not node.is_disabled:
@@ -143,8 +143,8 @@ func _handle_interaction(action: String) -> void:
 			return
 
 	# Check if we have an interactable in view and are pressing the correct button
-	if interactable != null and not is_carrying:
-		for node: InteractionComponent in interactable.interaction_nodes:
+	if targeting.interactable != null and not carrying.is_carrying:
+		for node: InteractionComponent in targeting.interactable.interaction_nodes:
 			if node.input_map_action == action and not node.is_disabled:
 				if player.get("is_in_interaction_state") and !player.is_in_interaction_state or (!player.is_on_floor() and node.disable_interaction_in_air):
 					return
@@ -165,11 +165,11 @@ func _handle_interaction(action: String) -> void:
 
 
 func on_death():
-	if equipped_wieldable_item:
-		equipped_wieldable_item.is_being_wielded = false
+	if wieldables.equipped_wieldable_item:
+		wieldables.equipped_wieldable_item.is_being_wielded = false
 
-	if carried_object:
-		carried_object = null
+	if carrying.carried_object:
+		carrying.carried_object = null
 
 
 # Function called by interactables if they need to send a hint. The signal sent here gets picked up by the Player_Hud_Manager.
@@ -224,11 +224,11 @@ func set_state():
 
 
 func _on_interaction_raycast_interactable_seen(new_interactable) -> void:
-	interactable = new_interactable
+	targeting.interactable = new_interactable
 
 
 func _on_interaction_raycast_interactable_unseen() -> void:
-	interactable = null
+	targeting.interactable = null
 	can_cycle_quickslots = false
 	cycle_quickslots_interrupt_timer.start()
 
@@ -245,126 +245,158 @@ func get_inventory() -> CogitoInventory:
 
 #region Forwarding to child nodes
 # Kept so existing code using these members on PlayerInteractionComponent keeps working.
+# Use the child nodes targeting, carrying and wieldables instead.
 
+## @deprecated: Use [code]targeting.interactable[/code] instead.
 var interactable:
 	get: return targeting.interactable
 	set(value): targeting.interactable = value
 
+## @deprecated: Use [code]carrying.carried_object[/code] instead.
 var carried_object:
 	get: return carrying.carried_object
 	set(value): carrying.carried_object = value
 
+## @deprecated: Use [code]carrying.is_carrying[/code] instead.
 var is_carrying: bool:
 	get: return carrying.is_carrying
 
+## @deprecated: Use [code]wieldables.is_changing_wieldables[/code] instead.
 var is_changing_wieldables: bool:
 	get: return wieldables.is_changing_wieldables
 	set(value): wieldables.is_changing_wieldables = value
 
+## @deprecated: Use [code]wieldables.equipped_wieldable_item[/code] instead.
 var equipped_wieldable_item: WieldableItemPD:
 	get: return wieldables.equipped_wieldable_item
 	set(value): wieldables.equipped_wieldable_item = value
 
+## @deprecated: Use [code]wieldables.equipped_wieldable_node[/code] instead.
 var equipped_wieldable_node: CogitoWieldable:
 	get: return wieldables.equipped_wieldable_node
 	set(value): wieldables.equipped_wieldable_node = value
 
+## @deprecated: Use [code]wieldables.wieldable_was_on[/code] instead.
 var wieldable_was_on: bool:
 	get: return wieldables.wieldable_was_on
 	set(value): wieldables.wieldable_was_on = value
 
+## @deprecated: Use [code]wieldables.is_wielding[/code] instead.
 var is_wielding: bool:
 	get: return wieldables.is_wielding
 
+## @deprecated: Use [code]wieldables.wieldable_item_to_auto_equip[/code] instead.
 var wieldable_item_to_auto_equip: WieldableItemPD:
 	get: return wieldables.wieldable_item_to_auto_equip
 	set(value): wieldables.wieldable_item_to_auto_equip = value
 
+## @deprecated: Use [code]wieldables.auto_equip_wieldable_after_carrying[/code] instead.
 var auto_equip_wieldable_after_carrying: bool:
 	get: return wieldables.auto_equip_wieldable_after_carrying
 	set(value): wieldables.auto_equip_wieldable_after_carrying = value
 
+## @deprecated: Use [code]wieldables.primary_action_held[/code] instead.
 var primary_action_held: bool:
 	get: return wieldables.primary_action_held
 	set(value): wieldables.primary_action_held = value
 
 
+## @deprecated: Use [code]targeting.is_interaction_raycast_colliding()[/code] instead.
 func is_interaction_raycast_colliding() -> bool:
 	return targeting.is_interaction_raycast_colliding()
 
 
+## @deprecated: Use [code]targeting.get_interaction_raycast_tip()[/code] instead.
 func get_interaction_raycast_tip(distance_offset: float) -> Vector3:
 	return targeting.get_interaction_raycast_tip(distance_offset)
 
 
+## @deprecated: Use [code]targeting.get_look_direction()[/code] instead.
 func get_look_direction() -> Vector3:
 	return targeting.get_look_direction()
 
 
+## @deprecated: Use [code]targeting.rebuild_interaction_prompts()[/code] instead.
 func _rebuild_interaction_prompts() -> void:
 	targeting.rebuild_interaction_prompts()
 
 
+## @deprecated: Use [code]carrying.get_carryable_destination_point()[/code] instead.
 func get_carryable_destination_point(distance_offset: float) -> Vector3:
 	return carrying.get_carryable_destination_point(distance_offset)
 
 
+## @deprecated: Use [code]carrying.start_carrying()[/code] instead.
 func start_carrying(_carried_object):
 	carrying.start_carrying(_carried_object)
 
 
+## @deprecated: Use [code]carrying.stop_carrying()[/code] instead.
 func stop_carrying():
 	carrying.stop_carrying()
 
 
+## @deprecated: Use [code]carrying.get_carried_object_mass()[/code] instead.
 func get_carried_object_mass(carried_object) -> float:
 	return carrying.get_carried_object_mass(carried_object)
 
 
+## @deprecated: Use [code]carrying.attempt_throw()[/code] instead.
 func _attempt_throw() -> void:
 	carrying.attempt_throw()
 
 
+## @deprecated: Use [code]carrying.drop_carried_object()[/code] instead.
 func _drop_carried_object() -> void:
 	carrying.drop_carried_object()
 
 
+## @deprecated: Use [code]wieldables.equip_wieldable()[/code] instead.
 func equip_wieldable(wieldable_item: WieldableItemPD):
 	await wieldables.equip_wieldable(wieldable_item)
 
 
+## @deprecated: Use [code]wieldables.change_wieldable_to()[/code] instead.
 func change_wieldable_to(next_wieldable: InventoryItemPD):
 	await wieldables.change_wieldable_to(next_wieldable)
 
 
+## @deprecated: Use [code]wieldables.attempt_action_primary()[/code] instead.
 func attempt_action_primary(is_released: bool):
 	wieldables.attempt_action_primary(is_released)
 
 
+## @deprecated: Use [code]wieldables.attempt_action_secondary()[/code] instead.
 func attempt_action_secondary(is_released: bool):
 	wieldables.attempt_action_secondary(is_released)
 
 
+## @deprecated: Use [code]wieldables.attempt_change_ammo()[/code] instead.
 func attempt_change_ammo():
 	wieldables.attempt_change_ammo()
 
 
+## @deprecated: Use [code]wieldables.attempt_reload()[/code] instead.
 func attempt_reload():
 	wieldables.attempt_reload()
 
 
+## @deprecated: Use [code]wieldables.get_camera_collision()[/code] instead.
 func get_camera_collision() -> Vector3:
 	return wieldables.get_camera_collision()
 
 
+## @deprecated: Use [code]wieldables.setup_wieldable_to_auto_equip()[/code] instead.
 func setup_wieldable_to_auto_equip(next_wieldable: WieldableItemPD = null) -> void:
 	wieldables.setup_wieldable_to_auto_equip(next_wieldable)
 
 
+## @deprecated: Use [code]wieldables.auto_equip_last_wieldable()[/code] instead.
 func auto_equip_last_wieldable() -> void:
 	await wieldables.auto_equip_last_wieldable()
 
 
+## @deprecated: Use [code]wieldables.update_equipped()[/code] instead.
 func update_equipped() -> void:
 	wieldables.update_equipped()
 #endregion

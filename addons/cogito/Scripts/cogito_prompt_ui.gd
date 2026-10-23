@@ -22,7 +22,7 @@ func _physics_process(delta: float) -> void:
 	if !use_spatial_prompt:
 		return
 	
-	var interactable = parent.player.player_interaction_component.interactable
+	var interactable = parent.player.player_interaction_component.targeting.interactable
 	
 	if interactable == null:
 		visible = false

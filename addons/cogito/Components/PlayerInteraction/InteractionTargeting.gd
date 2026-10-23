@@ -35,7 +35,7 @@ func get_look_direction() -> Vector3:
 
 func rebuild_interaction_prompts() -> void:
 	# Ensure the drop prompt isn't cleared.
-	if pic.is_carrying:
+	if pic.carrying.is_carrying:
 		return
 	pic.nothing_detected.emit() # Clears the prompts
 	if interactable != null:
@@ -45,7 +45,7 @@ func rebuild_interaction_prompts() -> void:
 func _set_interactable(new_interactable) -> void:
 	interactable = new_interactable
 	# Ensure the drop prompt isn't cleared.
-	if pic.is_carrying:
+	if pic.carrying.is_carrying:
 		return
 	if interactable == null:
 		pic.nothing_detected.emit()
