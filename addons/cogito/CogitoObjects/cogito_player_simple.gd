@@ -3,12 +3,7 @@
 class_name CogitoPlayerSimple
 extends CogitoPlayer
 
-## Emits when ESC/Menu input map action is pressed. Can be used to exit out other interfaces, etc.
-signal menu_pressed(player_interaction_component: PlayerInteractionComponent)
 signal toggle_inventory_interface()
-signal player_state_loaded()
-## Used to hide UI elements like the crosshair when another interface is active (like a container or readable)
-signal toggled_interface(is_showing_ui:bool) 
 
 signal mouse_movement(relative_mouse_movement:Vector2)
 
@@ -16,12 +11,6 @@ signal mouse_movement(relative_mouse_movement:Vector2)
 #region Variables
 ## Reference to Pause menu node
 @export var pause_menu : PackedScene
-## Refereence to Player HUD node
-@export var player_hud : CogitoPlayerHudManager
-# Used for handling input when UI is open/displayed
-var is_showing_ui : bool
-## Toggle printing debug messages or not. Works with the CogitoSceneManager
-@export var is_logging : bool
 
 ## Item Drop Shapecast
 @export var item_drop_shapecast : ShapeCast3D
@@ -31,8 +20,6 @@ var is_showing_ui : bool
 ## Fall velocity at which fall damage is triggered. This is negative y-Axis. -5 is a good starting point but might be a bit too sensitive.
 @export var fall_damage_threshold : float = -5
 
-## Inventory resource that stores the player inventory.
-@export var inventory_data : CogitoInventory
 
 @export_group("Audio")
 ## AudioStream that gets played when the player jumps.
@@ -127,13 +114,6 @@ var ladder_on_cooldown : bool = false
 ### WIGGLE MODIFIERS
 var WIGGLE_INTENSITY_MODIFIER = 1
 
-### NEW PLAYER ATTRIBUTE SYSTEM:
-var player_attributes : Dictionary
-var stamina_attribute : CogitoAttribute = null
-var visibility_attribute : CogitoAttribute
-
-### CURRENCIES
-var player_currencies: Dictionary
 
 ## STAIR HANDLING STUFF
 const WALL_MARGIN : float = 0.001
@@ -148,19 +128,16 @@ var head_offset : Vector3 = Vector3.ZERO
 var is_jumping : bool = false
 var is_in_air : bool = false
 
-var is_mouselook_active: bool = true
 var joystick_h_event
 var joystick_v_event
  
 var initial_carryable_height #DEPRECATED Used to change carryable position based if player is standing or crouching
 
 var config = ConfigFile.new()
-var uid: int = -1
 
 var current_speed : float = 5.0
 var gravity = ProjectSettings.get_setting("physics/3d/default_gravity")
 var gravity_vector = ProjectSettings.get_setting("physics/3d/default_gravity_vector")
-var main_velocity : Vector3 = Vector3.ZERO
 var direction : Vector3 = Vector3.ZERO
 var is_walking : bool = false
 var is_sprinting : bool = false
@@ -176,17 +153,13 @@ var bunny_hop_speed : float = SPRINTING_SPEED
 var last_velocity : Vector3= Vector3.ZERO
 var stand_after_roll : bool = false
 var is_movement_paused : bool = false
-var is_dead : bool = false
 var slide_audio_player : AudioStreamPlayer3D
 var radius : float
 
 #var external_gravity_force : Vector3 = Vector3.ZERO
 
 # Node caching
-@onready var player_interaction_component: PlayerInteractionComponent = $PlayerInteractionComponent
-@onready var body: Node3D = $Body
 @onready var neck: Node3D = $Body/Neck
-@onready var head: Node3D = $Body/Neck/Head
 @onready var eyes: Node3D = $Body/Neck/Head/Eyes
 @onready var camera: Camera3D = $Body/Neck/Head/Eyes/Camera
 @onready var animationPlayer: AnimationPlayer = $Body/Neck/Head/Eyes/AnimationPlayer
@@ -281,52 +254,6 @@ func slide_audio_init():
 	slide_audio_player.stream = slide_sound
 	slide_audio_player.bus = OptionsConstants.sfx_bus_name
 	add_child(slide_audio_player)
-
-
-# Use these functions to manipulate player attributes.
-func increase_attribute(attribute_name: String, value: float, value_type: ConsumableItemPD.ValueType) -> bool:
-	var attribute = player_attributes.get(attribute_name)
-	if not attribute:
-		CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Increase attribute: Attribute not found")
-		return false
-	if value_type == ConsumableItemPD.ValueType.CURRENT:
-		if attribute.value_current == attribute.value_max:
-			return false
-		attribute.add(value)
-		return true
-	elif value_type == ConsumableItemPD.ValueType.MAX:
-		attribute.value_max += value
-		attribute.add(value)
-		return true
-	return false
-
-
-func decrease_attribute(attribute_name: String, value: float):
-	var attribute = player_attributes.get(attribute_name)
-	if not attribute:
-		CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Decrease attribute: " + attribute_name + " - Attribute not found")
-		return
-	attribute.subtract(value)
-
-
-# Use these functions to manipulate player currencies.
-func increase_currency(currency_name: String, value: float) -> bool:
-	var currency = player_currencies.get(currency_name)
-	if not currency:
-		CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Increase currency: Currency not found")
-		return false
-	else:
-		currency.add(value)
-		return true
-
-
-func decrease_currency(currency_name: String, value: float):
-	var currency = player_currencies.get(currency_name)
-	if not currency:
-		CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Decrease currency: " + currency_name + " - Currency not found")
-		return
-	currency.subtract(value)
-
 
 
 func _on_death():
@@ -1314,13 +1241,6 @@ func _on_animation_player_animation_finished(anim_name):
 	stand_after_roll = anim_name == 'roll' and !is_crouching
 
 
-func apply_external_force(force_vector: Vector3):
-	if force_vector and force_vector.length() > 0:
-		CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Applying external force " + str(force_vector))
-		velocity += force_vector
-		move_and_slide()
-
-
 func override_gravity(_external_gravity_force : float, _external_gravity_vector: Vector3):
 	CogitoGlobals.debug_log(true, "cogito_player.gd", "override gravity with " + str(_external_gravity_force) + ", " + str(_external_gravity_vector))
 	gravity = _external_gravity_force
@@ -1357,7 +1277,6 @@ class StepResult:
 	var diff_position: Vector3 = Vector3.ZERO
 	var normal: Vector3 = Vector3.ZERO
 	var is_step_up: bool = false
-
 
 
 func _on_player_state_loaded():
