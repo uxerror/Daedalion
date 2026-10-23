@@ -277,7 +277,7 @@ func _ready():
 	call_deferred("slide_audio_init")
 	call_deferred("swim_audio_init")
 	
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	Input.mouse_mode = gameplay_mouse_mode
 	InputRouter.push(on_input)
 
 

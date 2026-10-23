@@ -103,7 +103,7 @@ func exit(_player: PlayerInteractionComponent) -> void:
 	if interacting_gizmo: interacting_gizmo.set_visible(false)
 	_player.close_interface()
 	InputRouter.pop()
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	CogitoSceneManager.restore_gameplay_mouse_mode()
 	is_being_controlled = false
 
 

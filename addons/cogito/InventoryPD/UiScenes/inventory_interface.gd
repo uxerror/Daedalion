@@ -117,7 +117,7 @@ func close_inventory():
 		external_inventory_ui.hide()
 		
 		InputRouter.pop()
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		CogitoSceneManager.restore_gameplay_mouse_mode()
 		inventory_open.emit(false)
 
 

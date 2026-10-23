@@ -82,6 +82,12 @@ func get_player() -> CogitoPlayer:
 	return null
 
 
+## Sets the mouse mode the current player plays with. Called when an interface or menu closes.
+func restore_gameplay_mouse_mode() -> void:
+	var player := get_player()
+	Input.mouse_mode = player.gameplay_mouse_mode if player else Input.MOUSE_MODE_CAPTURED
+
+
 ## Called by player controllers in their _ready() to become the current player.
 func register_player(player: CogitoPlayer) -> void:
 	_current_player_node = player

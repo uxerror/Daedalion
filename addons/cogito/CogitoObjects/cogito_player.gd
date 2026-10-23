@@ -18,6 +18,9 @@ var is_showing_ui : bool
 @export var is_logging : bool
 ## Inventory resource that stores the player inventory.
 @export var inventory_data : CogitoInventory
+## Mouse mode while playing. Interfaces and menus restore it when they close (see CogitoSceneManager.restore_gameplay_mouse_mode()).
+## First person players capture the mouse; a player controlled with the cursor keeps it visible.
+@export var gameplay_mouse_mode : Input.MouseMode = Input.MOUSE_MODE_CAPTURED
 
 ### NEW PLAYER ATTRIBUTE SYSTEM:
 var player_attributes : Dictionary

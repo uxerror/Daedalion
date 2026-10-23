@@ -52,4 +52,4 @@ func close(_player: PlayerInteractionComponent):
 	readable_ui.hide()
 	_player.close_interface(close)
 	InputRouter.pop()
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	CogitoSceneManager.restore_gameplay_mouse_mode()

@@ -183,4 +183,4 @@ func _on_reload_button_pressed() -> void:
 	# player.get_node(player.pause_menu).close_pause_menu()
 	player.is_showing_ui = false
 	player.animationPlayer.stop()
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	CogitoSceneManager.restore_gameplay_mouse_mode()

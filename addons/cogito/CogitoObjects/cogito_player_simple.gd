@@ -200,7 +200,7 @@ func _ready():
 	
 	radius = _calculate_player_radius()
 	
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	Input.mouse_mode = gameplay_mouse_mode
 	
 	setup_attributes_and_currencies()
 	
@@ -245,7 +245,7 @@ func _on_pause_movement():
 func _on_resume_movement():
 	if is_movement_paused:
 		is_movement_paused = false
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		Input.mouse_mode = gameplay_mouse_mode
 
 
 func pause_before_interaction():

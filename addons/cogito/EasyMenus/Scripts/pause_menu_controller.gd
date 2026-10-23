@@ -204,7 +204,7 @@ func load_current_slot_data() -> bool:
 func close_pause_menu():
 	get_tree().paused = false
 	InputRouter.pop()
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	CogitoSceneManager.restore_gameplay_mouse_mode()
 	pause_menu_closed.emit()
 	queue_free()
 

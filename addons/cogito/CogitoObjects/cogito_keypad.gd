@@ -98,7 +98,7 @@ func close(_player: PlayerInteractionComponent):
 	keypad_ui.hide()
 	_player.close_interface(close)
 	InputRouter.pop()
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	CogitoSceneManager.restore_gameplay_mouse_mode()
 
 func on_input(event: InputEvent) -> void:
 	if event.is_action_pressed("menu") or event.is_action_pressed("ui_cancel") and can_interact:
