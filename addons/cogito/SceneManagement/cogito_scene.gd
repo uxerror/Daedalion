@@ -34,6 +34,13 @@ func _enter_tree() -> void:
 		save_temp.call_deferred()
 
 
+# A notification instead of _ready(), so scenes that extend this script and override _ready() still get it.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_READY:
+		# Every node of the level is ready now, so the Persist nodes placed in it get their ids before anything moves.
+		CogitoPersistentId.stamp_level(self)
+
+
 func save_temp() -> void:
 	var current_scene_statename = get_tree().get_current_scene().get_name()
 	CogitoSceneManager.save_scene_state(current_scene_statename,"temp")

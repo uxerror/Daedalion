@@ -40,7 +40,7 @@ func _process(_delta):
 			if load_mode == 1: #Load_Mode one is attempting to load a save
 				CogitoGlobals.debug_log(true, "loading_screen.gd", "Attempting to load a save for passsed_slot " + passed_slot)
 				CogitoSceneManager._current_scene_name = new_scene_node.name #Manually setting new scene name
-				CogitoSceneManager.loading_saved_game(passed_slot, current_scene_name)
+				CogitoSceneManager.apply_saved_game(passed_slot)
 			else:
 				CogitoGlobals.debug_log(true, "loading_screen.gd", "Attempting to load scene state: " + next_scene_state_filename)
 				CogitoSceneManager.load_scene_state(next_scene_state_filename,"temp") # Loading temp scene state

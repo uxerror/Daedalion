@@ -143,17 +143,16 @@ func loading_saved_game(passed_slot: String, current_scene_name: String = "") ->
 		current_scene_name = get_tree().get_current_scene().get_name()
 	
 	CogitoGlobals.debug_log(true,"CSM","Current scene detected as "+ current_scene_name)
-	# Check if player is currently in the same scene as in the game that is being attempted to load:
-	if _current_scene_name == _player_state.player_current_scene:
-		# ABOVE used to be: get_tree().current_scene.get_name() == 
-		CogitoGlobals.debug_log(true,"CSM","Player state for slot "+ passed_slot+ " is from current scene.")
-		# Do a simple scene state load and player state load.
-		load_scene_state(_player_state.player_current_scene, passed_slot)
-		load_player_state(get_player(), passed_slot)
-	else:
-		# Transition to target scene and then attempt to load the saved game again.
-		CogitoGlobals.debug_log(true,"CSM","Player state for slot "+ passed_slot + " is in different scene (" + _player_state.player_current_scene + "). Transitioning...")
-		load_next_scene(_player_state.player_current_scene_path, "", passed_slot, CogitoSceneLoadMode.LOAD_SAVE) 
+	# The level is loaded again from its scene file even when the save is from the current scene,
+	# so the save gets applied to a clean level instead of one that is in the middle of being played.
+	CogitoGlobals.debug_log(true,"CSM","Loading scene " + _player_state.player_current_scene + " for slot " + passed_slot + "...")
+	load_next_scene(_player_state.player_current_scene_path, "", passed_slot, CogitoSceneLoadMode.LOAD_SAVE)
+
+
+## Applies the scene and player state of a save to the level that was just loaded for it by loading_saved_game().
+func apply_saved_game(passed_slot: String) -> void:
+	load_scene_state(_player_state.player_current_scene, passed_slot)
+	load_player_state(get_player(), passed_slot)
 
 
 #region PLAYER SAVE HANDLING
@@ -205,45 +204,11 @@ func load_scene_state(_scene_name_to_load:String, slot:String) -> void:
 		CogitoGlobals.debug_log(true,"CSM","Scene state exists. Loading " + str(_scene_state))
 		_scene_state = _scene_state.load_state(slot,_scene_name_to_load) as CogitoSceneState
 		
-		# Deleting all current nodes that are in the Persist group as to not clone objects.
-		var save_nodes = get_tree().get_nodes_in_group("Persist")
-		for i in save_nodes:
-			CogitoGlobals.debug_log(true,"CSM","Deleting existing node: "+ i.name)
-			i.queue_free()
-			
-		var array_of_node_data = _scene_state.saved_nodes
-		for node_data in array_of_node_data:
-			var parent_node : Node = _find_saved_node(node_data, "cogito_parent_id", "parent")
-			if !parent_node:
-				CogitoGlobals.debug_log(true,"CSM","Parent of saved node " + str(node_data["filename"]) + " not found, skipped.")
-				continue
-			var new_object = load(node_data["filename"]).instantiate()
-			CogitoPersistentId.restore(new_object, node_data.get("cogito_id", ""))
-			parent_node.add_child(new_object)
-			CogitoGlobals.debug_log(true,"CSM","Adding to scene: "+ new_object.get_name())
-				
-			new_object.position = Vector3(node_data["pos_x"],node_data["pos_y"],node_data["pos_z"])
-			new_object.rotation = Vector3(node_data["rot_x"],node_data["rot_y"],node_data["rot_z"])
-			# Restore physics properties if it's a RigidBody3D
-			if new_object is RigidBody3D:
-				if "linear_velocity_x" in node_data and "linear_velocity_y" in node_data and "linear_velocity_z" in node_data:
-					new_object.linear_velocity = Vector3(node_data["linear_velocity_x"], node_data["linear_velocity_y"], node_data["linear_velocity_z"])
-				if "angular_velocity_x" in node_data and "angular_velocity_y" in node_data and "angular_velocity_z" in node_data:
-					new_object.angular_velocity = Vector3(node_data["angular_velocity_x"], node_data["angular_velocity_y"], node_data["angular_velocity_z"])
-			# Set the remaining variables.
-			for data in node_data.keys():
-				if data == "filename" or data == "parent" or data == "pos_x" or data == "pos_y" or data == "pos_z" or data == "rot_x" or data == "rot_y" or data == "rot_z" or data == "item_charge" or data in SAVE_ID_KEYS:
-					continue
-				new_object.set(data, node_data[data])
-			
-			if new_object.has_method("update_wieldable_data"): # Check if item is wieldable
-				CogitoGlobals.debug_log(true,"CSM","Setting charge of "+ new_object+ " to "+ node_data["item_charge"])
-				new_object.slot_data.inventory_item.charge_current = node_data["item_charge"]
-			
-			# Call set_state only if the method exists
-			if new_object.has_method("set_state"):
-				new_object.set_state.call_deferred()
-		
+		if _scene_state.saved_nodes.all(func(node_data): return node_data.has("cogito_id")):
+			_load_persist_nodes_in_place(_scene_state.saved_nodes)
+		else:
+			_load_persist_nodes_legacy(_scene_state.saved_nodes)
+
 		# Loading states of objects in save_object_state
 		var array_of_state_data = _scene_state.saved_states
 		for state_data in array_of_state_data:
@@ -268,6 +233,87 @@ func load_scene_state(_scene_name_to_load:String, slot:String) -> void:
 		CogitoGlobals.debug_log(true,"CSM","CSM: Scene state doesn't exist.")
 
 
+# Restores Persist nodes on a freshly loaded level: nodes that are in the save are updated where they are,
+# saved nodes that are missing get created from their scene file, and nodes of the level that are not in the save
+# (picked up, destroyed) get removed.
+func _load_persist_nodes_in_place(saved_nodes: Array) -> void:
+	var saved_ids := {}
+	for node_data in saved_nodes:
+		saved_ids[node_data["cogito_id"]] = true
+
+	var live_nodes := {}
+	for node in get_tree().get_nodes_in_group("Persist"):
+		if node.is_queued_for_deletion():
+			continue
+		var id := CogitoPersistentId.of(node)
+		if saved_ids.has(id):
+			live_nodes[id] = node
+		elif node.has_method("save"): # Nodes without save() are never in a save, like the StateProcessors inside NPCs.
+			CogitoGlobals.debug_log(true,"CSM","Removing node that is not in the save: "+ node.name)
+			node.queue_free()
+
+	for node_data in saved_nodes:
+		var node : Node = live_nodes.get(node_data["cogito_id"])
+		if !node:
+			node = _spawn_saved_node(node_data)
+			if !node:
+				continue
+		_apply_saved_node_data(node, node_data)
+
+
+# Restores Persist nodes from a save made before ids were added: all of them get deleted and created again.
+func _load_persist_nodes_legacy(saved_nodes: Array) -> void:
+	# Deleting all current nodes that are in the Persist group as to not clone objects.
+	var save_nodes = get_tree().get_nodes_in_group("Persist")
+	for i in save_nodes:
+		CogitoGlobals.debug_log(true,"CSM","Deleting existing node: "+ i.name)
+		i.queue_free()
+
+	for node_data in saved_nodes:
+		var new_object := _spawn_saved_node(node_data)
+		if new_object:
+			_apply_saved_node_data(new_object, node_data)
+
+
+func _spawn_saved_node(node_data: Dictionary) -> Node:
+	if str(node_data.get("filename", "")).is_empty():
+		CogitoGlobals.debug_log(true,"CSM","Saved node " + str(node_data.get("cogito_id")) + " is not in the level and has no scene file, skipped.")
+		return null
+	var parent_node : Node = _find_saved_node(node_data, "cogito_parent_id", "parent")
+	if !parent_node:
+		CogitoGlobals.debug_log(true,"CSM","Parent of saved node " + str(node_data["filename"]) + " not found, skipped.")
+		return null
+	var new_object = load(node_data["filename"]).instantiate()
+	CogitoPersistentId.restore(new_object, node_data.get("cogito_id", ""))
+	parent_node.add_child(new_object)
+	CogitoGlobals.debug_log(true,"CSM","Adding to scene: "+ new_object.get_name())
+	return new_object
+
+
+func _apply_saved_node_data(new_object: Node, node_data: Dictionary) -> void:
+	new_object.position = Vector3(node_data["pos_x"],node_data["pos_y"],node_data["pos_z"])
+	new_object.rotation = Vector3(node_data["rot_x"],node_data["rot_y"],node_data["rot_z"])
+	# Restore physics properties if it's a RigidBody3D
+	if new_object is RigidBody3D:
+		if "linear_velocity_x" in node_data and "linear_velocity_y" in node_data and "linear_velocity_z" in node_data:
+			new_object.linear_velocity = Vector3(node_data["linear_velocity_x"], node_data["linear_velocity_y"], node_data["linear_velocity_z"])
+		if "angular_velocity_x" in node_data and "angular_velocity_y" in node_data and "angular_velocity_z" in node_data:
+			new_object.angular_velocity = Vector3(node_data["angular_velocity_x"], node_data["angular_velocity_y"], node_data["angular_velocity_z"])
+	# Set the remaining variables.
+	for data in node_data.keys():
+		if data == "filename" or data == "parent" or data == "pos_x" or data == "pos_y" or data == "pos_z" or data == "rot_x" or data == "rot_y" or data == "rot_z" or data == "item_charge" or data in SAVE_ID_KEYS:
+			continue
+		new_object.set(data, node_data[data])
+
+	if new_object.has_method("update_wieldable_data"): # Check if item is wieldable
+		CogitoGlobals.debug_log(true,"CSM","Setting charge of "+ str(new_object) + " to "+ str(node_data["item_charge"]))
+		new_object.slot_data.inventory_item.charge_current = node_data["item_charge"]
+
+	# Call set_state only if the method exists
+	if new_object.has_method("set_state"):
+		new_object.set_state.call_deferred()
+
+
 # Finds the node a saved entry belongs to. Saves made before ids were added only have an absolute path.
 func _find_saved_node(data: Dictionary, id_key: String, legacy_path_key: String) -> Node:
 	if data.has(id_key):
@@ -289,7 +335,8 @@ func save_scene_state(_scene_name_to_save, slot: String) -> void:
 		CogitoGlobals.debug_log(true,"CSM","No nodes in Persist group!")
 	else:
 		for node in save_nodes:
-			if node.scene_file_path.is_empty(): # Check the node is an instanced scene so it can be instanced again during load.
+			# A node needs a scene file to be created again on load, unless it is part of the level and gets updated where it is.
+			if node.scene_file_path.is_empty() and !CogitoPersistentId.of(node).begins_with("level:"):
 				CogitoGlobals.debug_log(true,"CSM","persistent node '%s' is not an instanced scene, skipped" % node.name)
 				continue
 
