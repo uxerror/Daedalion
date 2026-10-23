@@ -4,6 +4,7 @@ extends Sprite3D
 class_name CogitoPoint
 
 ## Represents a unique value
+## @deprecated: Use [code]CogitoPersistentId.of()[/code] to identify the point in save data.
 var uid: int = -1
 
 func _ready() -> void:

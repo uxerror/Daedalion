@@ -47,6 +47,8 @@ extends CogitoPlayerState
 @export var is_ejected: bool = false
 @export var currently_tweening: bool = false
 @export var current_sittable_path: NodePath
+## Persistent id of the sittable the player sits on. Saves made before ids only have current_sittable_path.
+@export var current_sittable_id: String
 
 #Collision shapes
 @export var standing_collision_shape_enabled : bool = true
@@ -297,6 +299,7 @@ func save_sitting_state(player):
 	currently_tweening = player.currently_tweening
 	if is_sitting:
 		current_sittable_path = CogitoSceneManager._current_sittable_node.get_path()
+		current_sittable_id = CogitoPersistentId.of(CogitoSceneManager._current_sittable_node)
 
 
 func load_sitting_state(player):
@@ -309,7 +312,9 @@ func load_sitting_state(player):
 	player.original_neck_basis = original_neck_basis
 	player.is_ejected = is_ejected
 	player.currently_tweening = currently_tweening
-	if is_sitting and current_sittable_path != null:
+	if is_sitting and !current_sittable_id.is_empty():
+		CogitoSceneManager._current_sittable_node = CogitoPersistentId.find(CogitoSceneManager.get_tree(), current_sittable_id)
+	elif is_sitting and current_sittable_path != null:
 		CogitoSceneManager._current_sittable_node = CogitoSceneManager.get_node(current_sittable_path)
 
 

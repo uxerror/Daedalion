@@ -91,6 +91,9 @@ var wiggle_index : float = 0.0
 var serialized_state : SerializedStateChart
 var patrol_path_nodepath : NodePath
 var attention_target_uid: int
+# Persistent ids, saved instead of the node path and uid above. Saves made before ids only have those.
+var patrol_path_id : String
+var attention_target_id : String
 
 var health: CogitoHealthAttribute
 
@@ -288,8 +291,10 @@ func set_state():
 func save():
 	if patrol_path:
 		patrol_path_nodepath = patrol_path.get_path()
-	if attention_target:
+		patrol_path_id = CogitoPersistentId.of(patrol_path)
+	if attention_target and "uid" in attention_target:
 		attention_target_uid = attention_target.uid
+	attention_target_id = CogitoPersistentId.of(attention_target) if attention_target else ""
 	
 	var node_data = {
 		"filename" : get_scene_file_path(),
@@ -303,13 +308,17 @@ func save():
 		"patrol_path_nodepath" : patrol_path_nodepath,
 		"serialized_state" : StateChartSerializer.serialize(state_chart),
 		"attention_target_uid": attention_target_uid,
+		"patrol_path_id" : patrol_path_id,
+		"attention_target_id" : attention_target_id,
 		"response_to_player": response_to_player
 	}
 	return node_data
 
 
 func load_nodepaths():
-	if patrol_path_nodepath:
+	if !patrol_path_id.is_empty():
+		patrol_path = CogitoPersistentId.find(get_tree(), patrol_path_id)
+	elif patrol_path_nodepath:
 		CogitoGlobals.debug_log(true,"CogitoNPC","Loading patrol path: " + str(patrol_path_nodepath))
 		patrol_path = get_node(patrol_path_nodepath)
 
@@ -333,7 +342,9 @@ func _restore_current_behaviour() -> void:
 
 
 func load_attention_target():
-	if attention_target_uid:
+	if !attention_target_id.is_empty():
+		attention_target = CogitoPersistentId.find(get_tree(), attention_target_id)
+	elif attention_target_uid:
 		# Do a fast check for uid matching player before scanning the tree
 		var player = CogitoSceneManager.get_player()
 		if attention_target_uid == player.uid:

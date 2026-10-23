@@ -436,6 +436,7 @@ func delete_temp_saves() -> void:
 	CogitoGlobals.debug_log(true,"CSM","Delete temp saves complete!")
 
 
+## @deprecated: Use [code]CogitoPersistentId.find()[/code] instead.
 func find_object_from_uid(uid: int) -> Node3D:
 	for node in get_tree().get_nodes_in_group("Persist"):
 		if node.get("uid") == uid:

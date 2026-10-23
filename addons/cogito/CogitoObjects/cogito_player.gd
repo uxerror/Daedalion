@@ -28,6 +28,7 @@ var visibility_attribute : CogitoAttribute
 var player_currencies: Dictionary
 
 var is_mouselook_active: bool = true
+## @deprecated: Use [code]CogitoPersistentId.of()[/code] to identify the player in save data.
 var uid: int = -1
 var main_velocity : Vector3 = Vector3.ZERO
 var is_dead : bool = false
