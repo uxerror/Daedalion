@@ -1,5 +1,7 @@
 extends Node3D
 class_name PlayerInteractionComponent
+## Handles the player's interaction input and passes it to interactables.
+## What the player looks at, carrying and wieldables live in the child nodes targeting, carrying and wieldables.
 
 # Signals for UI/HUD use
 signal interaction_prompt(interaction_text: String)
@@ -17,15 +19,6 @@ var device_id: int = -1  # Used for displaying correct input prompts depending o
 ## Raycast3D for interaction check.
 @export var interaction_raycast: InteractionRayCast
 @export var carryable_position: Node3D
-
-var interactable: # Updated via signals from InteractionRayCast
-	set = _set_interactable
-
-var carried_object = null:  # Used for carryable handling.
-	set = _set_carried_object
-	
-var is_carrying: bool:
-	get: return carried_object != null
 
 # Power with which object are thrown (opposed to being dropped)
 #@export var throw_power: float = 10
@@ -53,22 +46,15 @@ var player: CogitoPlayer
 ## List of Wieldable nodes
 @export var wieldable_nodes: Array[Node]
 @export var wieldable_container: Node3D
-var is_changing_wieldables: bool = false # Used to avoid any input acitons while wieldables are being swapped
-# Various variables used for wieldable handling
-var equipped_wieldable_item: WieldableItemPD = null
-var equipped_wieldable_node: CogitoWieldable = null
-var wieldable_was_on: bool = false
-var is_wielding: bool:
-	get: return equipped_wieldable_item != null
-# Used to auto equip the last, or just selected, wieldable automatically after or while carrying
-var wieldable_item_to_auto_equip: WieldableItemPD = null
-var auto_equip_wieldable_after_carrying: bool = false
-var primary_action_held: bool = false
 
 var player_rid
 # Briefly interrupt quickslot cycling after an interactable is unseen
 var can_cycle_quickslots: bool = true
 @onready var cycle_quickslots_interrupt_timer: Timer = $Timer
+
+@onready var targeting: InteractionTargeting = $InteractionTargeting
+@onready var carrying: CarryHandler = $CarryHandler
+@onready var wieldables: WieldableHandler = $WieldableHandler
 
 
 func _ready():
@@ -89,48 +75,48 @@ func on_input(event: InputEvent) -> void:
 	if event.is_action_pressed("interact") or event.is_action_pressed("interact2"):
 		var action: String = "interact" if event.is_action_pressed("interact") else "interact2"
 		_handle_interaction(action)
-		
+
 	if event.is_action_pressed("action_primary"):
-		primary_action_held = true
+		wieldables.primary_action_held = true
 		if is_carrying and is_instance_valid(carried_object):
-			_attempt_throw()
+			carrying.attempt_throw()
 			get_viewport().set_input_as_handled()
 		elif is_wielding:
-			attempt_action_primary(false)
+			wieldables.attempt_action_primary(false)
 			get_viewport().set_input_as_handled()
-			
+
 	elif event.is_action_released("action_primary"):
-		primary_action_held = false
+		wieldables.primary_action_held = false
 		if is_wielding and !is_carrying:
-			attempt_action_primary(true)
+			wieldables.attempt_action_primary(true)
 			get_viewport().set_input_as_handled()
-			
+
 	if event.is_action_pressed("action_secondary"):
 		if is_wielding:
-			attempt_action_secondary(false)
+			wieldables.attempt_action_secondary(false)
 			get_viewport().set_input_as_handled()
 	elif event.is_action_released("action_secondary"):
 		if is_wielding:
-			attempt_action_secondary(true)
+			wieldables.attempt_action_secondary(true)
 			get_viewport().set_input_as_handled()
-	
+
 	if event.is_action_pressed("change_ammo_type") and is_wielding:
-		attempt_change_ammo()
-		
+		wieldables.attempt_change_ammo()
+
 	if event.is_action_pressed("reload") and is_wielding:
 		# The below is a fix to avoid triggering reload when player attempts to interact and both actions are bound to same (gamepad) button
 		if InputHelper.device_index == -1: # If mouse/keyboard
-			attempt_reload()
+			wieldables.attempt_reload()
 		else:
 			if interactable == null:
-				attempt_reload()
+				wieldables.attempt_reload()
 
 func _handle_interaction(action: String) -> void:
 	# if carrying an object, drop it.
 	if is_carrying:
 		if is_instance_valid(carried_object):
 			if carried_object.input_map_action == action:
-				_drop_carried_object()
+				carrying.drop_carried_object()
 				#carried_object.throw(1)
 				return
 			else:
@@ -143,17 +129,17 @@ func _handle_interaction(action: String) -> void:
 								if !node.ignore_open_gui and get_parent().is_showing_ui:
 									return
 								node.interact(self)
-								
+
 								#Dual interaction components need to await signal to update correctly
 								if node is DualInteraction or node is ExtendedPickupInteraction:
 									await node.interaction_complete  # Wait until the interaction_complete signal is recieved
-									_rebuild_interaction_prompts()  # rebuild prompt after signal is received
+									targeting.rebuild_interaction_prompts()  # rebuild prompt after signal is received
 								else:
 									# Update the prompts after an interaction. This is especially crucial for doors and switches.
-									_rebuild_interaction_prompts()
+									targeting.rebuild_interaction_prompts()
 								break
 		else:
-			stop_carrying()
+			carrying.stop_carrying()
 			return
 
 	# Check if we have an interactable in view and are pressing the correct button
@@ -162,152 +148,26 @@ func _handle_interaction(action: String) -> void:
 			if node.input_map_action == action and not node.is_disabled:
 				if player.get("is_in_interaction_state") and !player.is_in_interaction_state or (!player.is_on_floor() and node.disable_interaction_in_air):
 					return
-					
+
 				if !node.ignore_open_gui and get_parent().is_showing_ui:
 					return
 				node.interact(self)
-				
+
 				#Dual interaction components need to await signal to update correctly
 				if node is DualInteraction or node is ExtendedPickupInteraction:
 					#(player.player_hud as CogitoPlayerHudManager).hold_ui.
 					await node.interaction_complete  # Wait until the interaction_complete signal is recieved
-					_rebuild_interaction_prompts()  # rebuild prompt after signal is received
+					targeting.rebuild_interaction_prompts()  # rebuild prompt after signal is received
 				else:
 					# Update the prompts after an interaction. This is especially crucial for doors and switches.
-					_rebuild_interaction_prompts()
+					targeting.rebuild_interaction_prompts()
 				break
-
-
-func is_interaction_raycast_colliding() -> bool:
-	if interaction_raycast.is_colliding():
-		return true
-	else:
-		return false
-
-
-## Helper function to always get raycast destination point
-func get_interaction_raycast_tip(distance_offset: float) -> Vector3:
-	var destination_point = interaction_raycast.global_position + (interaction_raycast.target_position.z - distance_offset) * get_viewport().get_camera_3d().get_global_transform().basis.z
-	if interaction_raycast.is_colliding():
-		#if destination_point == interaction_raycast.get_collision_point():
-		return interaction_raycast.get_collision_point()
-	else:
-		return destination_point
-
-
-func get_carryable_destination_point(distance_offset: float) -> Vector3:
-	if !carryable_position:
-		print("PIC: Error, no carryable position reference set!")
-		return self.global_position
-	
-	var camera = get_viewport().get_camera_3d()
-	var looking_vector = -camera.global_transform.basis.z.normalized()
-	var pitch = atan2(looking_vector.y, Vector2(looking_vector.x, looking_vector.z).length())
-	var look_down_factor = clamp(pitch, -PI / 2.0, 0.0) / (-PI / 2.0)
-	var safe_distance_offset = look_down_factor
-	
-	var carried_object_parent = carried_object.get_parent()
-	if carried_object_parent and carried_object_parent.has_method("get_aabb"):
-		var aabb = carried_object.get_parent().get_aabb()
-		var biggest_dimension = max(aabb.size.x,max(aabb.size.y, aabb.size.z))
-		safe_distance_offset = biggest_dimension * 0.5 + look_down_factor
-	
-	var destination_point = carryable_position.global_position + (distance_offset + safe_distance_offset) * looking_vector
-	
-	if interaction_raycast.is_colliding():
-		var collision_point = interaction_raycast.get_collision_point()
-		
-		if interaction_raycast.global_position.distance_squared_to(destination_point) < interaction_raycast.global_position.distance_squared_to(collision_point):
-			return destination_point
-		else:
-			return collision_point
-	
-	return destination_point
-
-
-### Carryable Management
-func start_carrying(_carried_object):
-	carried_object = _carried_object
-
-
-func stop_carrying():
-	carried_object = null
-	_rebuild_interaction_prompts() # Ensures the drop prompt gets deleted
-
-
-### Wieldable Management
-func equip_wieldable(wieldable_item: WieldableItemPD):
-	if wieldable_item != null:
-		equipped_wieldable_item = wieldable_item #Set Inventory Item reference
-		# Set Wieldable node reference
-		var wieldable_node = wieldable_item.build_wieldable_scene()
-		wieldable_container.add_child(wieldable_node)
-		equipped_wieldable_node = wieldable_node
-		equipped_wieldable_node.set_ammo_type(equipped_wieldable_item.current_ammo_type)
-		equipped_wieldable_node.item_reference = wieldable_item
-		print("PIC: Found ", equipped_wieldable_item.name, " in wieldable node array: ", wieldable_node.name)
-		wieldable_node.equip(self)
-		await get_tree().create_timer(wieldable_node.animation_player.current_animation_length).timeout
-		is_changing_wieldables = false
-		if is_instance_valid(wieldable_node) and wieldable_node == equipped_wieldable_node and wieldable_node.animation_player.is_playing():
-			await wieldable_node.animation_player.animation_finished
-		_apply_held_primary_action()
-	else:
-		is_changing_wieldables = false
-
-
-func change_wieldable_to(next_wieldable: InventoryItemPD):
-	is_changing_wieldables = true
-	if equipped_wieldable_item != null:
-		equipped_wieldable_item.is_being_wielded = false
-		if equipped_wieldable_node != null:
-			equipped_wieldable_node.unequip()
-			if equipped_wieldable_node.animation_player.is_playing(): # Wait until unequip animation finishes.
-				await get_tree().create_timer(equipped_wieldable_node.animation_player.current_animation_length).timeout 
-	equipped_wieldable_item = null
-	if equipped_wieldable_node != null:
-		equipped_wieldable_node.queue_free()
-	equipped_wieldable_node = null
-	equip_wieldable(next_wieldable)
-
-
-func attempt_action_primary(is_released: bool):
-	if is_changing_wieldables: # Block action if currently in the process of changing wieldables
-		return
-	if equipped_wieldable_node == null:
-		print("Nothing equipped, but is_wielding was true. This shouldn't happen!")
-		return
-		
-	equipped_wieldable_node.action_primary(equipped_wieldable_item, is_released)
-
-
-func _apply_held_primary_action() -> void:
-	if primary_action_held and Input.is_action_pressed("action_primary") and is_wielding and !is_carrying:
-		attempt_action_primary(false)
-
-
-func attempt_action_secondary(is_released: bool):
-	if is_changing_wieldables: # Block action if currently in the process of changing wieldables
-		return
-	if equipped_wieldable_node == null:
-		print("Nothing equipped, but is_wielding was true. This shouldn't happen!")
-		return
-	else:
-		equipped_wieldable_node.action_secondary(is_released)
-
-
-func attempt_change_ammo():
-	if equipped_wieldable_node: equipped_wieldable_node.change_ammo()
-
-
-func attempt_reload():
-	if equipped_wieldable_node: equipped_wieldable_node.reload()
 
 
 func on_death():
 	if equipped_wieldable_item:
 		equipped_wieldable_item.is_being_wielded = false
-	
+
 	if carried_object:
 		carried_object = null
 
@@ -355,68 +215,12 @@ func get_view_anchor() -> Node3D:
 #endregion
 
 
-# Function to get a normalised vector3 in direction the player is looking.
-func get_look_direction() -> Vector3:
-	var viewport = get_viewport().get_visible_rect().size
-	var camera = get_viewport().get_camera_3d()
-	return camera.project_ray_normal(viewport/2)
-
-
-# This gets a world space collision point of whatever the camera is pointed at, depending on the equipped wieldable range.
-func get_camera_collision() -> Vector3:
-	var viewport = get_viewport().get_visible_rect().size
-	var camera = get_viewport().get_camera_3d()
-	
-	var ray_origin = camera.project_ray_origin(viewport/2)
-	var ray_end = ray_origin + camera.project_ray_normal(viewport/2)*equipped_wieldable_item.wieldable_range
-	
-	var new_intersection = PhysicsRayQueryParameters3D.create(ray_origin, ray_end)
-	new_intersection.exclude = [player_rid]
-	var intersection = get_world_3d().direct_space_state.intersect_ray(new_intersection)
-	
-	if not intersection.is_empty():
-		var col_point = intersection.position
-		return col_point
-	else:
-		return ray_end
-
-
 func save():
-	if equipped_wieldable_node and equipped_wieldable_node.has_method("toggle_on_off"):
-		wieldable_was_on = equipped_wieldable_node.is_on
-	var interaction_component_data = {
-	"equipped_wieldable_item": equipped_wieldable_item,
-	#"equipped_wieldable_node": equipped_wieldable_node,
-	"is_wielding": is_wielding,
-	"wieldable_was_on" : wieldable_was_on,
-	}
-	return interaction_component_data
+	return wieldables.save()
 
 
 func set_state():
-	### Clearing out data from previous player state
-	updated_wieldable_data.emit(null, 0, null) # Clearing out wieldable HUD Data
-	
-	# Clearing out any instantiated wielable nodes
-	var leftover_wieldable_nodes : Array[Node] = wieldable_container.get_children()
-	for leftover_wieldable_node in leftover_wieldable_nodes:
-		leftover_wieldable_node.queue_free()
-
-	# Clearing out equipped wieldable node and it's reference
-	if equipped_wieldable_node != null:
-		equipped_wieldable_node.queue_free()
-	equipped_wieldable_node = null
-	
-	# Now equip saved wieldable item "from scratch"
-	if is_wielding and equipped_wieldable_item:
-		var temp_wieldable : WieldableItemPD = equipped_wieldable_item
-		equipped_wieldable_item = null
-		
-		temp_wieldable.is_being_wielded = false
-		temp_wieldable.use(get_parent())
-		
-		if equipped_wieldable_node and equipped_wieldable_node.has_method("toggle_on_off") and wieldable_was_on:
-			equipped_wieldable_node.toggle_flashlight(wieldable_was_on)
+	wieldables.set_state()
 
 
 func _on_interaction_raycast_interactable_seen(new_interactable) -> void:
@@ -429,122 +233,138 @@ func _on_interaction_raycast_interactable_unseen() -> void:
 	cycle_quickslots_interrupt_timer.start()
 
 
-func _set_interactable(new_interactable) -> void:
-	interactable = new_interactable
-	# Ensure the drop prompt isn't cleared.
-	if is_carrying:
-		return
-	if interactable == null:
-		nothing_detected.emit()
-	else:
-		interactive_object_detected.emit(interactable.interaction_nodes)
-
-
-func _set_carried_object(new_carried_object) -> void:
-	carried_object = new_carried_object
-	if carried_object != null:
-		started_carrying.emit(carried_object)
-
-
-func _rebuild_interaction_prompts() -> void:
-	# Ensure the drop prompt isn't cleared.
-	if is_carrying:
-		return
-	nothing_detected.emit() # Clears the prompts
-	if interactable != null:
-		interactive_object_detected.emit(interactable.interaction_nodes) # Builds the prompts
-
-
-func _attempt_throw() -> void:
-	if !is_carrying:
-		return
-
-	var carried_object_mass: float = get_carried_object_mass(carried_object)
-	var throw_force: float = carried_object_mass * throw_power_mass_multiplier
-	throw_force = clamp(throw_force, 0, max_throw_power)
-	
-	if stamina_attribute and throw_force >= throw_stamina_threshold:
-		if stamina_attribute.value_current < throw_stamina_drain:
-			if drop_when_cant_throw:
-				_drop_carried_object()
-			return
-		else:
-			player.decrease_attribute(stamina_attribute.attribute_name, throw_stamina_drain)
-			
-	carried_object.throw(throw_force)
-
-
-func _drop_carried_object() -> void:
-	if !is_carrying:
-		return
-	var carried_object_mass: float = get_carried_object_mass(carried_object)
-	var drop_force: float = carried_object_mass * drop_power_mass_multiplier
-	drop_force = clamp(drop_force, 0, max_drop_power)
-	carried_object.throw(drop_force)
-
-
-func get_carried_object_mass(carried_object) -> float:
-	var carried_object_mass: float
-	var carried_object_parent = carried_object.get_parent()
-	if carried_object_parent is RigidBody3D:
-		carried_object_mass = (carried_object_parent as RigidBody3D).mass
-	elif carried_object_parent is PhysicalBone3D:
-		carried_object_mass = (carried_object_parent as PhysicalBone3D).mass
-	return carried_object_mass
-
-
 ## Briefly interrupt quickslot cycling after an interactable is unseen
 ## This prevents incidental quickslot cycling when only attempting to interact with an item in the world that uses the same input action
 func _on_can_cycle_quickslots_timeout() -> void:
 	can_cycle_quickslots = true
 
 
-# Called by CarryableComponent just before carrying an object
+func get_inventory() -> CogitoInventory:
+	return get_parent().inventory_data
+
+
+#region Forwarding to child nodes
+# Kept so existing code using these members on PlayerInteractionComponent keeps working.
+
+var interactable:
+	get: return targeting.interactable
+	set(value): targeting.interactable = value
+
+var carried_object:
+	get: return carrying.carried_object
+	set(value): carrying.carried_object = value
+
+var is_carrying: bool:
+	get: return carrying.is_carrying
+
+var is_changing_wieldables: bool:
+	get: return wieldables.is_changing_wieldables
+	set(value): wieldables.is_changing_wieldables = value
+
+var equipped_wieldable_item: WieldableItemPD:
+	get: return wieldables.equipped_wieldable_item
+	set(value): wieldables.equipped_wieldable_item = value
+
+var equipped_wieldable_node: CogitoWieldable:
+	get: return wieldables.equipped_wieldable_node
+	set(value): wieldables.equipped_wieldable_node = value
+
+var wieldable_was_on: bool:
+	get: return wieldables.wieldable_was_on
+	set(value): wieldables.wieldable_was_on = value
+
+var is_wielding: bool:
+	get: return wieldables.is_wielding
+
+var wieldable_item_to_auto_equip: WieldableItemPD:
+	get: return wieldables.wieldable_item_to_auto_equip
+	set(value): wieldables.wieldable_item_to_auto_equip = value
+
+var auto_equip_wieldable_after_carrying: bool:
+	get: return wieldables.auto_equip_wieldable_after_carrying
+	set(value): wieldables.auto_equip_wieldable_after_carrying = value
+
+var primary_action_held: bool:
+	get: return wieldables.primary_action_held
+	set(value): wieldables.primary_action_held = value
+
+
+func is_interaction_raycast_colliding() -> bool:
+	return targeting.is_interaction_raycast_colliding()
+
+
+func get_interaction_raycast_tip(distance_offset: float) -> Vector3:
+	return targeting.get_interaction_raycast_tip(distance_offset)
+
+
+func get_look_direction() -> Vector3:
+	return targeting.get_look_direction()
+
+
+func _rebuild_interaction_prompts() -> void:
+	targeting.rebuild_interaction_prompts()
+
+
+func get_carryable_destination_point(distance_offset: float) -> Vector3:
+	return carrying.get_carryable_destination_point(distance_offset)
+
+
+func start_carrying(_carried_object):
+	carrying.start_carrying(_carried_object)
+
+
+func stop_carrying():
+	carrying.stop_carrying()
+
+
+func get_carried_object_mass(carried_object) -> float:
+	return carrying.get_carried_object_mass(carried_object)
+
+
+func _attempt_throw() -> void:
+	carrying.attempt_throw()
+
+
+func _drop_carried_object() -> void:
+	carrying.drop_carried_object()
+
+
+func equip_wieldable(wieldable_item: WieldableItemPD):
+	await wieldables.equip_wieldable(wieldable_item)
+
+
+func change_wieldable_to(next_wieldable: InventoryItemPD):
+	await wieldables.change_wieldable_to(next_wieldable)
+
+
+func attempt_action_primary(is_released: bool):
+	wieldables.attempt_action_primary(is_released)
+
+
+func attempt_action_secondary(is_released: bool):
+	wieldables.attempt_action_secondary(is_released)
+
+
+func attempt_change_ammo():
+	wieldables.attempt_change_ammo()
+
+
+func attempt_reload():
+	wieldables.attempt_reload()
+
+
+func get_camera_collision() -> Vector3:
+	return wieldables.get_camera_collision()
+
+
 func setup_wieldable_to_auto_equip(next_wieldable: WieldableItemPD = null) -> void:
-	if equipped_wieldable_node != null:
-		wieldable_item_to_auto_equip = equipped_wieldable_node.item_reference
-	elif equipped_wieldable_item != null:
-		wieldable_item_to_auto_equip = equipped_wieldable_item
-	elif next_wieldable != null: # Called when using quickslots to assign a wieldable while carrying an object
-		wieldable_item_to_auto_equip = next_wieldable
-	elif wieldable_item_to_auto_equip == null:
-		print("PIC: can't set up auto reequip as none of equipped_wieldable_node, equipped_wieldable_item, nor wieldable_to_auto_equip exist")
-		return
-	
-	if equipped_wieldable_node != null:
-		if equipped_wieldable_node.has_method("toggle_on_off"):
-			wieldable_was_on = equipped_wieldable_node.is_on
-		change_wieldable_to(null)
-	
-	auto_equip_wieldable_after_carrying = true
+	wieldables.setup_wieldable_to_auto_equip(next_wieldable)
 
 
 func auto_equip_last_wieldable() -> void:
-	if auto_equip_wieldable_after_carrying and wieldable_item_to_auto_equip != null:
-		if equipped_wieldable_node != null:
-			equipped_wieldable_node.queue_free()
-			await get_tree().create_timer(equipped_wieldable_node.animation_player.current_animation_length).timeout
-			if equipped_wieldable_node != null:
-				equipped_wieldable_node.free()
-		equipped_wieldable_node = null
-		equipped_wieldable_item = null
-		is_changing_wieldables = false
-		
-		var temp_wieldable : WieldableItemPD = wieldable_item_to_auto_equip
-		temp_wieldable.is_being_wielded = false
-		# Failing to reequip the wieldable, such as in carry->drop->carry scenarios, preserves the reequip status until it succeeds
-		if temp_wieldable.use(get_parent()):
-			auto_equip_wieldable_after_carrying = false
-		
-		if equipped_wieldable_node and equipped_wieldable_node.has_method("toggle_on_off") and wieldable_was_on:
-			equipped_wieldable_node.is_on = !wieldable_was_on
-			equipped_wieldable_node.toggle_on_off()
+	await wieldables.auto_equip_last_wieldable()
 
-
-func get_inventory() -> CogitoInventory:
-	return get_parent().inventory_data
-	
 
 func update_equipped() -> void:
-	if equipped_wieldable_item:
-		equipped_wieldable_item.update_wieldable_data(self)
+	wieldables.update_equipped()
+#endregion

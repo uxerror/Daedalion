@@ -1,6 +1,9 @@
 [gd_scene format=3 uid="uid://dy3tudla5p2nc"]
 
 [ext_resource type="Script" uid="uid://b8mj1lg1wruus" path="res://addons/cogito/Components/PlayerInteractionComponent.gd" id="1_8fdwf"]
+[ext_resource type="Script" path="res://addons/cogito/Components/PlayerInteraction/InteractionTargeting.gd" id="2_target"]
+[ext_resource type="Script" path="res://addons/cogito/Components/PlayerInteraction/CarryHandler.gd" id="3_carry"]
+[ext_resource type="Script" path="res://addons/cogito/Components/PlayerInteraction/WieldableHandler.gd" id="4_wield"]
 
 [node name="PlayerInteractionComponent" type="Node3D" unique_id=696914598]
 script = ExtResource("1_8fdwf")
@@ -8,3 +11,12 @@ script = ExtResource("1_8fdwf")
 [node name="Timer" type="Timer" parent="." unique_id=595756878]
 wait_time = 0.4
 one_shot = true
+
+[node name="InteractionTargeting" type="Node3D" parent="."]
+script = ExtResource("2_target")
+
+[node name="CarryHandler" type="Node3D" parent="."]
+script = ExtResource("3_carry")
+
+[node name="WieldableHandler" type="Node3D" parent="."]
+script = ExtResource("4_wield")
