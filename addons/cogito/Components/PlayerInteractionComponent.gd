@@ -202,7 +202,7 @@ func close_interface(on_menu_pressed: Callable = Callable()) -> void:
 	player.toggled_interface.emit(false)
 
 
-func get_hud() -> CogitoPlayerHudManager:
+func get_hud() -> CogitoHud:
 	return player.player_hud
 
 

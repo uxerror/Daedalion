@@ -36,7 +36,7 @@ var marked_for_deletion: bool = false
 
 # Internal variables to player
 var _player: CogitoPlayer
-var _player_hud: CogitoPlayerHudManager
+var _player_hud: CogitoHud
 
 enum DespawningLogic {
 NONE = 0, ## Container will not despawn and will become part of the scene. 
@@ -72,7 +72,7 @@ func _ready() -> void:
 ## Set up references to player and container in a deferred manner to avoid nulling
 func _set_up_references():
 	_player = CogitoSceneManager.get_player()
-	_player_hud = _player.find_child("Player_HUD", true, true)
+	_player_hud = _player.player_hud
 
 	# Connects to hud signal to be able to interact with this spawned object.
 	if !self.toggle_inventory.is_connected(_player_hud.toggle_inventory_interface):
@@ -209,9 +209,9 @@ func _unpause_timer():
 func _on_despawn_timer_timeout():
 	if _clear_for_despawning():
 		if _player_hud != null:
-			if _player_hud.inventory_interface.is_inventory_open:
-				if _player_hud.inventory_interface.get_external_inventory() == self:
-					_player_hud.inventory_interface.clear_external_inventory()
+			if _player_hud.is_inventory_visible():
+				if _player_hud.get_external_inventory() == self:
+					_player_hud.clear_external_inventory()
 		
 		CogitoGlobals.debug_log(debug_prints, "Loot Component/Loot Drop Container", "Despawning Container: " + str(self))
 		_remove_container()
@@ -234,8 +234,8 @@ func _on_inventory_updated(inventory_data : CogitoInventory):
 		if items_in_slots.is_empty():
 			if despawning_logic == DespawningLogic.ONLY_EMPTY:
 				if _player_hud != null:
-					if _player_hud.inventory_interface.is_inventory_open:
-						if _player_hud.inventory_interface.get_external_inventory() == self:
+					if _player_hud.is_inventory_visible():
+						if _player_hud.get_external_inventory() == self:
 							_player_hud.toggle_inventory_interface(self)
 							
 				_remove_container()
@@ -279,7 +279,7 @@ func _on_inventory_hidden():
 ## Pause the timer on inventory access
 func _on_inventory_toggled(external_inventory_owner: Node):
 	if self == external_inventory_owner:
-		if _player_hud.inventory_interface.is_inventory_open:
+		if _player_hud.is_inventory_visible():
 			if timer != null:
 				_pause_timer()
 				CogitoGlobals.debug_log(debug_prints, "Loot Component/Loot Drop Container", "Pausing timer. Time Remaining: " + str(timer.time_left) + " " + str(time_left)+ " " + str(timer.wait_time))

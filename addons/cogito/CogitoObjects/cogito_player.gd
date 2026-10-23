@@ -11,7 +11,7 @@ signal player_state_loaded()
 signal toggled_interface(is_showing_ui:bool)
 
 ## Refereence to Player HUD node
-@export var player_hud : CogitoPlayerHudManager
+@export var player_hud : CogitoHud
 # Used for handling input when UI is open/displayed
 var is_showing_ui : bool
 ## Toggle printing debug messages or not. Works with the CogitoSceneManager

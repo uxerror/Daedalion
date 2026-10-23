@@ -7,7 +7,7 @@ class_name LootGenerator extends Node
 
 # Internal variables to player
 var _player: CogitoPlayer
-var _player_hud: CogitoPlayerHudManager
+var _player_hud: CogitoHud
 var _player_inventory: CogitoInventory
 
 # Arrays to sort items into
@@ -49,7 +49,7 @@ func generate(loot_table: LootTable, amount: int, debug: bool = false) -> Array[
 ## Set up references to player in order to query loot bags and player inventory so we can check for unique and quest drops.
 func _set_up_references():
 	_player = CogitoSceneManager.get_player()
-	_player_hud = _player.find_child("Player_HUD", true, true)
+	_player_hud = _player.player_hud
 	_player_inventory = _player.inventory_data
 
 

@@ -20,8 +20,8 @@ func interact(_player_interaction_component):
 	player_interaction_component = _player_interaction_component
 	
 	var hud = _player_interaction_component.get_hud()
-	if !hud.hold_ui.is_holding:
-		hud.hold_ui.start_holding(self)
+	if !hud.is_holding():
+		hud.start_hold(self)
 
 
 func _on_object_state_change(_interaction_text: String):

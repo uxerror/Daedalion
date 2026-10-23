@@ -235,7 +235,7 @@ func _ready():
 	CogitoSceneManager.connect("seat_move_requested", Callable(self, "_on_seat_move_requested"))
 	
 	# Invntory Interface signal setup
-	player_hud.inventory_interface.inventory_open.connect(on_inventory_interface_open)
+	(player_hud as CogitoPlayerHudManager).inventory_interface.inventory_open.connect(on_inventory_interface_open)
 	
 	CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Player has no reference to pause menu.")
 	
@@ -359,7 +359,7 @@ func on_input(event):
 			return
 		if is_showing_ui: #Behaviour when pressing ESC/menu while external UI is open (Readables, Keypad, etc)
 			menu_pressed.emit(player_interaction_component)
-			if player_hud.inventory_interface.is_inventory_open: #Behaviour when pressing ESC/menu while Inventory is open
+			if player_hud.is_inventory_visible(): #Behaviour when pressing ESC/menu while Inventory is open
 				toggle_inventory_interface.emit()
 		elif !is_movement_paused and !is_dead:
 			if !currently_tweening:
@@ -379,8 +379,10 @@ func on_input(event):
 	if event.is_action_pressed("inventory") and !is_dead:
 		player_hud.set_inventory_visibility(true)
 		
-	if player_hud and player_hud.inventory_interface and player_hud.inventory_interface.quick_slots:
-		player_hud.inventory_interface.quick_slots.on_input(event)
+	# Quick slots are part of the first person HUD.
+	var fp_hud : CogitoPlayerHudManager = player_hud as CogitoPlayerHudManager
+	if fp_hud and fp_hud.inventory_interface and fp_hud.inventory_interface.quick_slots:
+		fp_hud.inventory_interface.quick_slots.on_input(event)
 
 
 func get_params(transform3d, motion):

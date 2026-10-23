@@ -31,7 +31,7 @@ class_name LootComponent extends Node3D
 
 # Internal variables to player
 var _player: CogitoPlayer
-var _player_hud: CogitoPlayerHudManager
+var _player_hud: CogitoHud
 var _player_inventory: CogitoInventory
 
 enum SpawningLogic {
@@ -55,7 +55,7 @@ func _ready() -> void:
 ## Set up references to player in a deferred manner to avoid nulling during tree operation
 func _set_up_references():
 	_player = CogitoSceneManager.get_player()
-	_player_hud = _player.find_child("Player_HUD", true, true)
+	_player_hud = _player.player_hud
 	_player_inventory = _player.inventory_data
 	
 	if spawning_logic == SpawningLogic.SPAWN_ITEM:

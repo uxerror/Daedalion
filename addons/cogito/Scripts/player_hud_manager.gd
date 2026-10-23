@@ -1,8 +1,5 @@
 class_name CogitoPlayerHudManager
-extends Control
-
-signal show_inventory
-signal hide_inventory
+extends CogitoHud
 
 #region Variables
 
@@ -230,6 +227,32 @@ func toggle_inventory_interface(external_inventory_owner = null):
 		inventory_interface.set_external_inventory(external_inventory_owner)
 	else:
 		inventory_interface.clear_external_inventory()
+
+#region CogitoHud
+func start_hold(hold_interaction: HoldInteraction) -> void:
+	hold_ui.start_holding(hold_interaction)
+
+
+func is_holding() -> bool:
+	return hold_ui.is_holding
+
+
+func is_inventory_visible() -> bool:
+	return inventory_interface.is_inventory_open
+
+
+func get_external_inventory():
+	return inventory_interface.get_external_inventory()
+
+
+func set_external_inventory(external_inventory_owner) -> void:
+	inventory_interface.set_external_inventory(external_inventory_owner)
+
+
+func clear_external_inventory() -> void:
+	inventory_interface.clear_external_inventory()
+#endregion
+
 
 func on_inventory_visibility_changed(is_showing: bool):
 	if !is_showing:

@@ -55,7 +55,7 @@ var end_time: float
 
 # Internal variables to player
 var _player: CogitoPlayer
-var _player_hud: CogitoPlayerHudManager
+var _player_hud: CogitoHud
 var _player_inventory: CogitoInventory
 var _player_interaction_component: PlayerInteractionComponent
 
@@ -84,7 +84,7 @@ func _ready() -> void:
 ## Set up references to player and container in a deferred manner to avoid nulling
 func _set_up_references():
 	_player = CogitoSceneManager.get_player()
-	_player_hud = _player.find_child("Player_HUD", true, true)
+	_player_hud = _player.player_hud
 	_player_inventory = _player.inventory_data
 	_player_interaction_component = _player.player_interaction_component
 	
@@ -157,9 +157,9 @@ func _populate_the_container(_inventory: CogitoInventory, _items: Array[LootDrop
 		# Close the container before clearing the slots
 		if _player_hud != null and viewing_this_container:
 			CogitoGlobals.debug_log(debug_prints, "Loot Component/Lootable Container", "Player Hud found and is viewing this container:" + str(self))
-			if _player_hud.inventory_interface.is_inventory_open:
-				if _player_hud.inventory_interface.get_external_inventory() == self:
-					_player_hud.inventory_interface.clear_external_inventory()
+			if _player_hud.is_inventory_visible():
+				if _player_hud.get_external_inventory() == self:
+					_player_hud.clear_external_inventory()
 				
 		for slot in slots:
 			_inventory.null_out_slots(slot)
@@ -188,8 +188,8 @@ func _populate_the_container(_inventory: CogitoInventory, _items: Array[LootDrop
 		_index += 1
 	# Reopen the container to refresh inventory displayed in the external_inventory. However currently interacting with the lootable container pauses respawn timer, this is kept as a further option but the way it is set up, cannot actually refresh.
 	if _player_hud != null and viewing_this_container:
-		if _player_hud.inventory_interface.is_inventory_open:
-			_player_hud.inventory_interface.set_external_inventory(self)
+		if _player_hud.is_inventory_visible():
+			_player_hud.set_external_inventory(self)
 
 
 ## Set up timer
@@ -278,7 +278,7 @@ func _on_inventory_hidden():
 ## Pause the timer on inventory access
 func _on_inventory_toggled(external_inventory_owner: Node):
 	if self == external_inventory_owner and inventory_respawning_logic == InventoryRespawningLogic.TIMED_RESPAWN:
-		if _player_hud.inventory_interface.is_inventory_open:
+		if _player_hud.is_inventory_visible():
 			_pause_timer()
 			viewing_this_container = true
 			CogitoGlobals.debug_log(debug_prints, "Loot Component/Lootable Container", "Pausing timer. Time Remaining: " + str(timer.time_left))
