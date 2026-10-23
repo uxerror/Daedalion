@@ -45,11 +45,11 @@ func interact(_player_interaction_component: PlayerInteractionComponent) -> void
 		return
 	
 	player_interaction_component = _player_interaction_component
-	player_interaction_component.get_parent().toggled_interface.emit(true)
+	player_interaction_component.open_interface()
 	
 	if !spawned_lockpick_game:
 		spawned_lockpick_game = lockpick_minigame.instantiate()
-	player_interaction_component.player.head.add_child(spawned_lockpick_game)
+	player_interaction_component.get_view_anchor().add_child(spawned_lockpick_game)
 	
 	spawned_lockpick_game.unlocked.connect(on_lock_picked)
 	spawned_lockpick_game.cancelled.connect(on_cancel)
@@ -58,7 +58,7 @@ func interact(_player_interaction_component: PlayerInteractionComponent) -> void
 	# Pass player attribute if attribute check is not NONE
 	if attribute_check != AttributeCheck.NONE:
 		var fetched_attribute : CogitoAttribute
-		fetched_attribute = player_interaction_component.player.player_attributes.get(attribute_to_check)
+		fetched_attribute = player_interaction_component.get_attribute(attribute_to_check)
 		spawned_lockpick_game.pass_player_attribute(fetched_attribute)
 	
 	# Set the UI to show the lockpick item icon and how many lockpicks the player is carrying:
@@ -73,7 +73,7 @@ func on_lock_picked() -> void:
 		player_interaction_component.send_hint(null, tr(lockpick_success_hint))
 		
 	lockpick_ui.hide()
-	player_interaction_component.get_parent().toggled_interface.emit(false)
+	player_interaction_component.close_interface()
 	
 	if doors_to_unlock:
 		for door in doors_to_unlock:
@@ -85,13 +85,13 @@ func on_lock_picked() -> void:
 
 
 func on_cancel() -> void:
-	player_interaction_component.get_parent().toggled_interface.emit(false)
+	player_interaction_component.close_interface()
 	spawned_lockpick_game.queue_free()
 	lockpick_ui.hide()
 
 
 func check_for_item(interactor, item) -> bool:
-	var inventory = interactor.get_parent().inventory_data
+	var inventory = interactor.get_inventory()
 	for slot_data in inventory.inventory_slots:
 		if slot_data != null and slot_data.inventory_item == item:
 			return true
@@ -100,7 +100,7 @@ func check_for_item(interactor, item) -> bool:
 
 func discard_lockpick() -> void:
 	#	Lockpick Discard Logic, used when a lockpick breaks to remove one from inventory.
-	var inventory = player_interaction_component.get_parent().inventory_data
+	var inventory = player_interaction_component.get_inventory()
 	for slot_data in inventory.inventory_slots:
 		if slot_data != null and slot_data.inventory_item == required_lockpick_item:
 			player_interaction_component.send_hint(null, tr(required_lockpick_item.name) + " " + tr(lockpick_item_breaks_hint) )
@@ -120,8 +120,8 @@ func discard_lockpick() -> void:
 
 func get_lockpick_amount_in_inventory(item_name_to_check_for: String) -> int:
 	var item_count : int = 0
-	if player_interaction_component.get_parent().inventory_data != null:
-		var inventory_to_check = player_interaction_component.get_parent().inventory_data
+	if player_interaction_component.get_inventory() != null:
+		var inventory_to_check = player_interaction_component.get_inventory()
 		for slot in inventory_to_check.inventory_slots:
 			if slot != null and slot.inventory_item.name == item_name_to_check_for:
 				item_count += slot.quantity

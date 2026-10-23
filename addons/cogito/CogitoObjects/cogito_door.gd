@@ -230,7 +230,7 @@ func unlock_door():
 	
 #	Key Discard Logic
 	if key && key.discard_after_use:
-		var inventory = player_interaction_component.get_parent().inventory_data
+		var inventory = player_interaction_component.get_inventory()
 		for slot_data in inventory.inventory_slots:
 			if slot_data != null and slot_data.inventory_item == key:
 				player_interaction_component.send_hint(null, tr(key.name) + " " + tr("HINT_SWITCH_item_used") ) # Sends a hint with the key item name.

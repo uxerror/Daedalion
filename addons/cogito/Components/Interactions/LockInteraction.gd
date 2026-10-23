@@ -34,7 +34,7 @@ func _lock_state_updated(lock_interaction_text: String):
 		player_interaction_component._rebuild_interaction_prompts()
 
 func check_for_item(interactor, item) -> bool:
-	var inventory = interactor.get_parent().inventory_data
+	var inventory = interactor.get_inventory()
 	for slot_data in inventory.inventory_slots:
 		if slot_data != null and slot_data.inventory_item == item:
 			if slot_data.inventory_item.has_method("discard_after_use"):

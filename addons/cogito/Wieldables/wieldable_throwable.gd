@@ -21,7 +21,7 @@ var item_slot : InventorySlotPD
 func equip(_player_interaction_component: PlayerInteractionComponent):
 	animation_player.play(anim_equip)
 	player_interaction_component = _player_interaction_component
-	player_inventory = player_interaction_component.get_parent().inventory_data
+	player_inventory = player_interaction_component.get_inventory()
 	item_slot = get_slot_reference()
 
 

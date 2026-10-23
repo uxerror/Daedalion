@@ -29,7 +29,7 @@ func interact(_player_interaction_component):
 
 #Runs check before allowing hold to start, currently used to stop lock/unlock hold interaction if key not present.
 func check_before_hold_start(_player_interaction_component):
-	var hud: CogitoPlayerHudManager = _player_interaction_component.player.player_hud
+	var hud: CogitoPlayerHudManager = _player_interaction_component.get_hud()
 	
 	if hold_node and hold_node.has_method("start_hold_check"):
 		if hold_node.start_hold_check(_player_interaction_component):

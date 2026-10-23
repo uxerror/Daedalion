@@ -84,8 +84,7 @@ func interact(_player: PlayerInteractionComponent):
 
 func open(_player: PlayerInteractionComponent):
 	is_closed = false
-	_player.get_parent().toggled_interface.emit(true)
-	_player.get_parent().menu_pressed.connect(close) #Connecting input action menu to close function.
+	_player.open_interface(close) #Connecting input action menu to close function.
 	keypad_ui.show()
 	grab_focus_button.grab_focus()
 	InputRouter.push(on_input)
@@ -97,8 +96,7 @@ func open(_player: PlayerInteractionComponent):
 func close(_player: PlayerInteractionComponent):
 	is_closed = true
 	keypad_ui.hide()
-	_player.get_parent().menu_pressed.disconnect(close)
-	_player.get_parent().toggled_interface.emit(false)
+	_player.close_interface(close)
 	InputRouter.pop()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 

@@ -34,7 +34,7 @@ func interact(_player_interaction_component):
 		was_interacted_with.emit(interaction_text, input_map_action)
 		player_interaction_component = _player_interaction_component
 		
-		var hud = _player_interaction_component.player.player_hud
+		var hud = _player_interaction_component.get_hud()
 		if !hud.hold_ui.is_holding:
 			hud.hold_ui.start_holding(self)
 
@@ -77,7 +77,7 @@ func set_disabled(player: CogitoPlayer) -> bool:
 			is_disabled = true
 	elif item is WieldableItemPD:
 		# Disable if no space in inventory
-		is_disabled = player_interaction_component.is_carrying or !player_interaction_component.player.inventory_data.can_pick_up_slot_data(pickup.slot_data)
+		is_disabled = player_interaction_component.is_carrying or !player_interaction_component.get_inventory().can_pick_up_slot_data(pickup.slot_data)
 	
 	# Invert pickup is_disabled state based on this disabled state
 	pickup.is_disabled = !is_disabled
@@ -156,7 +156,7 @@ func attempt_wield(wieldable: WieldableItemPD) -> void:
 	if player_interaction_component.is_changing_wieldables:
 		return
 	
-	if player_interaction_component.player.inventory_data.pick_up_slot_data(pickup.slot_data):
+	if player_interaction_component.get_inventory().pick_up_slot_data(pickup.slot_data):
 		if player_interaction_component.is_wielding:
 			player_interaction_component.equipped_wieldable_item.put_away()
 			await get_tree().create_timer(player_interaction_component.equipped_wieldable_node.animation_player.current_animation_length).timeout 

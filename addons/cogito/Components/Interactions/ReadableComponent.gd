@@ -40,8 +40,7 @@ func interact(_player_interaction_component: PlayerInteractionComponent):
 func open(_player: PlayerInteractionComponent):
 	player = _player
 	InputRouter.push(on_input)
-	player.get_parent().toggled_interface.emit(true)
-	player.get_parent().menu_pressed.connect(close) #Connecting input action menu to close function.
+	player.open_interface(close) #Connecting input action menu to close function.
 	readable_ui.show()
 	has_been_read.emit()
 	
@@ -51,7 +50,6 @@ func open(_player: PlayerInteractionComponent):
 
 func close(_player: PlayerInteractionComponent):
 	readable_ui.hide()
-	_player.get_parent().menu_pressed.disconnect(close)
-	_player.get_parent().toggled_interface.emit(false)
+	_player.close_interface(close)
 	InputRouter.pop()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED

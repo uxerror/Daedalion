@@ -317,6 +317,44 @@ func send_hint(hint_icon: Texture2D, hint_text: String):
 	hint_prompt.emit(hint_icon, hint_text)
 
 
+#region Interaction contract
+# What interactables may use from the one interacting with them, instead of reaching into the player node.
+
+## Returns the attribute with this name (for example "health" or "stamina"), or null if there is none.
+func get_attribute(attribute_name: String) -> CogitoAttribute:
+	return player.player_attributes.get(attribute_name)
+
+
+## Called by interactables that open their own UI (keypad, readable, etc). The player stops moving and looking around while it is open.
+## If on_menu_pressed is valid, it gets called with this component when the menu action is pressed, usually to close that UI.
+func open_interface(on_menu_pressed: Callable = Callable()) -> void:
+	player.toggled_interface.emit(true)
+	if on_menu_pressed.is_valid():
+		player.menu_pressed.connect(on_menu_pressed)
+
+
+## Counterpart of open_interface(). Pass the same on_menu_pressed that was passed to open_interface().
+func close_interface(on_menu_pressed: Callable = Callable()) -> void:
+	if on_menu_pressed.is_valid():
+		player.menu_pressed.disconnect(on_menu_pressed)
+	player.toggled_interface.emit(false)
+
+
+func get_hud() -> CogitoPlayerHudManager:
+	return player.player_hud
+
+
+## Turns mouse and stick look on or off, for example while the player rotates a carried object.
+func set_mouselook_enabled(is_enabled: bool) -> void:
+	player.is_mouselook_active = is_enabled
+
+
+## Node that follows the player's view, for interactables that show 3D content in front of the player (like the lockpick minigame).
+func get_view_anchor() -> Node3D:
+	return player.head
+#endregion
+
+
 # Function to get a normalised vector3 in direction the player is looking.
 func get_look_direction() -> Vector3:
 	var viewport = get_viewport().get_visible_rect().size

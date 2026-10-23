@@ -85,13 +85,13 @@ func _physics_process(_delta):
 		parent_object.set_linear_velocity((carry_position - parent_object.global_position) * carrying_velocity_multiplier)
 		
 		if Input.is_action_pressed("action_secondary") and enable_manual_rotating:
-			player_interaction_component.player.is_mouselook_active = false
+			player_interaction_component.set_mouselook_enabled(false)
 			is_being_rotated = true
 		
 		# Resume player movement when input action is released
 		if is_being_rotated:
 			if Input.is_action_just_released("action_secondary"):
-				player_interaction_component.player.is_mouselook_active = true
+				player_interaction_component.set_mouselook_enabled(true)
 				is_being_rotated = false
 				
 			if gamepad_rotation.length() >= 0.2:
@@ -156,7 +156,7 @@ func hold():
 func leave():
 	# Making sure the player movement resumes when object is dropped while being rotated
 	if is_being_rotated:
-		player_interaction_component.player.is_mouselook_active = true
+		player_interaction_component.set_mouselook_enabled(true)
 		
 	if parent_object is RigidBody3D and lock_rotation_when_carried:
 		parent_object.set_lock_rotation_enabled(false)

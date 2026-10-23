@@ -130,7 +130,7 @@ func _on_damage_received(_damage,_bullet_direction,_bullet_position):
 
 
 func check_for_item() -> bool:
-	var inventory = player_interaction_component.get_parent().inventory_data
+	var inventory = player_interaction_component.get_inventory()
 	for slot_data in inventory.inventory_slots:
 		if slot_data != null and slot_data.inventory_item == required_item:
 			player_interaction_component.send_hint(null, required_item.name + " used.") # Sends a hint with the key item name.

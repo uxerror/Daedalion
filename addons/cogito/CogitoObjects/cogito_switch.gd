@@ -102,7 +102,7 @@ func interact(_player_interaction_component):
 	else:
 		if is_holding_item:
 			# Logic to for the player to pick up the required item
-			var inventory = player_interaction_component.get_parent().inventory_data
+			var inventory = player_interaction_component.get_inventory()
 			inventory.pick_up_slot_data(required_item_slot)
 			
 			CogitoGlobals.debug_log(true,"cogito_switch.gd","Item " + required_item_slot.inventory_item.name + " added to player inventory")
@@ -178,7 +178,7 @@ func switch_off():
 
 
 func check_for_item() -> bool:
-	var inventory = player_interaction_component.get_parent().inventory_data
+	var inventory = player_interaction_component.get_inventory()
 	for slot_data in inventory.inventory_slots:
 		if slot_data != null and slot_data.inventory_item == required_item_slot.inventory_item:
 			player_interaction_component.send_hint(null, tr(required_item_slot.inventory_item.name) + " " + tr("HINT_SWITCH_item_used") ) # Sends a hint with the key item name.

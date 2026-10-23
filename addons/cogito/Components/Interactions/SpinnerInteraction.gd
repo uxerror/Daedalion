@@ -88,7 +88,7 @@ func interact(_player_interaction_component: PlayerInteractionComponent) -> void
 func enter(_pic: PlayerInteractionComponent) -> void:
 	player_interaction_component = _pic
 	InputRouter.push(on_input)
-	player_interaction_component.get_parent().toggled_interface.emit(true)
+	player_interaction_component.open_interface()
 
 	screen_center = Vector2(get_window().size.x / 2, get_window().size.y / 2 )
 	
@@ -101,7 +101,7 @@ func enter(_pic: PlayerInteractionComponent) -> void:
 
 func exit(_player: PlayerInteractionComponent) -> void:
 	if interacting_gizmo: interacting_gizmo.set_visible(false)
-	_player.get_parent().toggled_interface.emit(false)
+	_player.close_interface()
 	InputRouter.pop()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	is_being_controlled = false

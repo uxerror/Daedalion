@@ -8,7 +8,7 @@ var item_slot : InventorySlotPD
 # Function called when wieldable is unequipped.
 func equip(_player_interaction_component: PlayerInteractionComponent):
 	player_interaction_component = _player_interaction_component
-	player_inventory = player_interaction_component.get_parent().inventory_data
+	player_inventory = player_interaction_component.get_inventory()
 	item_slot = get_slot_reference()
 	player_interaction_component.updated_wieldable_data.emit(null,0,null)
 	

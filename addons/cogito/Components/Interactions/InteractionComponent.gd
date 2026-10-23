@@ -36,7 +36,7 @@ func check_attribute(player_interaction_component: PlayerInteractionComponent) -
 		return false
 	
 	var fetched_attribute : CogitoAttribute
-	fetched_attribute = player_interaction_component.player.player_attributes.get(attribute_to_check)
+	fetched_attribute = player_interaction_component.get_attribute(attribute_to_check)
 	
 	if fetched_attribute == null:
 		CogitoGlobals.debug_log(true,"InteractionComponent.gd", "attribute_to_check (" + attribute_to_check + ") was not found in player_attributes!")
