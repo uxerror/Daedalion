@@ -26,3 +26,17 @@ func interact(_player_interaction_component):
 
 func _on_object_state_change(_interaction_text: String):
 	interaction_text = _interaction_text
+
+
+## Runs when the hold is let go before it completes. Nothing for a plain hold.
+func perform_quick_action(_player_interaction_component: PlayerInteractionComponent) -> void:
+	pass
+
+
+## Runs when the hold completes.
+func perform_hold_action(_player_interaction_component: PlayerInteractionComponent) -> void:
+	parent_node.interact(_player_interaction_component)
+
+
+func get_actions(_player_interaction_component: PlayerInteractionComponent) -> Array[CogitoInteractionAction]:
+	return [CogitoInteractionAction.new(interaction_text, self, perform_hold_action, !is_disabled)]

@@ -47,6 +47,18 @@ func check_for_item(interactor, item) -> bool:
 	#Lockpick UI/Minigame can be initiated here
 	#pass
 	
+## Like start_hold_check(), but without using up a key that is discarded after use. Used to list the hold action.
+func can_start_hold(interactor) -> bool:
+	return _has_item(interactor, parent_node.key) or _has_item(interactor, parent_node.lockpick)
+
+
+func _has_item(interactor, item) -> bool:
+	for slot_data in interactor.get_inventory().inventory_slots:
+		if slot_data != null and slot_data.inventory_item == item:
+			return true
+	return false
+
+
 ##Used for dual interaction component. This function checks keys presence before allowing a hold to start.
 func start_hold_check(interactor) -> bool:
 	var keyResult: bool = check_for_item(interactor, parent_node.key)#

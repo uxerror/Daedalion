@@ -166,6 +166,20 @@ func start_interaction(action: String) -> void:
 				break
 
 
+## Performs an action from InteractionComponent.get_actions(), for example one picked from a context menu.
+## Checks the same things as start_interaction() and updates the prompts afterwards.
+func perform_action(action: CogitoInteractionAction) -> void:
+	if !action.enabled:
+		return
+	var node := action.component
+	if player.get("is_in_interaction_state") and !player.is_in_interaction_state or (!player.is_on_floor() and node.disable_interaction_in_air):
+		return
+	if !node.ignore_open_gui and get_parent().is_showing_ui:
+		return
+	await action.perform(self)
+	targeting.rebuild_interaction_prompts()
+
+
 func on_death():
 	if wieldables.equipped_wieldable_item:
 		wieldables.equipped_wieldable_item.is_being_wielded = false

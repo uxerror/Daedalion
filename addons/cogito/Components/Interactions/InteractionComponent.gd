@@ -62,3 +62,10 @@ func check_attribute(player_interaction_component: PlayerInteractionComponent) -
 
 func set_disabled(_player: CogitoPlayer) -> bool:
 	return is_disabled
+
+
+## What a player can do with this component, as actions that can be run without input actions or hold timing
+## (see PlayerInteractionComponent.perform_action()). Most components have one action: interacting with them.
+func get_actions(_player_interaction_component: PlayerInteractionComponent) -> Array[CogitoInteractionAction]:
+	# Every component implements interact(); the base class doesn't declare it.
+	return [CogitoInteractionAction.new(interaction_text, self, Callable(self, "interact"), !is_disabled)]

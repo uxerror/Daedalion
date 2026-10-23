@@ -43,6 +43,33 @@ func _on_object_state_change(_interaction_text: String):
 	pass
 
 
+## Picks the item up with its PickupComponent, which is disabled while this component handles the prompt.
+func perform_quick_action(_player_interaction_component: PlayerInteractionComponent) -> void:
+	player_interaction_component = _player_interaction_component
+	pickup.is_disabled = false
+	pickup.interact(_player_interaction_component)
+	if is_instance_valid(pickup): # The pickup failed if it's components still exist
+		pickup.is_disabled = true
+
+
+## Uses the item where it lies: consumes it, reloads the current wieldable with it, or wields it.
+func perform_hold_action(_player_interaction_component: PlayerInteractionComponent) -> void:
+	player_interaction_component = _player_interaction_component
+	use()
+
+
+## Picking the item up, and using it (see set_disabled() for when using it isn't possible).
+func get_actions(_player_interaction_component: PlayerInteractionComponent) -> Array[CogitoInteractionAction]:
+	if !pickup:
+		return []
+	var can_use := !set_disabled(_player_interaction_component.player)
+	var can_pick_up : bool = _player_interaction_component.get_inventory().can_pick_up_slot_data(pickup.slot_data)
+	return [
+		CogitoInteractionAction.new(pickup.interaction_text, self, perform_quick_action, can_pick_up),
+		CogitoInteractionAction.new(hold_interaction_text, self, perform_hold_action, can_use),
+	]
+
+
 func use() -> void:
 	if pickup.slot_data.inventory_item is ConsumableItemPD:
 		consume(pickup.slot_data.inventory_item)

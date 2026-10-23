@@ -40,6 +40,28 @@ func check_before_hold_start(_player_interaction_component):
 		hud.start_hold(self)
 
 
+func perform_quick_action(_player_interaction_component: PlayerInteractionComponent) -> void:
+	on_quick_press.emit(_player_interaction_component)
+
+
+func perform_hold_action(_player_interaction_component: PlayerInteractionComponent) -> void:
+	on_hold_complete.emit(_player_interaction_component)
+
+
+## The press action and the hold action. The hold action is disabled when hold_node says it can't start,
+## for example a lock without its key.
+func get_actions(_player_interaction_component: PlayerInteractionComponent) -> Array[CogitoInteractionAction]:
+	var can_hold := true
+	if hold_node and hold_node.has_method("can_start_hold"):
+		can_hold = hold_node.can_start_hold(_player_interaction_component)
+	var press_text := press_interaction_text if press_interaction_text else interaction_text
+	var hold_text := hold_interaction_text if hold_interaction_text else interaction_text
+	return [
+		CogitoInteractionAction.new(press_text, self, perform_quick_action, !is_disabled),
+		CogitoInteractionAction.new(hold_text, self, perform_hold_action, !is_disabled and can_hold),
+	]
+
+
 func _on_object_state_change(_interaction_text: String):
 	press_interaction_text = _interaction_text
 	update_interaction_text()

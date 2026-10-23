@@ -37,26 +37,12 @@ func _process(_delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if is_holding and event.is_action_released(hold_interaction.input_map_action):
-		if hold_interaction is DualInteraction:
-			hold_interaction.on_quick_press.emit(player_interaction_component)
-		if hold_interaction is ExtendedPickupInteraction:
-			# Pick up the item on early release, using the PickupComponent
-			hold_interaction.pickup.is_disabled = false
-			hold_interaction.pickup.interact(player_interaction_component)
-			if hold_interaction != null: # The pickup failed if it's components still exist
-				hold_interaction.pickup.is_disabled = true
-			
+		hold_interaction.perform_quick_action(player_interaction_component)
 		stop_holding()
 
 
 func _on_hold_complete():
-	# Important for HoldInteraction to be a base HoldInteraction, not a subclass, to work
-	if hold_interaction is not DualInteraction and hold_interaction is not ExtendedPickupInteraction:
-		hold_interaction.parent_node.interact(player_interaction_component)
-	elif hold_interaction is DualInteraction:
-		hold_interaction.on_hold_complete.emit(player_interaction_component)
-	elif hold_interaction is ExtendedPickupInteraction:
-		hold_interaction.use()
+	hold_interaction.perform_hold_action(player_interaction_component)
 	stop_holding()
 
 
