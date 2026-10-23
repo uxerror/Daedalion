@@ -54,6 +54,40 @@ var is_dead : bool = false
 @abstract func override_gravity(_external_gravity_force : float, _external_gravity_vector: Vector3)
 
 
+## Collects the CogitoAttribute and CogitoCurrency children of the player and connects them: health to death,
+## visibility to sanity. Player controllers call this in _ready().
+func setup_attributes_and_currencies() -> void:
+	### NEW PLAYER ATTRIBUTE SETUP:
+	# Grabs all attached player attributes
+	for attribute in find_children("","CogitoAttribute",false):
+		player_attributes[attribute.attribute_name] = attribute
+		CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Cogito Attribute found: " + attribute.attribute_name)
+
+	# If found, hookup health attribute signal to detect player death
+	var health_attribute = player_attributes.get("health")
+	if health_attribute:
+		health_attribute.death.connect(_on_death)
+	# Save reference to stamina attribute for movements that require stamina checks (null if not found)
+	stamina_attribute = player_attributes.get("stamina")
+	# Save reference to visibilty attribute for that require visibility checks (null if not found)
+	visibility_attribute = player_attributes.get("visibility")
+	# Hookup sanity attribute to visibility attribute
+	var sanity_attribute = player_attributes.get("sanity")
+	if sanity_attribute and visibility_attribute:
+		visibility_attribute.attribute_changed.connect(sanity_attribute.on_visibility_changed)
+		visibility_attribute.check_current_visibility()
+
+	### CURRENCY SETUP
+	for currency in find_children("", "CogitoCurrency", false):
+		player_currencies[currency.currency_name] = currency
+		CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Cogito Currency found: " + currency.currency_name)
+
+
+func _on_death():
+	player_interaction_component.on_death()
+	is_dead = true
+
+
 # Use these functions to manipulate player attributes.
 func increase_attribute(attribute_name: String, value: float, value_type: ConsumableItemPD.ValueType) -> bool:
 	var attribute = player_attributes.get(attribute_name)

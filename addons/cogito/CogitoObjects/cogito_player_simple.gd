@@ -202,30 +202,7 @@ func _ready():
 	
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	
-	### NEW PLAYER ATTRIBUTE SETUP:
-	# Grabs all attached player attributes
-	for attribute in find_children("","CogitoAttribute",false):
-		player_attributes[attribute.attribute_name] = attribute
-		CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Cogito Attribute found: " + attribute.attribute_name)
-	
-	# If found, hookup health attribute signal to detect player death
-	var health_attribute = player_attributes.get("health")
-	if health_attribute:
-		health_attribute.death.connect(_on_death)
-	# Save reference to stamina attribute for movements that require stamina checks (null if not found)
-	stamina_attribute = player_attributes.get("stamina")
-	# Save reference to visibilty attribute for that require visibility checks (null if not found)
-	visibility_attribute = player_attributes.get("visibility")
-	# Hookup sanity attribute to visibility attribute
-	var sanity_attribute = player_attributes.get("sanity")
-	if sanity_attribute and visibility_attribute:
-		visibility_attribute.attribute_changed.connect(sanity_attribute.on_visibility_changed)
-		visibility_attribute.check_current_visibility()
-	
-	### CURRENCY SETUP
-	for currency in find_children("", "CogitoCurrency", false):
-		player_currencies[currency.currency_name] = currency
-		CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Cogito Currency found: " + currency.currency_name)
+	setup_attributes_and_currencies()
 	
 	_reload_options()
 	
@@ -254,11 +231,6 @@ func slide_audio_init():
 	slide_audio_player.stream = slide_sound
 	slide_audio_player.bus = OptionsConstants.sfx_bus_name
 	add_child(slide_audio_player)
-
-
-func _on_death():
-	player_interaction_component.on_death()
-	is_dead = true
 
 
 # Methods to pause input (for Menu or Dialogues etc)
