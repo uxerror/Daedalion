@@ -16,14 +16,14 @@ func _ready():
 	
 	
 func _on_body_entered(body: Node3D):
-	if !body.is_in_group("Player"):
+	if body is not CogitoPlayer:
 		return
 	
 	transition_to_next_scene()
 
 	
 func _on_body_exited(body: Node3D):
-	if !body.is_in_group("Player"):
+	if body is not CogitoPlayer:
 		return
 
 

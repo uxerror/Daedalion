@@ -11,7 +11,7 @@ func _ready():
 		original_process_mode = ladder_collision.process_mode
 
 func _on_body_shape_entered(_body_rid,body,_body_shape_idx,local_shape_idx):
-	if body.is_in_group("Player"):
+	if body is CogitoPlayer:
 		var local_shape_owner = shape_find_owner(local_shape_idx)
 		var local_shape_node = shape_owner_get_owner(local_shape_owner) as CollisionShape3D
 		
@@ -26,7 +26,7 @@ func _on_body_shape_entered(_body_rid,body,_body_shape_idx,local_shape_idx):
 
 
 func _on_body_exited(body):
-	if body.is_in_group("Player"):
+	if body is CogitoPlayer:
 		body.on_ladder = false
 		if body.has_method("exit_ladder"):
 			body.exit_ladder()

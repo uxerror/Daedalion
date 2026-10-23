@@ -19,14 +19,14 @@ var is_within_zone : bool
 var player
 
 func _on_body_entered(body):
-	if body.is_in_group("Player") :
+	if body is CogitoPlayer :
 		player = body
 		if hint_message != "":
 			body.player_interaction_component.send_hint(hint_icon, tr(hint_message) )
 		is_within_zone = true
 
 func _on_body_exited(body):
-	if body.is_in_group("Player") :
+	if body is CogitoPlayer :
 		is_within_zone = false
 
 

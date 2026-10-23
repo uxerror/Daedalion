@@ -126,7 +126,7 @@ func rotate_object(input_dir: Vector2):
 
 
 func _on_body_entered(body):
-	if body.is_in_group("Player") and is_being_carried:
+	if body is CogitoPlayer and is_being_carried:
 		leave()
 
 

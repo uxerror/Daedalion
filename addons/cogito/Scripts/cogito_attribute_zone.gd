@@ -30,7 +30,7 @@ var hint_delay_time: float
 
 
 func _on_body_entered(body):
-	if body.is_in_group("Player"):
+	if body is CogitoPlayer:
 		if !player:
 			player = body
 		if effect_amount > 0 and hint_message != "":
@@ -42,7 +42,7 @@ func _on_body_entered(body):
 
 
 func _on_body_exited(body):
-	if body.is_in_group("Player"):
+	if body is CogitoPlayer:
 		is_within_zone = false
 
 

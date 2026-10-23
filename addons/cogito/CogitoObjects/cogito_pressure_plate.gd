@@ -102,6 +102,6 @@ func _on_plate_body_exited(body: Node) -> void:
 
 func _on_plate_body_entered(body: Node) -> void:
 	CogitoGlobals.debug_log(true,"cogito_pressure_plate.gd","Detected " + body.name)
-	if body.is_in_group("Player"):
+	if body is CogitoPlayer:
 		CogitoGlobals.debug_log(true,"cogito_pressure_plate.gd", "Player detected. applying force.")
 		plate_node.add_constant_central_force(Vector3(0,-3,0))

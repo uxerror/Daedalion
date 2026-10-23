@@ -26,7 +26,7 @@ func _ready():
 	
 	
 func _on_body_entered(body: Node3D):
-	if !body.is_in_group("Player"):
+	if body is not CogitoPlayer:
 		return
 	
 	if door_to_set != null:
@@ -44,7 +44,7 @@ func _on_body_entered(body: Node3D):
 	
 
 func _on_body_exited(body: Node3D):
-	if !body.is_in_group("Player"):
+	if body is not CogitoPlayer:
 		return
 	
 	if door_to_set!= null and close_door_on_exit:

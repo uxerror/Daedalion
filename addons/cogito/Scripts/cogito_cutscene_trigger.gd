@@ -32,7 +32,7 @@ func on_input(event: InputEvent) -> void:
 
 
 func _on_body_entered(body: Node3D):
-	if !body.is_in_group("Player"):
+	if body is not CogitoPlayer:
 		return
 	
 	player_reference = body
@@ -40,7 +40,7 @@ func _on_body_entered(body: Node3D):
 
 
 func _on_body_exited(body: Node3D):
-	if !body.is_in_group("Player"):
+	if body is not CogitoPlayer:
 		return
 
 

@@ -177,12 +177,12 @@ func object_visibile_for_detector(target: Node3D) -> bool:
 	
 
 func on_body_entered_detection(body: Node3D):
-	if only_detect_player and body.is_in_group("Player"):
+	if only_detect_player and body is CogitoPlayer:
 		CogitoGlobals.debug_log(true,"cogito_security_camera.gd", "Player entered detection area: " + body.name)
 		objects_in_detection_area.append(body)
 
 	# For non-player objects, check they are in the non_player_detection_list, and not a player
-	elif !only_detect_player and !body.is_in_group("Player"):
+	elif !only_detect_player and body is not CogitoPlayer:
 		if is_relevant_non_player(body):
 			CogitoGlobals.debug_log(true,"cogito_security_camera.gd", "Relevant object entered detection area: " + body.name)
 			objects_in_detection_area.append(body)
@@ -213,7 +213,7 @@ func is_relevant_non_player(body: Node3D) -> bool:
 
 
 func on_body_left_detection(body: Node3D):
-	if only_detect_player and body.is_in_group("Player"):
+	if only_detect_player and body is CogitoPlayer:
 		CogitoGlobals.debug_log(true,"cogito_security_camera.gd", "Player left detection area: " +  body.name)
 		objects_in_detection_area.erase(body)
 	elif is_relevant_non_player(body):
