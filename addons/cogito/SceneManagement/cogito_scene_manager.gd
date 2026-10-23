@@ -37,6 +37,9 @@ signal seat_move_requested(Node)
 @export var _current_scene_root_node : Node
 
 enum CogitoSceneLoadMode {TEMP, LOAD_SAVE, RESET}
+
+# Keys the scene state adds to saved entries to find their nodes again. They are not node properties.
+const SAVE_ID_KEYS : Array[String] = ["cogito_id", "cogito_parent_id"]
 @export var scene_load_mode: CogitoSceneLoadMode
 
 @export var cogito_state_dir : String = "user://saves/"
@@ -210,10 +213,14 @@ func load_scene_state(_scene_name_to_load:String, slot:String) -> void:
 			
 		var array_of_node_data = _scene_state.saved_nodes
 		for node_data in array_of_node_data:
+			var parent_node : Node = _find_saved_node(node_data, "cogito_parent_id", "parent")
+			if !parent_node:
+				CogitoGlobals.debug_log(true,"CSM","Parent of saved node " + str(node_data["filename"]) + " not found, skipped.")
+				continue
 			var new_object = load(node_data["filename"]).instantiate()
-			if get_node(node_data["parent"]):
-				get_node(node_data["parent"]).add_child(new_object)
-				CogitoGlobals.debug_log(true,"CSM","Adding to scene: "+ new_object.get_name())
+			CogitoPersistentId.restore(new_object, node_data.get("cogito_id", ""))
+			parent_node.add_child(new_object)
+			CogitoGlobals.debug_log(true,"CSM","Adding to scene: "+ new_object.get_name())
 				
 			new_object.position = Vector3(node_data["pos_x"],node_data["pos_y"],node_data["pos_z"])
 			new_object.rotation = Vector3(node_data["rot_x"],node_data["rot_y"],node_data["rot_z"])
@@ -225,7 +232,7 @@ func load_scene_state(_scene_name_to_load:String, slot:String) -> void:
 					new_object.angular_velocity = Vector3(node_data["angular_velocity_x"], node_data["angular_velocity_y"], node_data["angular_velocity_z"])
 			# Set the remaining variables.
 			for data in node_data.keys():
-				if data == "filename" or data == "parent" or data == "pos_x" or data == "pos_y" or data == "pos_z" or data == "rot_x" or data == "rot_y" or data == "rot_z" or data == "item_charge":
+				if data == "filename" or data == "parent" or data == "pos_x" or data == "pos_y" or data == "pos_z" or data == "rot_x" or data == "rot_y" or data == "rot_z" or data == "item_charge" or data in SAVE_ID_KEYS:
 					continue
 				new_object.set(data, node_data[data])
 			
@@ -240,12 +247,15 @@ func load_scene_state(_scene_name_to_load:String, slot:String) -> void:
 		# Loading states of objects in save_object_state
 		var array_of_state_data = _scene_state.saved_states
 		for state_data in array_of_state_data:
-			var node_to_set = get_node(state_data["node_path"])
+			var node_to_set : Node = _find_saved_node(state_data, "cogito_id", "node_path")
+			if !node_to_set:
+				CogitoGlobals.debug_log(true,"CSM","Saved object " + str(state_data.get("cogito_id", state_data.get("node_path"))) + " not found in the scene, skipped.")
+				continue
 			# Set variables here
 			node_to_set.position = Vector3(state_data["pos_x"],state_data["pos_y"],state_data["pos_z"])
 			node_to_set.rotation = Vector3(state_data["rot_x"],state_data["rot_y"],state_data["rot_z"])
 			for data in state_data.keys():
-				if data == "filename" or data == "parent" or data == "pos_x" or data == "pos_y" or data == "pos_z" or data == "rot_x" or data == "rot_y" or data == "rot_z":
+				if data == "filename" or data == "parent" or data == "pos_x" or data == "pos_y" or data == "pos_z" or data == "rot_x" or data == "rot_y" or data == "rot_z" or data in SAVE_ID_KEYS:
 					continue
 				node_to_set.set(data, state_data[data])
 			# Call set_state only if the method exists
@@ -256,6 +266,15 @@ func load_scene_state(_scene_name_to_load:String, slot:String) -> void:
 			
 	else:
 		CogitoGlobals.debug_log(true,"CSM","CSM: Scene state doesn't exist.")
+
+
+# Finds the node a saved entry belongs to. Saves made before ids were added only have an absolute path.
+func _find_saved_node(data: Dictionary, id_key: String, legacy_path_key: String) -> Node:
+	if data.has(id_key):
+		return CogitoPersistentId.find(get_tree(), data[id_key])
+	if data.has(legacy_path_key):
+		return get_node_or_null(data[legacy_path_key])
+	return null
 
 
 func save_scene_state(_scene_name_to_save, slot: String) -> void:
@@ -278,18 +297,18 @@ func save_scene_state(_scene_name_to_save, slot: String) -> void:
 				CogitoGlobals.debug_log(true,"CSM","persistent node '%s' is missing a save() function, skipped" % node.name)
 				continue
 				
+			var node_data = node.save()
+			node_data["cogito_id"] = CogitoPersistentId.of(node)
+			node_data["cogito_parent_id"] = CogitoPersistentId.of(node.get_parent())
 			# If the node is a RigidBody3D, then save the physics properties
 			if node is RigidBody3D:
-				var node_data = node.save()
 				node_data["linear_velocity_x"] = node.linear_velocity.x
 				node_data["linear_velocity_y"] = node.linear_velocity.y
 				node_data["linear_velocity_z"] = node.linear_velocity.z
 				node_data["angular_velocity_x"] = node.angular_velocity.x
 				node_data["angular_velocity_y"] = node.angular_velocity.y
 				node_data["angular_velocity_z"] = node.angular_velocity.z
-				_scene_state.add_node_data_to_array(node_data)
-			else:
-				_scene_state.add_node_data_to_array(node.save())
+			_scene_state.add_node_data_to_array(node_data)
 		
 	_scene_state.clear_saved_states()
 	
@@ -303,7 +322,9 @@ func save_scene_state(_scene_name_to_save, slot: String) -> void:
 				CogitoGlobals.debug_log(true,"CSM","persistent node '%s' is missing a save() function, skipped" % node.name)
 				continue
 				
-			_scene_state.add_state_data_to_array(node.save())
+			var state_data = node.save()
+			state_data["cogito_id"] = CogitoPersistentId.of(node)
+			_scene_state.add_state_data_to_array(state_data)
 			
 	_scene_state.write_state(slot, _scene_name_to_save)
 
