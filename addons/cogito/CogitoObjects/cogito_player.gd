@@ -33,10 +33,19 @@ var uid: int = -1
 var main_velocity : Vector3 = Vector3.ZERO
 var is_dead : bool = false
 
+@export_group("Node Paths")
+## The PlayerInteractionComponent of this player. Required.
+@export_node_path("Node3D") var player_interaction_component_path : NodePath = ^"PlayerInteractionComponent"
+## The node that turns when the player turns. Its rotation is saved, and set when entering a scene through a connector.
+@export_node_path("Node3D") var body_path : NodePath = ^"Body"
+## The node at the player's point of view. Things shown in front of the player (like the lockpick minigame) are attached to it.
+@export_node_path("Node3D") var head_path : NodePath = ^"Body/Neck/Head"
+@export_group("")
+
 # Node caching
-@onready var player_interaction_component: PlayerInteractionComponent = $PlayerInteractionComponent
-@onready var body: Node3D = $Body
-@onready var head: Node3D = $Body/Neck/Head
+@onready var player_interaction_component: PlayerInteractionComponent = get_node(player_interaction_component_path)
+@onready var body: Node3D = get_node(body_path)
+@onready var head: Node3D = get_node(head_path)
 
 
 @abstract func create_new_state() -> CogitoPlayerState
