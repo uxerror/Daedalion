@@ -27,8 +27,8 @@ func _ready():
 
 
 func grab_player_stamina_attribute() -> CogitoAttribute:
-	if CogitoSceneManager._current_player_node.stamina_attribute:
-		return CogitoSceneManager._current_player_node.stamina_attribute
+	if CogitoSceneManager.get_player().stamina_attribute:
+		return CogitoSceneManager.get_player().stamina_attribute
 	else:
 		CogitoGlobals.debug_log(true, "CogitoWieldable", "No player stamina attribute found.")
 		return null

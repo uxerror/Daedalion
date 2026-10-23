@@ -18,8 +18,8 @@ func move_player_to_connector(connector_name:String):
 	for node in connectors:
 		if node.get_name() == connector_name:
 			CogitoGlobals.debug_log(true, "CogitoScene.gd", "Connector found, moving player to " + node.get_name() )
-			CogitoSceneManager._current_player_node.global_position = node.global_position
-			CogitoSceneManager._current_player_node.body.global_rotation = node.global_rotation
+			CogitoSceneManager.get_player().global_position = node.global_position
+			CogitoSceneManager.get_player().body.global_rotation = node.global_rotation
 			return
 	
 	CogitoGlobals.debug_log(true, "CogitoScene.gd",  "No connector with name " + connector_name + " found.")
@@ -37,5 +37,5 @@ func _enter_tree() -> void:
 func save_temp() -> void:
 	var current_scene_statename = get_tree().get_current_scene().get_name()
 	CogitoSceneManager.save_scene_state(current_scene_statename,"temp")
-	CogitoSceneManager.save_player_state(CogitoSceneManager._current_player_node, "temp")
+	CogitoSceneManager.save_player_state(CogitoSceneManager.get_player(), "temp")
 

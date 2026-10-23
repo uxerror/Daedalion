@@ -140,7 +140,7 @@ func _on_body_entered_snap_area(body : Node3D):
 		return
 	
 	if !player_interaction_component:
-		player_interaction_component = CogitoSceneManager._current_player_node.player_interaction_component
+		player_interaction_component = CogitoSceneManager.get_player().player_interaction_component
 	
 	if body is CogitoObject:
 		CogitoGlobals.debug_log(true,"cogito_snap_slot.gd", "body is CogitoObject with cogito_name=" + body.cogito_name)

@@ -234,7 +234,7 @@ func release_single_slot_data(grabbed_slot_data: InventorySlotPD, index: int) ->
 		CogitoGlobals.debug_log(true,"cogito_inventory.gd", "release_single_slot_data(...): AmmoItem detected. Attempting to reload target.")
 		# Check if there's room for charge
 		if slot_data.inventory_item.charge_max - slot_data.inventory_item.charge_current >= grabbed_slot_data.inventory_item.reload_amount:
-			CogitoSceneManager._current_player_node.player_interaction_component.send_hint(null,"Charging " + slot_data.inventory_item.name + " by " + str(grabbed_slot_data.inventory_item.reload_amount))
+			CogitoSceneManager.get_player().player_interaction_component.send_hint(null,"Charging " + slot_data.inventory_item.name + " by " + str(grabbed_slot_data.inventory_item.reload_amount))
 			slot_data.inventory_item.add(grabbed_slot_data.inventory_item.reload_amount)
 			grabbed_slot_data.quantity -= 1
 		else:

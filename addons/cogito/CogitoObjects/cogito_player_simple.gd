@@ -193,7 +193,7 @@ func _ready():
 	#Some Setup steps
 	if uid == -1:
 		uid = get_instance_id()
-	CogitoSceneManager._current_player_node = self
+	CogitoSceneManager.register_player(self)
 	player_interaction_component.exclude_player(get_rid())
 	
 	randomize() 

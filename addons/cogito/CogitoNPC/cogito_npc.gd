@@ -335,7 +335,7 @@ func _restore_current_behaviour() -> void:
 func load_attention_target():
 	if attention_target_uid:
 		# Do a fast check for uid matching player before scanning the tree
-		var player = CogitoSceneManager._current_player_node
+		var player = CogitoSceneManager.get_player()
 		if attention_target_uid == player.uid:
 			attention_target = player
 		else:

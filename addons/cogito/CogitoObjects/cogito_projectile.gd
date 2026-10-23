@@ -56,7 +56,7 @@ func _on_body_entered(collider: Node):
 		get_tree().current_scene.add_child(noise)
 	
 	var collision_point = global_transform.origin
-	var bullet_direction = (collision_point - CogitoSceneManager._current_player_node.get_global_transform().origin).normalized() ##This is hacky TODO needs to be fixed for Multiplayer support
+	var bullet_direction = (collision_point - CogitoSceneManager.get_player().get_global_transform().origin).normalized() ##This is hacky TODO needs to be fixed for Multiplayer support
 	
 	if stick_on_impact:
 		self.linear_velocity = Vector3.ZERO

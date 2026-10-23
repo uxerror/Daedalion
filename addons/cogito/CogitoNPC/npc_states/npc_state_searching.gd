@@ -40,7 +40,7 @@ var last_known_player_point: Vector3
 var player: CogitoPlayer:
 	get:
 		if not player:
-			return CogitoSceneManager._current_player_node
+			return CogitoSceneManager.get_player()
 		return player
 
 var los_point_reached: bool = false

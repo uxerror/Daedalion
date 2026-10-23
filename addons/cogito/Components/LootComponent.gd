@@ -54,7 +54,7 @@ func _ready() -> void:
 
 ## Set up references to player in a deferred manner to avoid nulling during tree operation
 func _set_up_references():
-	_player = get_tree().get_first_node_in_group("Player")
+	_player = CogitoSceneManager.get_player()
 	_player_hud = _player.find_child("Player_HUD", true, true)
 	_player_inventory = _player.inventory_data
 	

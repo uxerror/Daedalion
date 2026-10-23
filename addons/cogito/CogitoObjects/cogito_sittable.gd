@@ -135,7 +135,7 @@ func _ready():
 		if len(players) > 0: audio_stream_player_3d = players[0]
 	
 	#find player node
-	player_node = CogitoSceneManager._current_player_node
+	player_node = CogitoSceneManager.get_player()
 	self.add_to_group("interactable")
 	add_to_group("save_object_state")
 	interaction_nodes = find_children("","InteractionComponent",true) #Grabs all attached interaction components

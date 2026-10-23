@@ -17,6 +17,7 @@ signal new_game_started
 @export var _current_world_dict : Dictionary
 
 # Variables for player state
+## @deprecated: Use [method get_player] and [method register_player] instead.
 @export var _current_player_node : Node
 @export var _player_state : CogitoPlayerState
 # Used to pass a screenshot to the player state when saved. This is created by the TabMenu/PauseMenu
@@ -71,6 +72,18 @@ func _ready() -> void:
 	instantiate_fade_panel()
 
 
+## Returns the current player, or null if no player has been registered yet or it was freed (for example during a scene change).
+func get_player() -> CogitoPlayer:
+	if is_instance_valid(_current_player_node):
+		return _current_player_node
+	return null
+
+
+## Called by player controllers in their _ready() to become the current player.
+func register_player(player: CogitoPlayer) -> void:
+	_current_player_node = player
+
+
 func grab_screenshot(scale: float = 1.0) -> Image:
 	var image: Image = get_viewport().get_texture().get_image()
 	image.resize(int(image.get_width() * scale), int(image.get_height() * scale), Image.INTERPOLATE_LANCZOS)
@@ -78,7 +91,7 @@ func grab_screenshot(scale: float = 1.0) -> Image:
 
 
 func send_player_hint(hint_icon: Texture2D, hint_text: String):
-	_current_player_node.player_interaction_component.send_hint(hint_icon, hint_text)
+	get_player().player_interaction_component.send_hint(hint_icon, hint_text)
 
 
 func switch_active_slot_to(slot_name:String) -> void:
@@ -133,7 +146,7 @@ func loading_saved_game(passed_slot: String, current_scene_name: String = "") ->
 		CogitoGlobals.debug_log(true,"CSM","Player state for slot "+ passed_slot+ " is from current scene.")
 		# Do a simple scene state load and player state load.
 		load_scene_state(_player_state.player_current_scene, passed_slot)
-		load_player_state(_current_player_node, passed_slot)
+		load_player_state(get_player(), passed_slot)
 	else:
 		# Transition to target scene and then attempt to load the saved game again.
 		CogitoGlobals.debug_log(true,"CSM","Player state for slot "+ passed_slot + " is in different scene (" + _player_state.player_current_scene + "). Transitioning...")
@@ -441,7 +454,7 @@ func starting_a_new_game() -> void:
 	CogitoGlobals.debug_log(true, "CSM", "New game. Adding new game start inventory to player inventory...")
 	var temp_item_list = CogitoGlobals.cogito_settings.new_game_starter_items.duplicate_deep(Resource.DeepDuplicateMode.DEEP_DUPLICATE_ALL)
 	for slot_data in temp_item_list:
-		_current_player_node.inventory_data.pick_up_slot_data(slot_data)
+		get_player().inventory_data.pick_up_slot_data(slot_data)
 		
 	fade_in()
 	is_starting_new_game = false
@@ -459,7 +472,7 @@ func _save_autosave_state() -> void:
 	if not _screenshot_to_save:
 		_screenshot_to_save = grab_screenshot(CogitoGlobals.screenshot_scale)
 	
-	save_player_state(_current_player_node, CogitoGlobals.cogito_settings.auto_save_name)
+	save_player_state(get_player(), CogitoGlobals.cogito_settings.auto_save_name)
 	save_scene_state(_current_scene_name, CogitoGlobals.cogito_settings.auto_save_name)
 	copy_temp_saves_to_slot(CogitoGlobals.cogito_settings.auto_save_name) # Use this to include scene states from other scenes in the save.
 

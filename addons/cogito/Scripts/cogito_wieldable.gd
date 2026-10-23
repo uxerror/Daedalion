@@ -61,7 +61,7 @@ func action_secondary(_is_released: bool):
 
 # Function called when wieldable reload is attempted
 func reload() -> bool:
-	var player: CogitoPlayer = player_interaction_component.player if player_interaction_component else CogitoSceneManager._current_player_node
+	var player: CogitoPlayer = player_interaction_component.player if player_interaction_component else CogitoSceneManager.get_player()
 	var inventory: CogitoInventory = player.inventory_data
 	# Some safety checks if reload should even be triggered.
 	if inventory == null:

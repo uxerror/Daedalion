@@ -191,7 +191,7 @@ func check_for_item() -> bool:
 
 
 func _on_damage_received(_damage,_bullet_direction,_bullet_position):
-	interact(CogitoSceneManager._current_player_node.player_interaction_component)
+	interact(CogitoSceneManager.get_player().player_interaction_component)
 
 func set_state():
 	if is_on:

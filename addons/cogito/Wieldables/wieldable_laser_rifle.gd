@@ -42,7 +42,7 @@ func _ready():
 	super._ready()
 	wieldable_mesh.hide()
 	firing_cooldown = 0
-	wielding_rid = CogitoSceneManager._current_player_node.get_rid()
+	wielding_rid = CogitoSceneManager.get_player().get_rid()
 
 
 func _physics_process(_delta: float) -> void:

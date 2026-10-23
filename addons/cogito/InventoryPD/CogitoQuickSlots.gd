@@ -32,7 +32,7 @@ func _ready() -> void:
 	set_quickslot_focus(false) # Setting focus mode on quickslots to NONE on ready.
 	
 	await get_tree().process_frame
-	player_interaction_component = (CogitoSceneManager._current_player_node as CogitoPlayer).player_interaction_component
+	player_interaction_component = CogitoSceneManager.get_player().player_interaction_component
 
 
 # Using this to either set up new inventory or load quickslot of existing inventory

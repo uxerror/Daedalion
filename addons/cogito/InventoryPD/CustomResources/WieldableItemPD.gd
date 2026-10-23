@@ -37,8 +37,8 @@ signal charge_changed()
 func use(target) -> bool:
 	# Target should always be player? Null check to override using the CogitoSceneManager, which stores a reference to current player node
 	if target == null:
-		CogitoGlobals.debug_log(true,"WieldableItemPD.gd", "Bad target pass. Setting target to " + CogitoSceneManager._current_player_node.name )
-		target = CogitoSceneManager._current_player_node
+		CogitoGlobals.debug_log(true,"WieldableItemPD.gd", "Bad target pass. Setting target to " + CogitoSceneManager.get_player().name )
+		target = CogitoSceneManager.get_player()
 	# Call after assigning a null target to avoid throwing a null ref
 	if target.is_in_group("external_inventory"):
 		CogitoGlobals.debug_log(true,"WieldableItemPD.gd", "Can't use wieldable that is not in your inventory." )

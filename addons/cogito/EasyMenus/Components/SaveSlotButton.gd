@@ -143,7 +143,7 @@ func save_in_slot():
 	CogitoSceneManager.is_loaded_from_start_new_game = false
 	CogitoSceneManager._current_scene_name = get_tree().get_current_scene().get_name()
 	CogitoSceneManager._current_scene_path = get_tree().current_scene.scene_file_path
-	CogitoSceneManager.save_player_state(CogitoSceneManager._current_player_node, manual_save_slot_name)
+	CogitoSceneManager.save_player_state(CogitoSceneManager.get_player(), manual_save_slot_name)
 	CogitoSceneManager.save_scene_state(CogitoSceneManager._current_scene_name,"temp")
 	CogitoSceneManager.copy_temp_saves_to_slot(manual_save_slot_name)
 	set_data_from_state(save_slot_manager_node.load_slot_data(manual_save_slot_name))

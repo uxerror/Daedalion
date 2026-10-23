@@ -231,7 +231,7 @@ func _ready():
 	
 	initial_collision_mask = collision_mask
 	
-	CogitoSceneManager._current_player_node = self
+	CogitoSceneManager.register_player(self)
 	player_interaction_component.interaction_raycast = $Body/Neck/Head/Eyes/Camera/InteractionRaycast
 	player_interaction_component.exclude_player(get_rid())
 	

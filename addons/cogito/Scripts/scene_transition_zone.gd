@@ -30,7 +30,7 @@ func _on_body_exited(body: Node3D):
 func transition_to_next_scene():
 	current_scene_statename = get_tree().get_current_scene().get_name()
 	CogitoSceneManager.save_scene_state(current_scene_statename,"temp")
-	CogitoSceneManager.save_player_state(CogitoSceneManager._current_player_node, "temp")
+	CogitoSceneManager.save_player_state(CogitoSceneManager.get_player(), "temp")
 	
 	CogitoSceneManager.is_currently_loading = true
 	

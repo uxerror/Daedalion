@@ -177,7 +177,7 @@ func _on_reload_button_pressed() -> void:
 	
 	InputRouter.pop()
 	# Ensure the game resumes properly when loading after death
-	var player = CogitoSceneManager._current_player_node as CogitoPlayer
+	var player = CogitoSceneManager.get_player()
 	player.is_dead = false
 	player.resume()
 	# player.get_node(player.pause_menu).close_pause_menu()

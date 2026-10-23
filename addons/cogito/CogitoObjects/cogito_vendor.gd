@@ -37,7 +37,7 @@ func _ready():
 	currency_check.connect("transaction_success", Callable(self, "_on_transaction_success"))
 	
 	await get_tree().process_frame
-	var player_node = CogitoSceneManager._current_player_node
+	var player_node = CogitoSceneManager.get_player()
 	player_interaction_component = (player_node as CogitoPlayer).player_interaction_component
 	for attribute in player_node.find_children("", "CogitoCurrency", false):
 		if attribute is CogitoCurrency and attribute.currency_name == currency_check.currency_name:

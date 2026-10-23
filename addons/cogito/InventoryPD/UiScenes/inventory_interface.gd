@@ -271,7 +271,7 @@ func clear_external_inventory():
 
 
 func set_player_inventory_data(inventory_data : CogitoInventory):
-	inventory_data.owner = CogitoSceneManager._current_player_node  # Setting player inventory owner reference to player node
+	inventory_data.owner = CogitoSceneManager.get_player()  # Setting player inventory owner reference to player node
 	
 	if !inventory_data.inventory_button_press.is_connected(on_inventory_button_press):
 		inventory_data.inventory_button_press.connect(on_inventory_button_press.bind(inventory_ui))
@@ -355,7 +355,7 @@ func on_inventory_button_press(inventory_data: CogitoInventory, index: int, acti
 
 
 func update_wieldable_if_equipped():
-	CogitoSceneManager._current_player_node.player_interaction_component.wieldables.update_equipped()
+	CogitoSceneManager.get_player().player_interaction_component.wieldables.update_equipped()
 
 
 func update_grabbed_slot():

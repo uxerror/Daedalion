@@ -71,7 +71,7 @@ func _ready() -> void:
 
 ## Set up references to player and container in a deferred manner to avoid nulling
 func _set_up_references():
-	_player = get_tree().get_first_node_in_group("Player")
+	_player = CogitoSceneManager.get_player()
 	_player_hud = _player.find_child("Player_HUD", true, true)
 
 	# Connects to hud signal to be able to interact with this spawned object.
