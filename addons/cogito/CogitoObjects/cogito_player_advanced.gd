@@ -11,9 +11,6 @@ signal mouse_movement(relative_mouse_movement:Vector2)
 ## Reference to Pause menu node
 @export var pause_menu : PackedScene
 
-## Item Drop Shapecast
-@export var item_drop_shapecast : ShapeCast3D
-
 ## Ledge Climbing Shapecast
 @export var ledge_climbing_shapecast : ShapeCast3D
 
@@ -180,7 +177,6 @@ var is_in_unpausable_state : bool = false
 var is_in_interaction_state : bool = true
 var slide_audio_player : AudioStreamPlayer3D
 var swim_under_water_audio_player : AudioStreamPlayer3D
-var radius : float
 var standing_height : float
 var crouching_height : float
 var ledge_climbing_shapecast_height : float
@@ -628,19 +624,6 @@ func override_gravity(_external_gravity_force : float, _external_gravity_vector:
 	gravity_vec = gravity_vector * gravity
 	velocity += gravity_vec
 	move_and_slide()
-
-
-func _calculate_player_radius():
-	var radius : float = 0.0
-	for child in find_children("*", "CollisionShape3D", false, false):
-		if child.shape is BoxShape3D:
-			var edge = max(child.shape.size.x, child.shape.size.z)
-			var r = sqrt(2 * pow(edge / 2, 2))
-			radius = max(r, radius)
-		elif child.shape is CylinderShape3D or child.shape is CapsuleShape3D:
-			radius = max(child.shape.radius, radius)
-	
-	return radius
 
 
 func _on_player_state_loaded():

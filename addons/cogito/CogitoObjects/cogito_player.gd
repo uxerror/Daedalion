@@ -21,6 +21,8 @@ var is_showing_ui : bool
 ## Mouse mode while playing. Interfaces and menus restore it when they close (see CogitoSceneManager.restore_gameplay_mouse_mode()).
 ## First person players capture the mouse; a player controlled with the cursor keeps it visible.
 @export var gameplay_mouse_mode : Input.MouseMode = Input.MOUSE_MODE_CAPTURED
+## Item Drop Shapecast
+@export var item_drop_shapecast : ShapeCast3D
 
 ### NEW PLAYER ATTRIBUTE SYSTEM:
 var player_attributes : Dictionary
@@ -35,6 +37,8 @@ var is_mouselook_active: bool = true
 var uid: int = -1
 var main_velocity : Vector3 = Vector3.ZERO
 var is_dead : bool = false
+## Radius of the player's collision shapes, set with _calculate_player_radius().
+var radius : float
 
 @export_group("Node Paths")
 ## The PlayerInteractionComponent of this player. Required.
@@ -141,3 +145,83 @@ func apply_external_force(force_vector: Vector3):
 		CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Applying external force " + str(force_vector))
 		velocity += force_vector
 		move_and_slide()
+
+
+## Drops the item in the slot into the world in front of the camera, where item_drop_shapecast finds room for it.
+## Returns false if there is no room. Override it for a different way of dropping items.
+func drop_item(slot_data: InventorySlotPD) -> bool:
+	var player_radius = radius
+	var shape_cast = item_drop_shapecast
+	var item_drop_distance_offset = (player_hud as CogitoPlayerHudManager).item_drop_distance_offset
+	var camera_basis_z = get_viewport().get_camera_3d().get_global_transform().basis.z
+	
+	var drop_distance = abs(shape_cast.target_position.z - item_drop_distance_offset)
+	
+	var scene_to_drop = load(slot_data.inventory_item.drop_scene)
+	var dropped_item = scene_to_drop.instantiate()
+	
+	if dropped_item is not CogitoObject:		
+		return false
+	
+	# Pass the existing data of the slot to the object, otherwise infinite ammo glitch
+	dropped_item.pass_inventory_data(slot_data.duplicate())
+		
+	var item_aabb = dropped_item.get_aabb()
+	var item_length = item_aabb.size.z
+	
+	shape_cast.add_exception(self)
+	
+	shape_cast.shape.size = item_aabb.size
+	
+	var previous_target_position = shape_cast.target_position
+	shape_cast.target_position = Vector3.ZERO
+	
+	shape_cast.force_shapecast_update()
+	
+	if shape_cast.is_colliding():
+		shape_cast.target_position = previous_target_position
+		return false
+	
+	shape_cast.target_position = previous_target_position
+	
+	shape_cast.force_shapecast_update()
+	
+	var collision_safe_fraction = shape_cast.get_closest_collision_safe_fraction()
+	var safe_drop_distance = drop_distance * collision_safe_fraction
+	
+	if item_length < player_radius:
+		if safe_drop_distance < player_radius:
+			return false
+	else:
+		if safe_drop_distance < item_length:
+			return false
+			
+	CogitoSceneManager._current_scene_root_node.add_child(dropped_item)
+	dropped_item.global_rotation = body.global_rotation
+	dropped_item.position = shape_cast.global_position + (safe_drop_distance - item_length / 2) * -camera_basis_z
+		
+	CogitoAudio.play_sound(slot_data.inventory_item.sound_drop)
+	
+	if item_length < player_radius:
+		dropped_item.position = shape_cast.global_position + (safe_drop_distance - item_length / 2) * -camera_basis_z
+	else:
+		dropped_item.position = shape_cast.global_position + (safe_drop_distance - item_length / 2 + player_radius) * -camera_basis_z
+		
+	dropped_item.find_interaction_nodes()
+	for node in dropped_item.interaction_nodes:
+		if node.has_method("get_item_type"):
+			node.slot_data = slot_data
+	return true
+
+
+func _calculate_player_radius():
+	var radius : float = 0.0
+	for child in find_children("*", "CollisionShape3D", false, false):
+		if child.shape is BoxShape3D:
+			var edge = max(child.shape.size.x, child.shape.size.z)
+			var r = sqrt(2 * pow(edge / 2, 2))
+			radius = max(r, radius)
+		elif child.shape is CylinderShape3D or child.shape is CapsuleShape3D:
+			radius = max(child.shape.radius, radius)
+	
+	return radius
