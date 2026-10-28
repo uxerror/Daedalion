@@ -54,7 +54,8 @@ var last_direction
 @export var sight_detection: SightDetection
 @export var hearing_detection: HearingDetection
 @export var behaviour_compound_state: CompoundState
-## Music state requested while this NPC is chasing, attacking or searching for the player. Leave empty to not affect the music.
+## Music state requested while this NPC is chasing, attacking or searching for the player.
+## Leave empty to use the scene's combat_music_state, e.g. set this only for a boss with its own theme.
 @export var combat_music_state: CogitoMusicState
 @export var weapon: NpcWieldable
 
@@ -120,13 +121,12 @@ func in_state(states: Array) -> bool:
 	return states.any(func(state): return current_behaviour == state)
 
 
-## Requests combat_music_state while the NPC is in a combat behaviour and releases it otherwise.
+## Requests combat music while the NPC is in a combat behaviour and releases it otherwise.
 ## Called by StateProcessor.enter_state().
 func update_combat_music() -> void:
-	if not combat_music_state:
-		return
-	if in_state([BehaviourState.Chasing, BehaviourState.Attacking, BehaviourState.Searching]):
-		CogitoAudio.push_music_state(combat_music_state, self)
+	var state: CogitoMusicState = combat_music_state if combat_music_state else CogitoAudio.get_scene_combat_music_state()
+	if state and in_state([BehaviourState.Chasing, BehaviourState.Attacking, BehaviourState.Searching]):
+		CogitoAudio.push_music_state(state, self)
 	else:
 		CogitoAudio.release_music_state(self)
 

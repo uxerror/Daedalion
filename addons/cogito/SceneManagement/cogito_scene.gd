@@ -9,6 +9,9 @@ extends Node
 ## Music played while this scene is active. If the next scene uses the same layers, they keep playing.
 ## Leave empty for no music.
 @export var music_state : CogitoMusicState
+## Music requested by NPCs while they chase, attack or search for the player. NPCs with their own
+## combat_music_state use that instead. Leave empty for no combat music.
+@export var combat_music_state : CogitoMusicState
 
 
 func move_player_to_connector(connector_name:String):
@@ -26,7 +29,7 @@ func _enter_tree() -> void:
 	CogitoSceneManager._current_scene_root_node = self
 	CogitoGlobals.debug_log(true, "CogitoScene.gd", "Current scene root node set to " + CogitoSceneManager._current_scene_root_node.name )
 	
-	CogitoAudio.set_scene_music_state(music_state)
+	CogitoAudio.set_scene_music_state(music_state, combat_music_state)
 	if save_temp_on_enter:
 		save_temp.call_deferred()
 

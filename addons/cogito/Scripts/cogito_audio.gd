@@ -68,6 +68,7 @@ func _create_player_3d(stream: AudioStream, volume_db: float, pitch_scale: float
 #region Music
 
 var _scene_music_state: CogitoMusicState
+var _scene_combat_music_state: CogitoMusicState
 ## Requested states, oldest first. Each entry: { source: Object, state: CogitoMusicState, on_exit: Callable }
 var _music_requests: Array[Dictionary] = []
 var _active_music_state: CogitoMusicState
@@ -85,18 +86,29 @@ func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 
-## Sets the music state of the current scene. Called by CogitoScene when it enters the tree.
-## Pass null for silence.
-func set_scene_music_state(state: CogitoMusicState) -> void:
+## Sets the music states of the current scene. Called by CogitoScene when it enters the tree.
+## state plays while nothing else is requested; pass null for silence.
+## combat_state is what NPCs request in combat unless they have their own.
+func set_scene_music_state(state: CogitoMusicState, combat_state: CogitoMusicState = null) -> void:
 	_scene_music_state = state
+	_scene_combat_music_state = combat_state
 	_queue_music_resolve()
 
 
+## Combat music state of the current scene, or null.
+func get_scene_combat_music_state() -> CogitoMusicState:
+	return _scene_combat_music_state
+
+
 ## Requests a music state on behalf of source (e.g. an NPC requesting combat music).
-## Each source holds at most one request; pushing again replaces it.
+## Each source holds at most one request; pushing a different state replaces it.
 ## The request with the highest priority plays, or the scene's state if there are none.
+## On equal priority the oldest request keeps playing.
 ## If source is a Node, its request is released when it leaves the tree.
 func push_music_state(state: CogitoMusicState, source: Object) -> void:
+	# Pushing the same state again keeps the request's place, so it doesn't win ties it didn't win before.
+	if _music_requests.any(func(request): return request.source == source and request.state == state):
+		return
 	_remove_music_request(source)
 	var request := { "source": source, "state": state, "on_exit": Callable() }
 	if source is Node:
@@ -141,8 +153,8 @@ func _resolve_music_state() -> void:
 
 	var target_state: CogitoMusicState = null
 	for request in _music_requests:
-		# >= so the latest request wins ties.
-		if request.state and (target_state == null or request.state.priority >= target_state.priority):
+		# > so the oldest request wins ties.
+		if request.state and (target_state == null or request.state.priority > target_state.priority):
 			target_state = request.state
 	if target_state == null:
 		target_state = _scene_music_state
