@@ -2175,7 +2175,7 @@ func _on_crouching_state_physics_processing(delta: float) -> void:
 	# Kept up to date while swimming too: the swimming state sends "stand_up" itself.
 	state_chart.set_expression_property("is_crouch_shapecast_colliding", crouch_shapecast.is_colliding())
 
-	if current_moving_state != MovingState.Swimming:
+	if current_moving_state != MovingState.Swimming and current_moving_state != MovingState.LedgeClimbing:
 		if TOGGLE_CROUCH and Input.is_action_just_pressed("crouch"):
 			try_crouch = !try_crouch
 		elif !TOGGLE_CROUCH:
