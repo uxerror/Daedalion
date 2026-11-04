@@ -68,10 +68,13 @@ func _ready() -> void:
 	# GRAPHICS
 	init_fullscreen_mode()
 	init_windowed_resolution()
-	vsync_check_button.toggled.connect(_on_v_sync_check_button_toggled)
-	fullscreen_mode_check_button.toggled.connect(_on_fullscreen_mode_toggled)
 	windowed_resolution_option_button.item_selected.connect(CogitoGameConfig._on_resolution_selected)
+	CogitoGameConfig.windowed_resolution_has_changed.connect(_on_windowed_resolution_has_changed)
+	fullscreen_mode_check_button.toggled.connect(_on_fullscreen_mode_toggled)
+	anti_aliasing_2d_option_button.item_selected.connect(_on_anti_aliasing_2d_option_button_item_selected)
+	anti_aliasing_3d_option_button.item_selected.connect(_on_anti_aliasing_3d_option_button_item_selected)
 	gui_scale_slider.value_changed.connect(_on_gui_scale_slider_value_changed)
+	vsync_check_button.toggled.connect(_on_v_sync_check_button_toggled)
 	
 	# AUDIO
 	CogitoGameConfig.sfx_bus_index = AudioServer.get_bus_index(OptionsConstants.sfx_bus_name)
@@ -148,6 +151,7 @@ func get_gui_scale_max_value(resolution_y):
 func _on_fullscreen_mode_toggled(button_pressed: bool) -> void:
 	if button_pressed:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN)
+		CogitoGameConfig.fullscreen_mode = true
 		
 		gui_scale_slider.max_value = get_gui_scale_max_value(DisplayServer.screen_get_size().y)
 		gui_scale_slider.value = CogitoGameConfig.gui_scale
@@ -155,6 +159,7 @@ func _on_fullscreen_mode_toggled(button_pressed: bool) -> void:
 	else:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 		DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
+		CogitoGameConfig.fullscreen_mode = false
 		
 		var scale_max_value = get_gui_scale_max_value(CogitoGameConfig.windowed_resolution.y)
 		gui_scale_slider.max_value = scale_max_value
@@ -285,8 +290,14 @@ func update_fullscreen_resolution_slider_label() -> void:
 
 
 func _on_gui_scale_slider_value_changed(value):
+	CogitoGameConfig.gui_scale = gui_scale_slider.value
 	gui_scale_current_value_label.text = "%d%%" % int(value * 100)
 	have_options_changed = true
+
+
+func _on_windowed_resolution_has_changed() -> void:
+	gui_scale_slider.max_value = get_gui_scale_max_value(CogitoGameConfig.windowed_resolution.y)
+	apply_gui_scale_value()
 
 
 func _on_gui_scale_slider_drag_ended(_value_changed):
