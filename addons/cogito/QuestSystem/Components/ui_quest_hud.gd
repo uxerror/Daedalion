@@ -45,9 +45,9 @@ func update_active_quests():
 		node.queue_free()
 	
 	for quest in CogitoQuestManager.get_active_quests():
-		var instanced_quest_entry = quest_entry.instantiate()
+		var instanced_quest_entry: QuestEntry = quest_entry.instantiate()
 		active_group.add_child(instanced_quest_entry)
-		instanced_quest_entry.set_quest_info(quest.quest_title,quest.quest_description,str(quest.quest_counter_current) + "/" + str(quest.quest_counter_goal))
+		instanced_quest_entry.set_quest_info(quest)
 
 
 func update_completed_quests():
@@ -56,9 +56,9 @@ func update_completed_quests():
 		node.queue_free()
 	
 	for quest in CogitoQuestManager.get_completed_quests():
-		var instanced_quest_entry = quest_entry.instantiate()
+		var instanced_quest_entry: QuestEntry = quest_entry.instantiate()
 		completed_group.add_child(instanced_quest_entry)
-		instanced_quest_entry.set_quest_info(quest.quest_title,quest.quest_description,str(quest.quest_counter_current) + "/" + str(quest.quest_counter_goal))
+		instanced_quest_entry.set_quest_info(quest)
 
 
 func update_failed_quests():
@@ -67,9 +67,9 @@ func update_failed_quests():
 		node.queue_free()
 	
 	for quest in CogitoQuestManager.get_failed_quests():
-		var instanced_quest_entry = quest_entry.instantiate()
+		var instanced_quest_entry: QuestEntry = quest_entry.instantiate()
 		failed_group.add_child(instanced_quest_entry)
-		instanced_quest_entry.set_quest_info(quest.quest_title,quest.quest_description,str(quest.quest_counter_current) + "/" + str(quest.quest_counter_goal))
+		instanced_quest_entry.set_quest_info(quest)
 
 
 # Called when the node enters the scene tree for the first time.

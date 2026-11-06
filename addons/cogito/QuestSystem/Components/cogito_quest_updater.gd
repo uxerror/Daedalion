@@ -2,10 +2,11 @@ extends Node3D
 class_name CogitoQuestUpdater
 
 @export var quest_to_update : CogitoQuest
-enum UpdateType {Start, Complete, Fail, ChangeCounter}
+enum UpdateType {Start, Complete, Fail, AddFlag}
 @export var update_type: UpdateType
-## Amount by which the quest counter changes. Can be positive or negative.
-@export var counter_change: int = 0
+## Flag(s) to add if using AddFlag
+@export var flag_name: String
+@export var flag_value: Variant
 
 var has_been_triggered : bool = false #Used to avoid double-triggering.
 
@@ -22,12 +23,12 @@ func update_quest():
 		UpdateType.Fail:
 			CogitoGlobals.debug_log(true, "cogito_quest_updater.gd", "Failing quest " + quest_to_update.quest_name)
 			CogitoQuestManager.fail_quest(quest_to_update)
-		UpdateType.ChangeCounter:
+		UpdateType.AddFlag:
 			if has_been_triggered:
 				return
 			if !CogitoQuestManager.is_quest_active(quest_to_update):
 				CogitoQuestManager.start_quest(quest_to_update)
-			CogitoQuestManager.change_quest_counter(quest_to_update, counter_change)
+			CogitoQuestManager.add_flag(quest_to_update, flag_name, flag_value)
 			has_been_triggered = true
 
 

@@ -42,11 +42,10 @@ theme = ExtResource("2_kkklj")
 text = "Long text is long. Long text is long. Long text is long. Long text is long. Long text is long. Long text is long."
 autowrap_mode = 3
 
-[node name="QuestCounter" type="Label" parent="VBoxContainer" unique_id=309972734]
+[node name="QuestObjectives" type="Label" parent="VBoxContainer" unique_id=309972734]
 custom_minimum_size = Vector2(350, 0)
 layout_mode = 2
 theme = ExtResource("2_kkklj")
 theme_override_fonts/font = ExtResource("3_ygsya")
-text = "00/99"
-horizontal_alignment = 2
+text = "- Quest Objective (0/5)"
 autowrap_mode = 3

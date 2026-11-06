@@ -1,11 +1,32 @@
 [gd_resource type="Resource" script_class="CogitoQuest" format=3 uid="uid://drmtc0tqmwquk"]
 
 [ext_resource type="Script" uid="uid://bb3ww0nivppeq" path="res://addons/cogito/QuestSystem/CustomResources/cogito_quest.gd" id="1_53ru2"]
+[ext_resource type="Script" uid="uid://dqjgrpxl8eywm" path="res://addons/cogito/QuestSystem/CustomResources/cogito_quest_objective.gd" id="1_tl1bj"]
+[ext_resource type="Script" uid="uid://cb0bb7a4drtej" path="res://addons/cogito/QuestSystem/Flags/cogito_flag_group.gd" id="2_tpokx"]
+[ext_resource type="Script" uid="uid://c044xs0320uyo" path="res://addons/cogito/QuestSystem/Flags/cogito_flag.gd" id="3_v2s63"]
+[ext_resource type="Script" uid="uid://cdu5jo471lb8u" path="res://addons/cogito/QuestSystem/Flags/bool_flag.gd" id="4_jhwn2"]
+
+[sub_resource type="Resource" id="Resource_w1m7v"]
+script = ExtResource("4_jhwn2")
+flag_name = "ArchiveAccessed"
+metadata/_custom_type_script = "uid://cdu5jo471lb8u"
+
+[sub_resource type="Resource" id="Resource_aorsj"]
+script = ExtResource("2_tpokx")
+flags = Array[ExtResource("3_v2s63")]([SubResource("Resource_w1m7v")])
+metadata/_custom_type_script = "uid://cb0bb7a4drtej"
+
+[sub_resource type="Resource" id="Resource_bjpjg"]
+script = ExtResource("1_tl1bj")
+objective_description = "Find a way into the archive"
+completion_flags = Array[ExtResource("2_tpokx")]([SubResource("Resource_aorsj")])
+metadata/_custom_type_script = "uid://dqjgrpxl8eywm"
 
 [resource]
 script = ExtResource("1_53ru2")
 quest_name = "demo_access_archive"
 quest_title = "Gain access to the archive."
+quest_objectives = Array[ExtResource("1_tl1bj")]([SubResource("Resource_bjpjg")])
 quest_description_active = "You won't be able to just walk in, but we're sure you'll find away."
 quest_description_completed = "You're in!"
 quest_description_failed = "You should've not been able to fail this."
