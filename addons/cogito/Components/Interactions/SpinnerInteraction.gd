@@ -5,7 +5,7 @@ extends InteractionComponent
 @export var rotating_object : Node3D
 ## Sets the spinning axis for the rotating object.
 @export var spinning_axis : Vector3
-## Object rotation per spin step, in radians. One step also takes this angle of cursor or stick rotation, so the object follows the input.
+## Object rotation per spin step, in radians. One step takes this angle of input after applying the mouse rotation multiplier.
 @export var rotation_speed : float = .05
 ## Move object as you rotate it
 @export var rise_when_rotate : float = 0
@@ -15,6 +15,10 @@ extends InteractionComponent
 @export var interacting_gizmo : Node
 
 @export_group("Spinner Input Settings")
+## Require holding the left mouse button to rotate. Disable to rotate just by moving the cursor.
+@export var mouse_requires_hold : bool = true
+## Mouse rotation scale: 1.0 follows the cursor, 0.5 requires twice the movement, 0 disables mouse rotation. Does not affect the gamepad.
+@export_range(0.0, 4.0, 0.05, "or_greater") var mouse_rotation_multiplier : float = 1.0
 ## Cursor distance from the screen center, in pixels, below which mouse movement is ignored. Close to the center small movements turn into large angles.
 @export var mouse_dead_zone : float = 20.0
 ## Right stick deflection below which gamepad input is ignored.
@@ -71,6 +75,10 @@ func _notification(what: int) -> void:
 
 ## Input event for input routing
 func on_input(event: InputEvent) -> void:
+	if InputHelper.device_index == -1 and mouse_requires_hold and event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		# Rebase even if release and re-press both happen between process frames.
+		previous_angle = NAN
+		spin_accumulator = 0.0
 	if event.is_action_pressed("interact") or event.is_action_pressed("ui_cancel"):
 		exit(player_interaction_component)
 
@@ -115,14 +123,20 @@ func _process(_delta: float) -> void:
 
 	# Switch between mouse spin detection or gamepad spin detection based on input device
 	var angle : float
+	var rotation_multiplier : float = 1.0
 	if InputHelper.device_index == -1:
+		if mouse_requires_hold and !Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+			previous_angle = NAN
+			spin_accumulator = 0.0
+			return
 		angle = get_mouse_angle()
+		rotation_multiplier = maxf(mouse_rotation_multiplier, 0.0)
 	else:
 		angle = get_stick_angle()
 
 	if !is_nan(angle) and !is_nan(previous_angle):
 		# angle_difference wraps across the -PI/PI seam.
-		spin_accumulator += angle_difference(angle, previous_angle)
+		spin_accumulator += angle_difference(angle, previous_angle) * rotation_multiplier
 		apply_spin()
 	previous_angle = angle
 
