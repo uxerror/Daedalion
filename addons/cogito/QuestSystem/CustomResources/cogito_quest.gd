@@ -1,3 +1,4 @@
+@tool
 # Main class for managing quests in the Cogito system
 extends Resource
 class_name CogitoQuest
@@ -118,3 +119,9 @@ func failed(_mute: bool = false) -> void:
 	
 	# Update description to failed state
 	quest_description = quest_description_failed
+	
+func get_all_flag_names() -> Array[String]:
+	var flag_names: Array[String] = []
+	for objective in quest_objectives:
+		flag_names.append_array(objective.get_all_flag_names())
+	return flag_names

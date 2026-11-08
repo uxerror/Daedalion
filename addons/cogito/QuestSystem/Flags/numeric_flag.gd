@@ -1,3 +1,4 @@
+@tool
 extends CogitoFlag
 class_name NumericFlag
 

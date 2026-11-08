@@ -1,3 +1,4 @@
+@tool
 extends Resource
 class_name CogitoQuestObjective
 
@@ -27,6 +28,16 @@ enum ObjectiveState {
 
 ## Flags needed to reveal the objective
 @export var reveal_flags:  Array[CogitoFlagGroup] = []
+
+func get_all_flag_names() -> Array[String]:
+	var names: Array[String] = []
+	for group in completion_flags:
+		names.append_array(group.get_flag_names())
+	for group in failure_flags:
+		names.append_array(group.get_flag_names())
+	for group in reveal_flags:
+		names.append_array(group.get_flag_names())
+	return names
 
 func get_description(flags: Dictionary) -> String:
 	var description = objective_description
