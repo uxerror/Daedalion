@@ -19,9 +19,6 @@ enum QuestState {
 ## Displayed quest title (for user interface)
 @export var quest_title: String
 
-## Flags associated with the quest
-@export var quest_flags: Dictionary
-
 ## All objectives associated with the quest
 @export var quest_objectives: Array[CogitoQuestObjective] = []
 
@@ -64,18 +61,12 @@ func start(_mute: bool = false) -> void:
 	
 	# Set the quest state to Active, wipe the flags
 	quest_state = QuestState.Active
-	quest_flags = {}
 
-func add_flag(flag_name: String, value: Variant):
-	if not quest_flags.has(flag_name):
-		quest_flags.set(flag_name, value)
-	else:
-		# If the value is numeric, combine the existing value
-		var set_value = value if value is bool else quest_flags[flag_name] as int + value as int
-		quest_flags.set(flag_name, set_value)
 
-# Updates the quest by updating each associated objective against the updated flag list
+
+# Updates the quest by updating each associated objective against the world state
 func update() -> QuestState:
+	var world_state = CogitoSceneManager._current_world_dict
 	# Do not update the quest if the state is completed or inactive
 	if quest_state == QuestState.Completed or quest_state == QuestState.NotStarted:
 		return quest_state
@@ -86,16 +77,20 @@ func update() -> QuestState:
 	# Assume quest will complete on update
 	var set_quest_state = QuestState.Completed
 	
-	# Update all quest objectives based on new quest flags
+	# Update all quest objectives based on new world flags
+	var previous_objective_state: CogitoQuestObjective.ObjectiveState = CogitoQuestObjective.ObjectiveState.Active
 	for objective in quest_objectives:
-		var objective_state = objective.update(quest_flags)
-					
+		var objective_state = objective.update(world_state, previous_objective_state == CogitoQuestObjective.ObjectiveState.Completed)
+		
 		# Fail the quest if the objective fails and is required
 		if objective.required_to_complete and objective_state == cq.Failed:
 			set_quest_state = QuestState.Failed
 			break
 		elif objective.required_to_complete and objective_state != cq.Completed:
 			set_quest_state = QuestState.Active
+			
+		# Store objective state for use in unhiding the next objective if boolean is set
+		previous_objective_state = objective_state
 	
 	quest_state = set_quest_state
 	return quest_state

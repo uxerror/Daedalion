@@ -7,7 +7,8 @@
 [ext_resource type="Resource" uid="uid://ca0wjra4aq00v" path="res://addons/cogito/InventoryPD/Items/Cogito_LaptopReal.tres" id="5_838le"]
 [ext_resource type="Resource" uid="uid://b7myxblvr7lty" path="res://addons/cogito/InventoryPD/Items/Cogito_Laptop.tres" id="6_6xc2m"]
 [ext_resource type="Script" uid="uid://d2jjqadlnhp6x" path="res://addons/cogito/QuestSystem/Components/cogito_quest_updater.gd" id="7_fhl3i"]
-[ext_resource type="Resource" uid="uid://dhadvbqjxigfo" path="res://addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_DeliverLaptop.tres" id="8_wpbw8"]
+[ext_resource type="Resource" uid="uid://b7wrhr74mptlf" path="res://addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_StealLaptop.tres" id="8_pfioi"]
+[ext_resource type="Script" uid="uid://cx1tu6vu6edrq" path="res://addons/cogito/QuestSystem/Flags/world_flag.gd" id="9_pfioi"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_fmsn7"]
 resource_name = "metalLight"
@@ -229,6 +230,18 @@ _data = {
 &"open": SubResource("Animation_pl7ih")
 }
 
+[sub_resource type="Resource" id="Resource_ymx1h"]
+script = ExtResource("9_pfioi")
+flag_name = "LaptopDelivered"
+value = true
+metadata/_custom_type_script = "uid://cx1tu6vu6edrq"
+
+[sub_resource type="Resource" id="Resource_pfioi"]
+script = ExtResource("9_pfioi")
+flag_name = "FakeLaptopDelivered"
+value = true
+metadata/_custom_type_script = "uid://cx1tu6vu6edrq"
+
 [node name="kitchenFridgeContainer" type="StaticBody3D" unique_id=1618526638 node_paths=PackedStringArray("prompt_marker")]
 collision_layer = 3
 collision_mask = 0
@@ -310,13 +323,15 @@ item_to_check_for = ExtResource("6_6xc2m")
 
 [node name="QuestUpdaterWIN" type="Node3D" parent="." unique_id=1026729968]
 script = ExtResource("7_fhl3i")
-quest_to_update = ExtResource("8_wpbw8")
+quest_to_update = ExtResource("8_pfioi")
 update_type = 1
+world_flag = Array[ExtResource("9_pfioi")]([SubResource("Resource_ymx1h")])
 
 [node name="QuestUpdaterFAIL" type="Node3D" parent="." unique_id=982334135]
 script = ExtResource("7_fhl3i")
-quest_to_update = ExtResource("8_wpbw8")
-update_type = 2
+quest_to_update = ExtResource("8_pfioi")
+update_type = 1
+world_flag = Array[ExtResource("9_pfioi")]([SubResource("Resource_pfioi")])
 
 [connection signal="container_closed" from="." to="InventoryCheckerWIN" method="update_inventory"]
 [connection signal="container_closed" from="." to="InventoryCheckerWIN" method="check_inventory" flags=3]

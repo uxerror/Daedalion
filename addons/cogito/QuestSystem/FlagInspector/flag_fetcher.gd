@@ -15,6 +15,8 @@ static func fetch_all_flags(tree: SceneTree) -> Array:
 		dict.set(flag, 1)
 	for flag in get_all_quest_objective_flags():
 		dict.set(flag, 1)
+	# Remove any empty values from InventoryFlag
+	dict.erase("")
 	return dict.keys()
 
 ## Get all flag names defined (with duplicates) in CogitoQuestUpdater instances in the current scene.
@@ -22,8 +24,8 @@ static func get_all_updater_flags(tree: SceneTree) -> Array[String]:
 	var flag_names: Array[String] = []
 	var quest_updaters = tree.edited_scene_root.find_children("", "CogitoQuestUpdater")
 	for updater in quest_updaters:
-		if updater.flag_name != "":
-			flag_names.append(updater.flag_name)
+		for world_flag in updater.world_flag:
+			flag_names.append(world_flag.flag_name)
 	return flag_names
 
 ## Obtain every quest objective flag name defined (with duplicates) from a

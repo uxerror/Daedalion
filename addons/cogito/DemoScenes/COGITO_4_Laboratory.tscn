@@ -41,6 +41,7 @@
 [ext_resource type="PackedScene" uid="uid://sfypssn0rllo" path="res://addons/cogito/PackedScenes/Pickups/pickup_stamina_extension.tscn" id="31_w4dru"]
 [ext_resource type="PackedScene" uid="uid://bekq2c16juwa1" path="res://addons/cogito/PackedScenes/Pickups/pickup_dart.tscn" id="32_eue0k"]
 [ext_resource type="PackedScene" uid="uid://c2r7ib4rrrdfj" path="res://addons/cogito/DemoScenes/DemoPrefabs/ksi_table_long.tscn" id="33_qijth"]
+[ext_resource type="Script" uid="uid://cx1tu6vu6edrq" path="res://addons/cogito/QuestSystem/Flags/world_flag.gd" id="34_dckl7"]
 [ext_resource type="Script" uid="uid://bbq3bdpyu0d4y" path="res://addons/cogito/Scripts/cogito_spawnzone.gd" id="34_us6yk"]
 [ext_resource type="PackedScene" uid="uid://7osjlj17ntxb" path="res://addons/cogito/DemoScenes/DemoPrefabs/ksi_wall_window_painted.tscn" id="35_12m6n"]
 [ext_resource type="PackedScene" uid="uid://dj5ljgm5vwf1g" path="res://addons/cogito/DemoScenes/DemoPrefabs/ksi_wall_window_painted_alt.tscn" id="36_vbqup"]
@@ -75,12 +76,12 @@
 [ext_resource type="PackedScene" uid="uid://d2lnk6ecthmvd" path="res://addons/cogito/PackedScenes/Pickups/pickup_strength_potion.tscn" id="67_17g06"]
 [ext_resource type="Script" uid="uid://cf14qv41gf7ll" path="res://addons/cogito/Scripts/water_area.gd" id="67_kt1ow"]
 [ext_resource type="Script" uid="uid://d2jjqadlnhp6x" path="res://addons/cogito/QuestSystem/Components/cogito_quest_updater.gd" id="67_ovhpt"]
-[ext_resource type="Resource" uid="uid://c2goscdbbyawd" path="res://addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_TargetPractice.tres" id="68_a6jus"]
 [ext_resource type="PackedScene" uid="uid://dn3ldbym7cl7v" path="res://addons/cogito/Wieldables/NPC_blaster.tscn" id="68_gg4s8"]
 [ext_resource type="PackedScene" uid="uid://byb1y44thne6i" path="res://addons/cogito/PackedScenes/gravity_zone.tscn" id="68_kt1ow"]
 [ext_resource type="Shader" uid="uid://bqurxcbvm4a7a" path="res://addons/cogito/Assets/Shader/water_and_under.gdshader" id="68_r8380"]
 [ext_resource type="PackedScene" uid="uid://b2cccsfb5tikx" path="res://addons/cogito/CogitoNPC/cogito_npc.tscn" id="68_wxy0x"]
 [ext_resource type="Resource" path="res://addons/cogito/DemoScenes/DemoMusic/combat_music.tres" id="99_combat"]
+[ext_resource type="Resource" uid="uid://c2goscdbbyawd" path="res://addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_TargetPractice.tres" id="78_gg4s8"]
 
 [sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_wjbty"]
 panorama = ExtResource("2_akrjl")
@@ -243,6 +244,12 @@ roughness = 0.0
 
 [sub_resource type="QuadMesh" id="QuadMesh_nf5bb"]
 material = SubResource("StandardMaterial3D_5g5t0")
+
+[sub_resource type="Resource" id="Resource_p1ri8"]
+script = ExtResource("34_dckl7")
+flag_name = "TargetsShot"
+value = 1
+metadata/_custom_type_script = "uid://cx1tu6vu6edrq"
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hmon6"]
 size = Vector3(8, 1, 6.10059)
@@ -3468,6 +3475,10 @@ line_spacing = -5.0
 [node name="TargetDestructable" parent="NavigationRegion3D/SHOOTING_RANGE/TARGETS" unique_id=356711413 instance=ExtResource("25_s7t53")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 1, -22)
 
+[node name="QuestUpdater" parent="NavigationRegion3D/SHOOTING_RANGE/TARGETS/TargetDestructable" index="6" unique_id=5035604]
+update_type = 1
+world_flag = Array[ExtResource("34_dckl7")]([SubResource("Resource_p1ri8")])
+
 [node name="TargetDestructable2" parent="NavigationRegion3D/SHOOTING_RANGE/TARGETS" unique_id=305688418 instance=ExtResource("25_s7t53")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, -22)
 
@@ -4020,7 +4031,7 @@ transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -24.17
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.56735, 0.117202, -9.93328)
 collision_mask = 17
 script = ExtResource("67_ovhpt")
-quest_to_update = ExtResource("68_a6jus")
+quest_to_update = ExtResource("78_gg4s8")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="TargetPractice_QuestStarter" unique_id=2051813857]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.51529, 2.35317, -0.0870171)

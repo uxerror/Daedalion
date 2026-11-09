@@ -11,4 +11,5 @@ func set_quest_info(_passed_quest: CogitoQuest):
 	
 	quest_objectives_label.text = ""
 	for objective in _passed_quest.quest_objectives:
-		quest_objectives_label.text += "\n- %s" % objective.get_description(_passed_quest.quest_flags)
+		if objective.objective_state != CogitoQuestObjective.ObjectiveState.Hidden:
+			quest_objectives_label.text += "\n- %s" % objective.get_description(CogitoSceneManager._current_world_dict)

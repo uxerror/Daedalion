@@ -22,9 +22,9 @@ func _can_handle(_object) -> bool:
 func inspected_type_check(object: Object):
 	if not object: return false
 	var script: Script = object.get_script()
-	return object is CogitoFlag \
-	 or object is CogitoQuestUpdater \
-	 or (script and script.get_global_name() == "CogitoQuestUpdater")
+	return object is BooleanFlag \
+	or object is NumericFlag \
+	or object is WorldFlag
 
 # When a resource is saved add it to the fetcher resource path cache
 func on_resource_saved(resource: Resource) -> void:

@@ -85,22 +85,28 @@ func fail_quest(quest: CogitoQuest) -> CogitoQuest:
 	return quest
 
 
-## Updates/adds a flag for a quest. Value should be either int or bool. Quest needs to be active.
-func add_flag(quest: CogitoQuest, flag_name: String, value: Variant) -> CogitoQuest:
-	if value is not int and value is not bool:
-		CogitoGlobals.debug_log(true, "cogito_quest_manager.gd", "Value type is not integer or boolean! Returning....")
-	
+## Updates the quest state with an optional world flag added to the world state. Quest needs to be active.
+func update_quest(quest: CogitoQuest, flags: Array[WorldFlag]) -> CogitoQuest:
 	if not active.is_quest_inside(quest):
 		return quest
 	
-	quest.add_flag(flag_name, value)
-	quest_updated.emit(quest)
+	var world_state = CogitoSceneManager._current_world_dict
+	for flag in flags:
+		if not world_state.has(flag.flag_name):
+			world_state.set(flag.flag_name, flag.value)
+		else:
+			# If the value is numeric, combine the existing value
+			var value = flag.value
+			var set_value = value if value is bool else world_state[flag.flag_name] as int + value as int
+			world_state.set(flag.flag_name, set_value)
 	
 	var quest_state = quest.update()
 	if quest_state == CogitoQuest.QuestState.Completed:
 		complete_quest(quest)
 	elif quest_state == CogitoQuest.QuestState.Failed:
 		fail_quest(quest)
+	else:
+		quest_updated.emit(quest)
 
 	return quest
 

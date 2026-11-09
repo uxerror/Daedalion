@@ -20,14 +20,16 @@ enum ObjectiveState {
 ## Current state of the objective
 @export var objective_state: ObjectiveState = ObjectiveState.Active
 
-## Flag group that completes the objective. Multiple flag groups work as a "Group" OR "Group" relationship
+## World Flag group that completes the objective. Multiple flag groups work as a "Group" OR "Group" relationship
 @export var completion_flags: Array[CogitoFlagGroup] = []
 
-## Flags needed in quest to fail the objective
+## World Flag group needed in quest to fail the objective
 @export var failure_flags:  Array[CogitoFlagGroup] = []
 
-## Flags needed to reveal the objective
+## World Flags group needed to reveal the objective
 @export var reveal_flags:  Array[CogitoFlagGroup] = []
+## If true, reveals the objective when the previous ones is completed
+@export var reveal_on_completion_of_previous_objective: bool = false
 
 func get_all_flag_names() -> Array[String]:
 	var names: Array[String] = []
@@ -40,18 +42,21 @@ func get_all_flag_names() -> Array[String]:
 	return names
 
 func get_description(flags: Dictionary) -> String:
-	var description = objective_description
+	var numeric_descs = ""
 	for flag in completion_flags:
 		for num in flag.get_numeric_descriptions(flags):
-			description.append("\n%s" % num)
-	return description + " [%s]" % ObjectiveState.keys()[objective_state]
+			numeric_descs += "\n%s" % num if len(num) > 0 else ""
+	return objective_description + " [%s]" % ObjectiveState.keys()[objective_state] + numeric_descs
 
-func update(flags: Dictionary) -> ObjectiveState:
+func update(flags: Dictionary, previous_objective_completed: bool) -> ObjectiveState:
 	## If objective state is hidden, check reveal flags
 	if objective_state == ObjectiveState.Hidden:
-		for group in reveal_flags:
-			if group.meets_criteria(flags):
-				objective_state = ObjectiveState.Active
+		if reveal_on_completion_of_previous_objective and previous_objective_completed:
+			objective_state = ObjectiveState.Active
+		else:
+			for group in reveal_flags:
+				if group.meets_criteria(flags):
+					objective_state = ObjectiveState.Active
 	
 	for group in completion_flags:
 		if group.meets_criteria(flags):

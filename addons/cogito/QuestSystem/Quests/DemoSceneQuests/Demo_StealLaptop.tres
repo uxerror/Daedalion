@@ -1,10 +1,76 @@
 [gd_resource type="Resource" script_class="CogitoQuest" format=3 uid="uid://b7wrhr74mptlf"]
 
+[ext_resource type="Script" uid="uid://dqjgrpxl8eywm" path="res://addons/cogito/QuestSystem/CustomResources/cogito_quest_objective.gd" id="1_hfa3p"]
 [ext_resource type="Script" uid="uid://bb3ww0nivppeq" path="res://addons/cogito/QuestSystem/CustomResources/cogito_quest.gd" id="1_l7t02"]
+[ext_resource type="Script" uid="uid://cb0bb7a4drtej" path="res://addons/cogito/QuestSystem/Flags/cogito_flag_group.gd" id="2_4oksg"]
+[ext_resource type="Resource" uid="uid://ca0wjra4aq00v" path="res://addons/cogito/InventoryPD/Items/Cogito_LaptopReal.tres" id="3_td38l"]
+[ext_resource type="Script" uid="uid://dnniljhhtx2pl" path="res://addons/cogito/QuestSystem/Flags/inventory_flag.gd" id="4_cnfj8"]
+[ext_resource type="Script" uid="uid://dc2atholvyqaf" path="res://addons/cogito/QuestSystem/Flags/single_flag_group.gd" id="5_yncax"]
+[ext_resource type="Script" uid="uid://cdu5jo471lb8u" path="res://addons/cogito/QuestSystem/Flags/bool_flag.gd" id="6_4oksg"]
+[ext_resource type="Resource" uid="uid://b7myxblvr7lty" path="res://addons/cogito/InventoryPD/Items/Cogito_Laptop.tres" id="6_td38l"]
+
+[sub_resource type="Resource" id="Resource_v0uas"]
+script = ExtResource("4_cnfj8")
+expected_item = ExtResource("3_td38l")
+metadata/_custom_type_script = "uid://dnniljhhtx2pl"
+
+[sub_resource type="Resource" id="Resource_p1ri8"]
+script = ExtResource("5_yncax")
+flag = SubResource("Resource_v0uas")
+metadata/_custom_type_script = "uid://dc2atholvyqaf"
+
+[sub_resource type="Resource" id="Resource_td38l"]
+script = ExtResource("4_cnfj8")
+expected_item = ExtResource("6_td38l")
+metadata/_custom_type_script = "uid://dnniljhhtx2pl"
+
+[sub_resource type="Resource" id="Resource_4oksg"]
+script = ExtResource("5_yncax")
+flag = SubResource("Resource_td38l")
+metadata/_custom_type_script = "uid://dc2atholvyqaf"
+
+[sub_resource type="Resource" id="Resource_dckl7"]
+script = ExtResource("1_hfa3p")
+objective_description = "Find and steal the CEOs laptop."
+completion_flags = Array[ExtResource("2_4oksg")]([SubResource("Resource_p1ri8"), SubResource("Resource_4oksg")])
+reveal_on_completion_of_previous_objective = null
+metadata/_custom_type_script = "uid://dqjgrpxl8eywm"
+
+[sub_resource type="Resource" id="Resource_cnfj8"]
+script = ExtResource("6_4oksg")
+flag_name = "LaptopDelivered"
+metadata/_custom_type_script = "uid://cdu5jo471lb8u"
+
+[sub_resource type="Resource" id="Resource_yncax"]
+script = ExtResource("5_yncax")
+flag = SubResource("Resource_cnfj8")
+metadata/_custom_type_script = "uid://dc2atholvyqaf"
+
+[sub_resource type="Resource" id="Resource_n5u3l"]
+script = ExtResource("6_4oksg")
+flag_name = "FakeLaptopDelivered"
+metadata/_custom_type_script = "uid://cdu5jo471lb8u"
+
+[sub_resource type="Resource" id="Resource_pfioi"]
+script = ExtResource("5_yncax")
+flag = SubResource("Resource_n5u3l")
+metadata/_custom_type_script = "uid://dc2atholvyqaf"
+
+[sub_resource type="Resource" id="Resource_ptfm8"]
+script = ExtResource("1_hfa3p")
+objective_id = 1
+objective_description = "Deliver the laptop to the hidden compartment in the fridge."
+objective_state = 3
+completion_flags = Array[ExtResource("2_4oksg")]([SubResource("Resource_yncax")])
+failure_flags = Array[ExtResource("2_4oksg")]([SubResource("Resource_pfioi")])
+reveal_on_completion_of_previous_objective = true
+metadata/_custom_type_script = "uid://dqjgrpxl8eywm"
 
 [resource]
 script = ExtResource("1_l7t02")
 quest_name = "demo_steal_laptop"
 quest_title = "Steal the CEO's laptop"
+quest_objectives = Array[ExtResource("1_hfa3p")]([SubResource("Resource_dckl7"), SubResource("Resource_ptfm8")])
 quest_description_active = "We need the data on that laptop. As soon as you have it in your possession, we'll let you know the next steps."
-quest_description_completed = "You found the laptop."
+quest_description_completed = "You managed to find the laptop and deliver the data we needed. Great work!"
+quest_description_failed = "The laptop you delivered was fake! Do not contact us again."

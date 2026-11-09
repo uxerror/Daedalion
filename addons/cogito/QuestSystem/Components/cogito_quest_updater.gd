@@ -2,11 +2,10 @@ extends Node3D
 class_name CogitoQuestUpdater
 
 @export var quest_to_update : CogitoQuest
-enum UpdateType {Start, Complete, Fail, AddFlag}
+enum UpdateType {Start, Update, Complete, Fail }
 @export var update_type: UpdateType
-## Flag(s) to add if using AddFlag
-@export var flag_name: String
-@export var flag_value: Variant
+## World flag(s) to optionally add if using Update
+@export var world_flag: Array[WorldFlag] = []
 
 var has_been_triggered : bool = false #Used to avoid double-triggering.
 
@@ -23,12 +22,12 @@ func update_quest():
 		UpdateType.Fail:
 			CogitoGlobals.debug_log(true, "cogito_quest_updater.gd", "Failing quest " + quest_to_update.quest_name)
 			CogitoQuestManager.fail_quest(quest_to_update)
-		UpdateType.AddFlag:
+		UpdateType.Update:
 			if has_been_triggered:
 				return
 			if !CogitoQuestManager.is_quest_active(quest_to_update):
 				CogitoQuestManager.start_quest(quest_to_update)
-			CogitoQuestManager.add_flag(quest_to_update, flag_name, flag_value)
+			CogitoQuestManager.update_quest(quest_to_update, world_flag)
 			has_been_triggered = true
 
 
@@ -43,7 +42,8 @@ func _on_pickup_component_was_interacted_with(_interaction_text: Variant, _input
 
 func set_state():
 	pass
-	
+
+
 func save():
 	var state_dict = {
 		"node_path" : self.get_path(),
