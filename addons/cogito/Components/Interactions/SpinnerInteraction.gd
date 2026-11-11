@@ -75,7 +75,7 @@ func _notification(what: int) -> void:
 
 ## Input event for input routing
 func on_input(event: InputEvent) -> void:
-	if InputHelper.device_index == -1 and mouse_requires_hold and event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+	if InputHelper.device_index == -1 and mouse_requires_hold and event.is_action("action_primary"):
 		# Rebase even if release and re-press both happen between process frames.
 		previous_angle = NAN
 		spin_accumulator = 0.0
@@ -125,7 +125,7 @@ func _process(_delta: float) -> void:
 	var angle : float
 	var rotation_multiplier : float = 1.0
 	if InputHelper.device_index == -1:
-		if mouse_requires_hold and !Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		if mouse_requires_hold and !Input.is_action_pressed("action_primary"):
 			previous_angle = NAN
 			spin_accumulator = 0.0
 			return
