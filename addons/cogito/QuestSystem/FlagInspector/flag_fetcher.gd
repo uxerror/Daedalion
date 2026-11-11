@@ -72,4 +72,5 @@ static func check_resource_type(file_name:String, expected_type:String) -> bool:
 	if FileAccess.get_size(file_name) > 131072: return false
 	var file = FileAccess.open(file_name, FileAccess.ModeFlags.READ)
 	var text = file.get_line()
-	return text.contains(expected_type)
+	# Wrap the expected type contains in quotes so you parse only that specific type
+	return text.contains("\""+expected_type+"\"")
