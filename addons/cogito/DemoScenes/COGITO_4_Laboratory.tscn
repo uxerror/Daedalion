@@ -80,6 +80,7 @@
 [ext_resource type="PackedScene" uid="uid://byb1y44thne6i" path="res://addons/cogito/PackedScenes/gravity_zone.tscn" id="68_kt1ow"]
 [ext_resource type="Shader" uid="uid://bqurxcbvm4a7a" path="res://addons/cogito/Assets/Shader/water_and_under.gdshader" id="68_r8380"]
 [ext_resource type="PackedScene" uid="uid://b2cccsfb5tikx" path="res://addons/cogito/CogitoNPC/cogito_npc.tscn" id="68_wxy0x"]
+[ext_resource type="Resource" path="res://addons/cogito/DemoScenes/DemoMusic/combat_music.tres" id="99_combat"]
 
 [sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_wjbty"]
 panorama = ExtResource("2_akrjl")
@@ -451,6 +452,7 @@ data = PackedVector3Array(-0.5, 0.025, 0.5, 0.5, 0.025, 0.5, -0.5, -0.025, 0.5, 
 [node name="Cogito04Laboratory" type="Node3D" unique_id=514933480 node_paths=PackedStringArray("connectors")]
 script = ExtResource("1_kxi7f")
 connectors = [NodePath("CONNECTOR_TO_LOBBY/ConnectorFromLobby")]
+combat_music_state = ExtResource("99_combat")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=2011997096]
 transform = Transform3D(0.5, -0.224144, 0.836516, -1.13133e-08, 0.965926, 0.258819, -0.866025, -0.12941, 0.482963, 0, 2, 0)

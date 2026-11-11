@@ -277,8 +277,10 @@ func create_new_state() -> CogitoPlayerState:
 
 func slide_audio_init():
 	#setup sound effect for sliding
-	slide_audio_player = Audio.play_sound_3d(slide_sound, false)
-	slide_audio_player.reparent(self, false)
+	slide_audio_player = AudioStreamPlayer3D.new()
+	slide_audio_player.stream = slide_sound
+	slide_audio_player.bus = OptionsConstants.sfx_bus_name
+	add_child(slide_audio_player)
 
 
 # Use these functions to manipulate player attributes.
@@ -1052,7 +1054,7 @@ func _physics_process(delta):
 				decrease_attribute("stamina",stamina_attribute.jump_exhaustion)
 			
 			animationPlayer.play("jump")
-			Audio.play_sound(jump_sound)
+			CogitoAudio.play_sound(jump_sound)
 			if !sliding_timer.is_stopped():
 				# if we're doing a slide jump, use our standard JUMP_VELOCITY
 				main_velocity.y = JUMP_VELOCITY * SLIDE_JUMP_MOD

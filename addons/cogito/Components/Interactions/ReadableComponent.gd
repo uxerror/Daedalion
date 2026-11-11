@@ -29,7 +29,7 @@ func on_input(event: InputEvent) -> void:
 		close(player)
 
 func interact(_player_interaction_component: PlayerInteractionComponent):
-	Audio.play_sound_3d(interact_sound).global_position = self.global_position
+	CogitoAudio.play_sound_3d(interact_sound, self.global_position)
 	
 	if readable_ui.visible:
 		close(_player_interaction_component)

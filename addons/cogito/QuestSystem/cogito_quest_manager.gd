@@ -46,7 +46,7 @@ func start_quest(quest: CogitoQuest) -> CogitoQuest:
 	quest_activated.emit(quest)
 
 	quest.start()
-	Audio.play_sound(CogitoGlobals.cogito_settings.quest_start_sound).volume_db = quest_audio_volume_db
+	CogitoAudio.play_sound(CogitoGlobals.cogito_settings.quest_start_sound, quest_audio_volume_db)
 	CogitoGlobals.debug_log(true, "QuestManager.gd", "Quest " + quest.quest_name + " has been started.")
 	return quest
 
@@ -65,7 +65,7 @@ func complete_quest(quest: CogitoQuest) -> CogitoQuest:
 	completed.add_quest(quest)
 
 	quest_completed.emit(quest)
-	Audio.play_sound(CogitoGlobals.cogito_settings.quest_complete_sound).volume_db = quest_audio_volume_db
+	CogitoAudio.play_sound(CogitoGlobals.cogito_settings.quest_complete_sound, quest_audio_volume_db)
 	return quest
 
 
@@ -80,7 +80,7 @@ func fail_quest(quest: CogitoQuest) -> CogitoQuest:
 	failed.add_quest(quest)
 
 	quest_failed.emit(quest)
-	Audio.play_sound(CogitoGlobals.cogito_settings.quest_failed_sound).volume_db = quest_audio_volume_db
+	CogitoAudio.play_sound(CogitoGlobals.cogito_settings.quest_failed_sound, quest_audio_volume_db)
 	return quest
 
 

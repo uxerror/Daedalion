@@ -22,6 +22,7 @@ var has_windowed_resolution_changed := false
 
 
 # AUDIO
+@onready var master_volume_slider: HSliderWLabel = %HBoxContainer_MasterVolumeSlider
 @onready var sfx_volume_slider: HSliderWLabel = %HBoxContainer_SFXVolumeSlider
 @onready var music_volume_slider: HSliderWLabel = %HBoxContainer_MusicVolumeSlider
 
@@ -77,8 +78,10 @@ func _ready() -> void:
 	vsync_check_button.toggled.connect(_on_v_sync_check_button_toggled)
 	
 	# AUDIO
+	CogitoGameConfig.master_bus_index = AudioServer.get_bus_index(OptionsConstants.master_bus_name)
 	CogitoGameConfig.sfx_bus_index = AudioServer.get_bus_index(OptionsConstants.sfx_bus_name)
 	CogitoGameConfig.music_bus_index = AudioServer.get_bus_index(OptionsConstants.music_bus_name)
+	master_volume_slider.hslider.value_changed.connect(_on_master_volume_slider_value_changed)
 	sfx_volume_slider.hslider.value_changed.connect(_on_sfx_volume_slider_value_changed)
 	music_volume_slider.hslider.value_changed.connect(_on_music_volume_slider_value_changed)
 	
@@ -184,6 +187,10 @@ func _on_fullscreen_resolution_slider_value_changed(value: float) -> void:
 	update_fullscreen_resolution_slider_label()
 	have_options_changed = true
 
+func _on_master_volume_slider_value_changed(value):
+	CogitoGameConfig.set_volume(CogitoGameConfig.master_bus_index, value)
+
+
 func _on_sfx_volume_slider_value_changed(value):
 	CogitoGameConfig.set_volume(CogitoGameConfig.sfx_bus_index, value)
 
@@ -216,6 +223,7 @@ func _on_options_loaded(skip_applying:bool):
 	gp_look_sens_value_label.text = str(CogitoGameConfig.gp_looksens)
 
 	# LOADING AUDIO CFG
+	master_volume_slider.hslider.value = CogitoGameConfig.master_volume
 	sfx_volume_slider.hslider.value = CogitoGameConfig.sfx_volume
 	music_volume_slider.hslider.value = CogitoGameConfig.music_volume
 

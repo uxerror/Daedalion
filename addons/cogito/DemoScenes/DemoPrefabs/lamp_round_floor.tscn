@@ -137,6 +137,7 @@ omni_range = 3.0
 
 [node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="." unique_id=1821292348]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.101038, 1.11881, -0.152142)
+bus = &"SFX"
 
 [node name="BasicInteraction" parent="." unique_id=1067841970 instance=ExtResource("3_djnni")]
 

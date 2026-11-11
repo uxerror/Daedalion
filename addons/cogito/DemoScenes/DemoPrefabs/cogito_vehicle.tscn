@@ -50,6 +50,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.139682, 0, 0.694907)
 stream = ExtResource("3_wbi0e")
 volume_db = -35.0
 pitch_scale = 0.5
+bus = &"SFX"
 
 [node name="sit_area" type="Area3D" parent="." unique_id=1226745293]
 collision_mask = 17

@@ -60,7 +60,7 @@ func _on_transaction_success() -> void:
 
 func _delayed_object_spawn() -> void:
 	if dispensing_sound:
-		Audio.play_sound_3d(dispensing_sound).global_position = spawn_point.global_position
+		CogitoAudio.play_sound_3d(dispensing_sound, spawn_point.global_position)
 	
 	await get_tree().create_timer(spawn_delay).timeout
 	is_dispensing = false

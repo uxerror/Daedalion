@@ -152,7 +152,7 @@ func _on_hidden():
 
 func _on_focus_entered() -> void:
 	highlight_panel.modulate = Color(255, 255, 255, 0.1)
-	Audio.play_sound(sound_highlight)
+	CogitoAudio.play_sound(sound_highlight)
 	highlight_slot.emit(get_index(), true)
 	highlight_panel.show()
 

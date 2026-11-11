@@ -34,6 +34,7 @@ func _ready() -> void:
 ## Make sure to call this from your subclass as super.enter_state() if you want to track npc behaviours in state logic
 func enter_state():
 	npc.current_behaviour = behaviour_state
+	npc.update_combat_music()
 
 
 ## Make sure to call this from your subclass as super.exit_state() if you want to track npc behaviours in state logic

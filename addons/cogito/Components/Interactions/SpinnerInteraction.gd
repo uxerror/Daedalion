@@ -124,7 +124,7 @@ func _physics_process(delta: float) -> void:
 		if ( spinner_goal_value < 0 and spinner_value <= spinner_goal_value ) or ( spinner_goal_value > 0 and spinner_value >= spinner_goal_value ) :
 			spinner_goal_met.emit()
 			if sound_on_goal_met :
-				Audio.play_sound_3d(sound_on_goal_met).position = self.position
+				CogitoAudio.play_sound_3d(sound_on_goal_met, global_position)
 			if destroy_on_goal_met:
 				get_parent().queue_free()
 

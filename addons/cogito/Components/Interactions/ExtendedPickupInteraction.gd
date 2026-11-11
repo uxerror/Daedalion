@@ -91,7 +91,7 @@ func consume(consumable: ConsumableItemPD) -> void:
 	consumable.use(player_interaction_component.player)
 	player_interaction_component.interaction_raycast._set_interactable(null)
 	was_interacted_with.emit(interaction_text, input_map_action)
-	Audio.play_sound(consumable.sound_pickup)
+	CogitoAudio.play_sound(consumable.sound_pickup)
 	get_parent().queue_free()
 #endregion
 
@@ -143,7 +143,7 @@ func attempt_reload_current_wieldable(ammo: AmmoItemPD) -> void:
 	
 	player_interaction_component.equipped_wieldable_item.update_wieldable_data(player_interaction_component)
 	was_interacted_with.emit(interaction_text, input_map_action)
-	Audio.play_sound(ammo.sound_pickup)
+	CogitoAudio.play_sound(ammo.sound_pickup)
 	
 	if free_ammo:
 		player_interaction_component.interaction_raycast._set_interactable(null)
@@ -163,7 +163,7 @@ func attempt_wield(wieldable: WieldableItemPD) -> void:
 	
 		wieldable.use(player_interaction_component.player)
 		was_interacted_with.emit(interaction_text, input_map_action)
-		Audio.play_sound(wieldable.sound_pickup)
+		CogitoAudio.play_sound(wieldable.sound_pickup)
 		player_interaction_component.interaction_raycast._set_interactable(null)
 		get_parent().queue_free()
 	else:

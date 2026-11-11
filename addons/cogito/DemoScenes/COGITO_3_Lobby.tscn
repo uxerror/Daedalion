@@ -2,8 +2,7 @@
 
 [ext_resource type="Script" uid="uid://c2kkj7vhsd1oi" path="res://addons/cogito/SceneManagement/cogito_scene.gd" id="1_dracg"]
 [ext_resource type="Texture2D" uid="uid://sdcljx8f5dhj" path="res://addons/cogito/Assets/hdris/kloofendal_48d_partly_cloudy_puresky_2k.hdr" id="2_a8imk"]
-[ext_resource type="AudioStream" uid="uid://lr1efmq0q16k" path="res://addons/cogito/Assets/Audio/Phazorknight/CogitoAmbience_v02.ogg" id="2_hd73s"]
-[ext_resource type="AudioStream" uid="uid://08bonhm3y2ju" path="res://addons/cogito/Assets/Audio/Phazorknight/CogitoAmbience_v01.ogg" id="2_jeioi"]
+[ext_resource type="Resource" path="res://addons/cogito/DemoScenes/DemoMusic/lobby_music.tres" id="2_music"]
 [ext_resource type="PackedScene" uid="uid://otv80grtivvc" path="res://addons/cogito/PackedScenes/cogito_player_advanced.tscn" id="3_mgle8"]
 [ext_resource type="Script" uid="uid://btnha2whsheir" path="res://addons/cogito/InventoryPD/cogito_inventory.gd" id="4_0kggm"]
 [ext_resource type="Script" uid="uid://di15gqemrkk0x" path="res://addons/cogito/InventoryPD/CustomResources/InventorySlotPD.gd" id="4_g5h7u"]
@@ -3348,9 +3347,7 @@ size = Vector3(2, 2, 2)
 script = ExtResource("1_dracg")
 connectors = [NodePath("MAIN_LOBBY/LAB_CONNECTOR/ConnectorFromLab")]
 save_temp_on_enter = true
-bgm_neutral = ExtResource("2_hd73s")
-bgm_combat = ExtResource("2_jeioi")
-music_max_volume_db = -8.0
+music_state = ExtResource("2_music")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1566647294]
 transform = Transform3D(0.5, -0.224144, 0.836516, -1.13133e-08, 0.965926, 0.258819, -0.866025, -0.12941, 0.482963, 0, 2, 0)
@@ -6117,6 +6114,7 @@ shape = SubResource("ConcavePolygonShape3D_c03ni")
 
 [node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="UPPER_OFFICE_CEO/deskCorner/Drawer" unique_id=263571667]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.272675, 0.554159, -1.26853)
+bus = &"SFX"
 
 [node name="BasicInteraction" parent="UPPER_OFFICE_CEO/deskCorner/Drawer" unique_id=363224607 instance=ExtResource("14_qtguo")]
 

@@ -98,7 +98,7 @@ func set_slot_data(_a, _b, _c, _d) -> void:
 	pass
 
 func _on_focus_entered() -> void:
-	Audio.play_sound(sound_highlight)
+	CogitoAudio.play_sound(sound_highlight)
 	selection_panel.show()
 
 func _on_focus_exited() -> void:

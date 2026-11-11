@@ -89,7 +89,7 @@ func update_display_label() -> void:
 
 func trigger_event_actions() -> void:
 	if sound_on_event:
-		Audio.play_sound_3d(sound_on_event).position = self.position
+		CogitoAudio.play_sound_3d(sound_on_event, global_position)
 	if destroy_on_event:
 		for node in destroy_on_event:
 			node.queue_free()

@@ -65,7 +65,7 @@ var quest_counter: int:
 func start(_mute: bool = false) -> void:
 	# Play start audio if available and not muted
 	if audio_on_start and not _mute:
-		Audio.play_sound(audio_on_start)
+		CogitoAudio.play_sound(audio_on_start)
 	
 	# Set description to active state
 	quest_description = quest_description_active
@@ -86,7 +86,7 @@ func update() -> void:
 func complete(_mute: bool = false) -> void:
 	# Play completion audio if available and not muted
 	if audio_on_complete and not _mute:
-		Audio.play_sound(audio_on_complete)
+		CogitoAudio.play_sound(audio_on_complete)
 	
 	# Update description to completed state
 	quest_description = quest_description_completed
@@ -103,7 +103,7 @@ func complete(_mute: bool = false) -> void:
 func failed(_mute: bool = false) -> void:
 	# Play failure audio if available and not muted
 	if audio_on_fail and not _mute:
-		Audio.play_sound(audio_on_fail)
+		CogitoAudio.play_sound(audio_on_fail)
 	
 	# Update description to failed state
 	quest_description = quest_description_failed

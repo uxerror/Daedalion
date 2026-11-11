@@ -54,6 +54,9 @@ var last_direction
 @export var sight_detection: SightDetection
 @export var hearing_detection: HearingDetection
 @export var behaviour_compound_state: CompoundState
+## Music state requested while this NPC is chasing, attacking or searching for the player.
+## Leave empty to use the scene's combat_music_state, e.g. set this only for a boss with its own theme.
+@export var combat_music_state: CogitoMusicState
 @export var weapon: NpcWieldable
 
 @export_group("Head LookAt")
@@ -116,6 +119,16 @@ var current_behaviour: BehaviourState
 
 func in_state(states: Array) -> bool:
 	return states.any(func(state): return current_behaviour == state)
+
+
+## Requests combat music while the NPC is in a combat behaviour and releases it otherwise.
+## Called by StateProcessor.enter_state().
+func update_combat_music() -> void:
+	var state: CogitoMusicState = combat_music_state if combat_music_state else CogitoAudio.get_scene_combat_music_state()
+	if state and in_state([BehaviourState.Chasing, BehaviourState.Attacking, BehaviourState.Searching]):
+		CogitoAudio.push_music_state(state, self)
+	else:
+		CogitoAudio.release_music_state(self)
 
 
 ## Gets the active state processor. Requires the state processor to be childed to the Atomic State.
@@ -304,6 +317,19 @@ func load_nodepaths():
 func load_state_chart():
 	var errors = StateChartSerializer.deserialize(serialized_state, state_chart)
 	CogitoGlobals.debug_log(true, "CogitoNPC", "Deserialising state chart, errors: %s" % errors)
+	# Deserializing doesn't emit state_entered, so the state processors' enter_state() doesn't run.
+	_restore_current_behaviour()
+
+
+## Sets current_behaviour from the active behaviour state, as its StateProcessor would on enter.
+func _restore_current_behaviour() -> void:
+	for state in behaviour_compound_state.get_children():
+		if not (state is StateChartState and state.active):
+			continue
+		for child in state.get_children():
+			if child is StateProcessor and child.behaviour_state != BehaviourState.None:
+				current_behaviour = child.behaviour_state
+	update_combat_music()
 
 
 func load_attention_target():

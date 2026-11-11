@@ -139,13 +139,13 @@ func check_entered_code():
 	if entered_code == passcode and is_locked:
 		unlock_keypad()
 	else:
-		Audio.play_sound(wrong_code_entered_sound)
+		CogitoAudio.play_sound(wrong_code_entered_sound)
 		lock_color.modulate = wrong_code_color
 		await get_tree().create_timer(unlock_wait_time).timeout
 		clear_entered_code()
 
 func unlock_keypad():
-	Audio.play_sound(correct_code_entered_sound)
+	CogitoAudio.play_sound(correct_code_entered_sound)
 	is_locked = false
 	lock_color.modulate = correct_code_color
 	interaction_text = interaction_text_when_unlocked
