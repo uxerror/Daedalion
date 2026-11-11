@@ -158,23 +158,12 @@ func _ready():
 
 func interact(interactor: Node3D):
 	player_interaction_component = interactor
-	if !is_locked:
-		if !is_open:
-			open_door(interactor)
-			
-			for nodepath in doors_to_sync_with:
-				if nodepath != null:
-					var object = get_node(nodepath)
-					object.open_door(interactor)
-		else:
-			close_door(interactor)
-			
-			for nodepath in doors_to_sync_with:
-				if nodepath != null:
-					var object = get_node(nodepath)
-					object.close_door(interactor)
+	
+	if is_open:
+		close_door(interactor)
 	else:
-		door_rattle(interactor)
+		if is_locked: door_rattle(interactor)
+		else: open_door(interactor)
 
 
 func door_rattle(interactor):
@@ -285,11 +274,17 @@ func open_door(interactor: Node3D):
 	else:
 		var tween_door = get_tree().create_tween()
 		tween_door.tween_property(self,"position", open_position, door_speed)
+		
+	for nodepath in doors_to_sync_with:
+		if nodepath != null:
+			var object = get_node(nodepath)
+			object.open_door(interactor)
 	
 	is_open = true
 	interaction_text = interaction_text_when_open
 	object_state_updated.emit(interaction_text)
 	door_state_changed.emit(true)
+	
 	# Only used if there's an auto close time set.
 	if auto_close_time > 0:
 		close_timer = Timer.new()
@@ -324,6 +319,12 @@ func close_door(_interactor: Node3D):
 		# Sliding door close
 		var tween_door = get_tree().create_tween()
 		tween_door.tween_property(self,"position", closed_position, door_speed)
+		
+	for nodepath in doors_to_sync_with:
+		if nodepath != null:
+			var object = get_node(nodepath)
+			object.close_door(_interactor)
+		
 	is_open = false
 	interaction_text = interaction_text_when_closed
 	object_state_updated.emit(interaction_text)
