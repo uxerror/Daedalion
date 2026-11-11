@@ -2,33 +2,13 @@
 
 [ext_resource type="Script" uid="uid://dqjgrpxl8eywm" path="res://addons/cogito/QuestSystem/CustomResources/cogito_quest_objective.gd" id="1_5rq3r"]
 [ext_resource type="Script" uid="uid://bb3ww0nivppeq" path="res://addons/cogito/QuestSystem/CustomResources/cogito_quest.gd" id="1_bjfge"]
-[ext_resource type="Script" uid="uid://cb0bb7a4drtej" path="res://addons/cogito/QuestSystem/Flags/cogito_flag_group.gd" id="2_tdkjf"]
-[ext_resource type="Script" uid="uid://dc2atholvyqaf" path="res://addons/cogito/QuestSystem/Flags/single_flag_group.gd" id="4_b0eks"]
-[ext_resource type="Script" uid="uid://gy6poqp7nndb" path="res://addons/cogito/QuestSystem/Flags/numeric_flag.gd" id="7_b0eks"]
-
-[sub_resource type="Resource" id="Resource_b0eks"]
-script = ExtResource("7_b0eks")
-specific_objective_text = "Targets"
-flag_name = "TargetsShot"
-expected = 5
-metadata/_custom_type_script = "uid://gy6poqp7nndb"
-
-[sub_resource type="Resource" id="Resource_xv01h"]
-script = ExtResource("4_b0eks")
-flag = SubResource("Resource_b0eks")
-metadata/_custom_type_script = "uid://dc2atholvyqaf"
-
-[sub_resource type="Resource" id="Resource_gxiae"]
-script = ExtResource("1_5rq3r")
-objective_description = "Destroy 5 targets."
-completion_flags = Array[ExtResource("2_tdkjf")]([SubResource("Resource_xv01h")])
-metadata/_custom_type_script = "uid://dqjgrpxl8eywm"
+[ext_resource type="Resource" uid="uid://qmtxes41ckud" path="res://addons/cogito/QuestSystem/Quests/DemoSceneObjectives/Demo_TargetPracticeObj.tres" id="2_h8pru"]
 
 [resource]
 script = ExtResource("1_bjfge")
 quest_name = "demo_target_practice"
 quest_title = "Target Practice"
-quest_objectives = Array[ExtResource("1_5rq3r")]([SubResource("Resource_gxiae")])
+quest_objectives = Array[ExtResource("1_5rq3r")]([ExtResource("2_h8pru")])
 quest_state = 1
 quest_description_active = "Time to show off your skills with a weapon! Pick one up and give it a go!"
 quest_description_completed = "You showed those targets who's boss."

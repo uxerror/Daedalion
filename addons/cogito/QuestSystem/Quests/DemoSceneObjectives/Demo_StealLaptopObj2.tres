@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="CogitoQuestObjective" format=3 uid="uid://e34iyv5vevb5"]
+
+[ext_resource type="Script" uid="uid://cb0bb7a4drtej" path="res://addons/cogito/QuestSystem/Flags/cogito_flag_group.gd" id="1_tqcs4"]
+[ext_resource type="Script" uid="uid://cdu5jo471lb8u" path="res://addons/cogito/QuestSystem/Flags/bool_flag.gd" id="2_kjy3k"]
+[ext_resource type="Script" uid="uid://dc2atholvyqaf" path="res://addons/cogito/QuestSystem/Flags/single_flag_group.gd" id="3_txrje"]
+[ext_resource type="Script" uid="uid://dqjgrpxl8eywm" path="res://addons/cogito/QuestSystem/CustomResources/cogito_quest_objective.gd" id="4_fxyov"]
+
+[sub_resource type="Resource" id="Resource_cnfj8"]
+script = ExtResource("2_kjy3k")
+flag_name = "LaptopDelivered"
+metadata/_custom_type_script = "uid://cdu5jo471lb8u"
+
+[sub_resource type="Resource" id="Resource_yncax"]
+script = ExtResource("3_txrje")
+flag = SubResource("Resource_cnfj8")
+metadata/_custom_type_script = "uid://dc2atholvyqaf"
+
+[sub_resource type="Resource" id="Resource_n5u3l"]
+script = ExtResource("2_kjy3k")
+flag_name = "FakeLaptopDelivered"
+metadata/_custom_type_script = "uid://cdu5jo471lb8u"
+
+[sub_resource type="Resource" id="Resource_pfioi"]
+script = ExtResource("3_txrje")
+flag = SubResource("Resource_n5u3l")
+metadata/_custom_type_script = "uid://dc2atholvyqaf"
+
+[resource]
+script = ExtResource("4_fxyov")
+objective_id = 1
+objective_description = "Deliver the laptop to the hidden compartment in the fridge."
+objective_state = 3
+completion_flags = Array[ExtResource("1_tqcs4")]([SubResource("Resource_yncax")])
+failure_flags = Array[ExtResource("1_tqcs4")]([SubResource("Resource_pfioi")])
+reveal_on_completion_of_previous_objective = true
+metadata/_custom_type_script = "uid://dqjgrpxl8eywm"
