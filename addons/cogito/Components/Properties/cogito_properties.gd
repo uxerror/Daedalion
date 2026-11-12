@@ -10,6 +10,20 @@ signal has_become_wet()
 signal has_become_dry()
 signal has_become_electric()
 signal has_lost_electricity()
+## Emitted when an element was applied through apply_element() (after resistances).
+signal element_applied(element: Element, amount: float, source: Node)
+## Emitted when two elements react with each other, e.g. &"steam" (fire on wet), &"douse" (water on fire).
+signal reaction_triggered(reaction: StringName)
+
+## Elements used for buildup, reactions, resistances and damage types.
+enum Element {
+	PHYSICAL,
+	FIRE,
+	COLD,
+	SHOCK,
+	WATER,
+	POISON,
+}
 
 enum ElementalProperties{
 	CONDUCTIVE = 1,
@@ -48,6 +62,33 @@ enum MaterialProperties{
 @export var electric_on_ready : bool
 
 
+@export_group("Element Buildup")
+## Amount of an element needed to change state (ignite, get wet, get electrified).
+## apply_element() amounts are measured in this unit, so 1.0 = exactly enough.
+@export var buildup_threshold : float = 1.0
+## Upper limit for stored buildup. Higher values let strong effects last longer.
+@export var buildup_max : float = 3.0
+## Buildup lost per second. Heat below the ignition point cools down, applied charge runs out.
+@export var buildup_decay_per_second : float = 0.5
+## Seconds it takes for applied wetness (buildup_threshold worth) to dry out. 0 = never dries.
+## Objects that start WET or got wet by touching a wet object stay wet.
+@export var dry_time : float = 20.0
+## Damage multiplier for SHOCK damage while the object is wet.
+@export var wet_shock_damage_multiplier : float = 1.5
+
+
+@export_group("Resistances")
+## Resistance in percent. 100 = immune, 0 = normal, negative values = weakness (-50 = 1.5x).
+## Scales both damage of that type and element buildup.
+@export_range(-100, 100, 1, "or_greater") var resist_fire : float = 0.0
+@export_range(-100, 100, 1, "or_greater") var resist_cold : float = 0.0
+@export_range(-100, 100, 1, "or_greater") var resist_shock : float = 0.0
+## Water resistance only affects getting wet (e.g. waterproof objects).
+@export_range(-100, 100, 1, "or_greater") var resist_water : float = 0.0
+@export_range(-100, 100, 1, "or_greater") var resist_poison : float = 0.0
+@export_range(-100, 100, 1, "or_greater") var resist_physical : float = 0.0
+
+
 @export_group("VFX PackedScenes")
 ## PackedScene of VFX etc that gets spawned when object ignites.
 @export var spawn_on_ignite : PackedScene
@@ -77,6 +118,12 @@ var player_node : Node3D = null
 
 var reaction_bodies : Array[Node3D] #Used to keep track of bodies with systemic properties.
 
+## Current buildup per element (Element -> float). Read with get_element_level().
+var element_levels : Dictionary = {}
+## Elements whose state was caused by buildup and wears off by itself (Element -> true).
+## States set directly (contact, on ready, set_on_fire() etc.) are sustained and don't wear off.
+var _timed_states : Dictionary = {}
+
 ## Meta key used to tag spawned VFX with the state that spawned them, so clearing one state keeps the others.
 const VFX_KIND_META := &"cogito_vfx_kind"
 const VFX_FIRE := &"fire"
@@ -102,6 +149,8 @@ func _ready():
 		
 	if elemental_properties & ElementalProperties.WET:
 		make_wet.call_deferred()
+	
+	_update_processing()
 
 
 ## Returns the CogitoProperties of a node, or null if it has none (or no such member at all).
@@ -145,7 +194,7 @@ func check_for_reaction_timer_interrupt(passed_collider: Node3D):
 			reaction_timer.stop()
 	
 	if reaction_bodies.size() == 0:
-		if is_electric and !electric_on_ready:
+		if is_electric and !electric_on_ready and !_timed_states.has(Element.SHOCK):
 			loose_electricity()
 
 
@@ -171,7 +220,7 @@ func check_for_systemic_reactions():
 			other.extinguish()
 
 	### ELECTRICITY REACTIONS
-	if elemental_properties & ElementalProperties.CONDUCTIVE:
+	if can_conduct():
 		if is_electric:
 			_log("Electrified, touched collider " + reaction_collider.name + ". Trying to pass on electricity!")
 			other.make_electric()
@@ -200,6 +249,8 @@ func make_wet():
 	if is_wet:
 		return # Already wet.
 	is_wet = true
+	_timed_states.erase(Element.WATER)
+	element_levels[Element.WATER] = buildup_max
 	if spawn_on_wet:
 		spawn_elemental_vfx(spawn_on_wet, VFX_WET)
 	has_become_wet.emit()
@@ -210,6 +261,8 @@ func make_dry():
 		return
 	elemental_properties &= ~ElementalProperties.WET
 	is_wet = false
+	_timed_states.erase(Element.WATER)
+	element_levels.erase(Element.WATER)
 	clear_spawned_effects(VFX_WET)
 	has_become_dry.emit()
 
@@ -219,6 +272,7 @@ func set_on_fire():
 		if is_on_fire:
 			return # Already burning.
 		is_on_fire = true
+		element_levels[Element.FIRE] = buildup_max
 		if spawn_on_ignite:
 			spawn_elemental_vfx(spawn_on_ignite, VFX_FIRE)
 		CogitoAudio.play_sound_3d_attached(audio_igniting, self)
@@ -241,10 +295,11 @@ func start_burn_damage_timer():
 
 
 func apply_burn_damage():
-	deal_burn_damage.emit(burn_damage_amount)
+	var amount := burn_damage_amount * get_damage_multiplier(Element.FIRE)
+	deal_burn_damage.emit(amount)
 	# Calling damage received on Cogito Object or Enemy parent node.
 	if get_parent().has_signal("damage_received"):
-		get_parent().damage_received.emit(burn_damage_amount)
+		get_parent().damage_received.emit(amount)
 	
 	if is_on_fire:
 		start_burn_damage_timer()
@@ -254,6 +309,7 @@ func extinguish():
 	if !is_on_fire:
 		return
 	is_on_fire = false
+	element_levels.erase(Element.FIRE)
 	if !damage_timer.is_stopped():
 		damage_timer.stop()
 	if audio_stream_player_3d:
@@ -278,10 +334,12 @@ func clear_spawned_effects(kind: StringName = &""):
 
 
 func make_electric():
-	if elemental_properties & ElementalProperties.CONDUCTIVE:
+	if can_conduct():
 		if is_electric:
 			return # Already electric.
 		is_electric = true
+		_timed_states.erase(Element.SHOCK)
+		element_levels[Element.SHOCK] = buildup_max
 		if spawn_on_electrified:
 			spawn_elemental_vfx(spawn_on_electrified, VFX_ELECTRIC)
 		CogitoGlobals.debug_log(is_logging, "cogito_properties.gd", get_parent().name + " has become electric.")
@@ -289,13 +347,15 @@ func make_electric():
 		
 		recheck_systemic_reactions()
 	else:
-		CogitoGlobals.debug_log(is_logging, "cogito_properties.gd", get_parent().name + " is not CONDUCTIVE.")
+		CogitoGlobals.debug_log(is_logging, "cogito_properties.gd", get_parent().name + " is not CONDUCTIVE or wet.")
 
 
 func loose_electricity():
 	if !is_electric:
 		return
 	is_electric = false
+	_timed_states.erase(Element.SHOCK)
+	element_levels.erase(Element.SHOCK)
 	clear_spawned_effects(VFX_ELECTRIC)
 	has_lost_electricity.emit()
 
@@ -335,6 +395,196 @@ func recheck_systemic_reactions():
 		
 	for reaction_body in reaction_bodies:
 		start_reaction_threshold_timer(reaction_body)
+
+
+#region Elements: buildup, reactions, resistances
+
+## Wet objects conduct electricity like CONDUCTIVE ones.
+func can_conduct() -> bool:
+	return bool(elemental_properties & ElementalProperties.CONDUCTIVE) or is_wet
+
+
+func get_element_level(element: Element) -> float:
+	return element_levels.get(element, 0.0)
+
+
+## Resistance in percent for an element (see the Resistances export group).
+func get_resistance(element: Element) -> float:
+	match element:
+		Element.FIRE: return resist_fire
+		Element.COLD: return resist_cold
+		Element.SHOCK: return resist_shock
+		Element.WATER: return resist_water
+		Element.POISON: return resist_poison
+		Element.PHYSICAL: return resist_physical
+	return 0.0
+
+
+## Multiplier applied to element buildup: 100% resistance = 0, -100% = 2.
+func get_resistance_multiplier(element: Element) -> float:
+	return maxf(0.0, 1.0 - get_resistance(element) / 100.0)
+
+
+## Multiplier applied to incoming damage of a type, including state modifiers (wet + shock).
+func get_damage_multiplier(element: Element) -> float:
+	var multiplier := get_resistance_multiplier(element)
+	if element == Element.SHOCK and is_wet:
+		multiplier *= wet_shock_damage_multiplier
+	return multiplier
+
+
+## Exposes this object to an element. Amount is measured in buildup_threshold units:
+## reaching the threshold ignites, wets or electrifies the object. States caused this way wear off
+## (wetness dries, applied charge runs out); a fire keeps burning until extinguished.
+## Returns the amount that was actually applied after resistances and reactions.
+func apply_element(element: Element, amount: float, source: Node = null) -> float:
+	if amount <= 0.0 or element == Element.PHYSICAL:
+		return 0.0
+	amount *= get_resistance_multiplier(element)
+	if amount <= 0.0:
+		return 0.0
+	
+	match element:
+		Element.FIRE:
+			amount = _react_fire(amount)
+		Element.WATER:
+			amount = _react_water(amount)
+		Element.SHOCK:
+			amount = _react_shock(amount)
+		_:
+			# COLD and POISON only build up for now.
+			_add_level(element, amount)
+	
+	if amount > 0.0:
+		_log("applied " + Element.keys()[element] + " x" + str(snappedf(amount, 0.01)))
+		element_applied.emit(element, amount, source)
+	_update_processing()
+	return amount
+
+
+## Deals damage of an element to a target, scaled by the target's resistances and states.
+## Works with anything that has a damage_received signal (CogitoObject, CogitoNPC, ...).
+## Returns the damage that was dealt.
+static func deal_elemental_damage(target: Node, amount: float, element: Element, source: Node = null, hit_direction := Vector3.ZERO, hit_position := Vector3.ZERO) -> float:
+	if !is_instance_valid(target) or !target.has_signal("damage_received"):
+		return 0.0
+	var props := get_properties_of(target)
+	if props:
+		amount *= props.get_damage_multiplier(element)
+	if amount <= 0.0:
+		return 0.0
+	target.damage_received.emit(amount, source, hit_direction, hit_position)
+	return amount
+
+
+func _react_fire(amount: float) -> float:
+	if is_wet:
+		if !_timed_states.has(Element.WATER):
+			# Permanently wet objects swallow the heat.
+			reaction_triggered.emit(&"steam")
+			return 0.0
+		var wetness := get_element_level(Element.WATER)
+		reaction_triggered.emit(&"steam")
+		if amount <= wetness:
+			_set_level(Element.WATER, wetness - amount)
+			return 0.0
+		amount -= wetness
+		make_dry()
+	if _add_level(Element.FIRE, amount) >= buildup_threshold and !is_on_fire:
+		if elemental_properties & ElementalProperties.FLAMMABLE:
+			set_on_fire()
+	return amount
+
+
+func _react_water(amount: float) -> float:
+	if is_on_fire:
+		reaction_triggered.emit(&"douse")
+		extinguish()
+	else:
+		element_levels.erase(Element.FIRE) # Cools down heat that hasn't ignited yet.
+	if is_wet:
+		if _timed_states.has(Element.WATER):
+			_add_level(Element.WATER, amount)
+		return amount
+	if _add_level(Element.WATER, amount) >= buildup_threshold:
+		var level := get_element_level(Element.WATER)
+		make_wet()
+		_timed_states[Element.WATER] = true
+		_set_level(Element.WATER, level)
+	return amount
+
+
+func _react_shock(amount: float) -> float:
+	if !can_conduct():
+		return 0.0
+	if is_electric:
+		if _timed_states.has(Element.SHOCK):
+			_add_level(Element.SHOCK, amount)
+		return amount
+	if _add_level(Element.SHOCK, amount) >= buildup_threshold:
+		var level := get_element_level(Element.SHOCK)
+		make_electric()
+		if is_electric:
+			_timed_states[Element.SHOCK] = true
+			_set_level(Element.SHOCK, level)
+	return amount
+
+
+func _add_level(element: Element, amount: float) -> float:
+	return _set_level(element, get_element_level(element) + amount)
+
+
+func _set_level(element: Element, value: float) -> float:
+	value = clampf(value, 0.0, buildup_max)
+	if value <= 0.0:
+		element_levels.erase(element)
+	else:
+		element_levels[element] = value
+	return value
+
+
+## Levels that should decay: sub-threshold buildup and timed states. Sustained states stay.
+func _is_decaying(element: Element) -> bool:
+	match element:
+		Element.FIRE: return !is_on_fire
+		Element.WATER: return !is_wet or _timed_states.has(Element.WATER)
+		Element.SHOCK: return !is_electric or _timed_states.has(Element.SHOCK)
+	return true
+
+
+func _update_processing() -> void:
+	for element in element_levels:
+		if _is_decaying(element):
+			set_process(true)
+			return
+	set_process(false)
+
+
+func _process(delta: float) -> void:
+	for element in element_levels.keys():
+		if !_is_decaying(element):
+			continue
+		var rate := buildup_decay_per_second
+		if element == Element.WATER:
+			if dry_time <= 0.0:
+				continue
+			rate = buildup_threshold / dry_time
+		if _set_level(element, get_element_level(element) - rate * delta) <= 0.0:
+			_on_level_depleted(element)
+	_update_processing()
+
+
+func _on_level_depleted(element: Element) -> void:
+	if !_timed_states.has(element):
+		return
+	match element:
+		Element.WATER:
+			make_dry()
+		Element.SHOCK:
+			loose_electricity()
+	_timed_states.erase(element)
+
+#endregion
 
 
 func _log(message: String) -> void:
