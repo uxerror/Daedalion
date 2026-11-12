@@ -19,7 +19,10 @@ extends InteractionComponent
 @export var mouse_requires_hold : bool = true
 ## Mouse rotation scale: 1.0 follows the cursor, 0.5 requires twice the movement, 0 disables mouse rotation. Does not affect the gamepad.
 @export_range(0.0, 4.0, 0.05, "or_greater") var mouse_rotation_multiplier : float = 1.0
-## Cursor distance from the screen center, in pixels, below which mouse movement is ignored. Close to the center small movements turn into large angles.
+## Mouse movement drives a virtual stick: its offset from the center, in pixels, is limited to this radius,
+## so circling the mouse at any size and anywhere on the desk turns the spinner.
+@export var mouse_stick_radius : float = 120.0
+## Virtual stick offset, in pixels, below which mouse movement is ignored. Close to the center small movements turn into large angles.
 @export var mouse_dead_zone : float = 20.0
 ## Right stick deflection below which gamepad input is ignored.
 @export var stick_dead_zone : float = 0.3
@@ -46,6 +49,8 @@ signal object_state_updated(interaction_text : String)
 var previous_angle : float = NAN
 ## Input rotation collected since the last whole step, in radians. Positive is clockwise.
 var spin_accumulator : float = 0.0
+## Virtual stick offset collected from relative mouse motion, in pixels.
+var mouse_stick : Vector2 = Vector2.ZERO
 ## Spinner value is used as a goal for signals. Eg. Spin from 0 to 100 to meet the goal.
 var spinner_value : float = 0.0 :
 	set(value):
@@ -75,6 +80,9 @@ func _notification(what: int) -> void:
 
 ## Input event for input routing
 func on_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		# Relative motion works with a captured or hidden cursor and doesn't depend on where the cursor is.
+		mouse_stick = (mouse_stick + event.relative).limit_length(maxf(mouse_stick_radius, mouse_dead_zone))
 	if InputHelper.device_index == -1 and mouse_requires_hold and event.is_action("action_primary"):
 		# Rebase even if release and re-press both happen between process frames.
 		previous_angle = NAN
@@ -100,8 +108,7 @@ func enter(_pic: PlayerInteractionComponent) -> void:
 	is_being_controlled = true
 	if interacting_gizmo: interacting_gizmo.set_visible(true)
 
-	if InputHelper.device_index == -1:
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	mouse_stick = Vector2.ZERO
 
 
 func exit(_player: PlayerInteractionComponent) -> void:
@@ -141,14 +148,11 @@ func _process(_delta: float) -> void:
 	previous_angle = angle
 
 
-## Cursor angle around the screen center, in radians, or NAN inside the dead zone. Decreases when the cursor moves clockwise.
+## Virtual mouse stick angle, in radians, or NAN inside the dead zone. Decreases when the mouse moves clockwise.
 func get_mouse_angle() -> float:
-	var viewport := get_viewport()
-	# The mouse position is in viewport coordinates, which differ from window pixels under stretch modes.
-	var offset := viewport.get_mouse_position() - viewport.get_visible_rect().size / 2
-	if offset.length() < mouse_dead_zone:
+	if mouse_stick.length() < mouse_dead_zone:
 		return NAN
-	return -offset.angle()
+	return -mouse_stick.angle()
 
 
 ## Right stick angle, in radians, or NAN inside the dead zone. Decreases when the stick moves clockwise.
