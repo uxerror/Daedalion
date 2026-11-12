@@ -29,7 +29,7 @@ const TICK := 0.25
 @export var visuals : Array[Node3D] = []
 
 @export_group("Reactions")
-## FIRE areas: WATER buildup that puts the area out. 0 = can't be doused.
+## FIRE areas: WATER or COLD buildup that puts the area out. 0 = can't be doused.
 @export var douse_threshold : float = 1.0
 ## FIRE areas: FIRE buildup that lights a doused area again. 0 = stays out.
 @export var reignite_threshold : float = 1.0
@@ -86,9 +86,10 @@ func apply_element(applied: CogitoProperties.Element, amount: float, _source: No
 		return 0.0
 	var is_fire_area := element == CogitoProperties.Element.FIRE
 	match applied:
-		CogitoProperties.Element.WATER:
+		CogitoProperties.Element.WATER, CogitoProperties.Element.COLD:
 			if is_fire_area and enabled and douse_threshold > 0.0:
-				if _add_level(applied, amount) >= douse_threshold:
+				# Water and cold share one buildup.
+				if _add_level(CogitoProperties.Element.WATER, amount) >= douse_threshold:
 					_levels.clear()
 					set_enabled(false)
 					reaction_triggered.emit(&"douse")

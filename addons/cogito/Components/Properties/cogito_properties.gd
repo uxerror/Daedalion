@@ -10,9 +10,22 @@ signal has_become_wet()
 signal has_become_dry()
 signal has_become_electric()
 signal has_lost_electricity()
+## Emitted when the COLD buildup chilled the object.
+signal has_become_chilled()
+## Emitted when a chill wore off.
+signal has_warmed_up()
+## Emitted when a wet object froze.
+signal has_frozen()
+## Emitted when a frozen object thawed (it becomes wet again).
+signal has_thawed()
+## Emitted when the POISON buildup poisoned the object.
+signal has_been_poisoned()
+## Emitted when the poison wore off or was cured with cure_poison().
+signal has_been_cured()
 ## Emitted when an element was applied through apply_element() (after resistances).
 signal element_applied(element: Element, amount: float, source: Node)
-## Emitted when two elements react with each other, e.g. &"steam" (fire on wet), &"douse" (water on fire).
+## Emitted when two elements react with each other, e.g. &"steam" (fire on wet), &"douse" (water on fire),
+## &"freeze" (cold on wet), &"thaw" (fire on frozen), &"quench" (cold on fire).
 signal reaction_triggered(reaction: StringName)
 ## Emitted when a burning object ran out of fuel (see fuel and burn_out_result).
 signal burned_out()
@@ -100,6 +113,22 @@ enum MaterialProperties{
 @export var wet_shock_damage_multiplier : float = 1.5
 
 
+@export_group("Cold and Poison")
+## Seconds a chill of one buildup_threshold lasts. While chilled the COLD level decays at buildup_threshold / chill_time.
+@export var chill_time : float = 5.0
+## Seconds a freeze caused by buildup lasts before it thaws by itself. 0 = never thaws by itself.
+## Objects frozen with freeze() stay frozen until thaw() or fire.
+@export var freeze_time : float = 15.0
+## COLD damage per second dealt to the object while it is chilled or frozen.
+@export var cold_damage_per_second : float = 0.0
+## Seconds one buildup_threshold of poison lasts while poisoned.
+@export var poison_time : float = 10.0
+## POISON damage per second dealt to the object while it is poisoned.
+@export var poison_damage_per_second : float = 2.0
+## Interval of cold and poison damage ticks in seconds. Damage per tick = damage per second * interval.
+@export var state_damage_interval : float = 1.0
+
+
 @export_group("Resistances")
 ## Resistance in percent. 100 = immune, 0 = normal, negative values = weakness (-50 = 1.5x).
 ## Scales both damage of that type and element buildup.
@@ -119,6 +148,12 @@ enum MaterialProperties{
 @export var spawn_on_wet : PackedScene
 ## PackedScene of VFX etc that gets spawned when object is electrified
 @export var spawn_on_electrified : PackedScene
+## PackedScene of VFX etc that gets spawned when object gets chilled.
+@export var spawn_on_chilled : PackedScene
+## PackedScene of VFX etc that gets spawned when object freezes.
+@export var spawn_on_frozen : PackedScene
+## PackedScene of VFX etc that gets spawned when object gets poisoned.
+@export var spawn_on_poisoned : PackedScene
 
 
 @export_group("Audio")
@@ -136,6 +171,9 @@ var spawned_effects : Array[Node] # Used to store and clear out spawned effects
 var is_on_fire : bool = false
 var is_electric : bool = false
 var is_wet : bool = false
+var is_chilled : bool = false
+var is_frozen : bool = false
+var is_poisoned : bool = false
 var player_is_touching : bool = false
 var player_node : Node3D = null
 
@@ -150,6 +188,12 @@ var _timed_states : Dictionary = {}
 var fuel_remaining : float = -1.0
 var _heat_sensor : Area3D = null
 var _heat_tick : float = 0.0
+## COLD buildup against a fire (separate from the FIRE level). Reaching buildup_threshold puts the fire out.
+var _cold_vs_fire : float = 0.0
+## Whether the wetness an object had before freezing was sustained (and has to be restored as such).
+var _frozen_wet_sustained : bool = false
+var _rigid_freeze_before : bool = false
+var _state_tick : float = 0.0
 
 ## Interval of heat radiation ticks, in seconds.
 const HEAT_TICK := 0.25
@@ -159,6 +203,9 @@ const VFX_KIND_META := &"cogito_vfx_kind"
 const VFX_FIRE := &"fire"
 const VFX_WET := &"wet"
 const VFX_ELECTRIC := &"electric"
+const VFX_CHILLED := &"chilled"
+const VFX_FROZEN := &"frozen"
+const VFX_POISONED := &"poisoned"
 
 
 func _ready():
@@ -274,6 +321,9 @@ func make_flammable():
 
 
 func make_wet():
+	if is_frozen:
+		_log("is frozen and can't get wet.")
+		return
 	if is_on_fire:
 		extinguish()
 	elemental_properties |= ElementalProperties.WET
@@ -299,6 +349,9 @@ func make_dry():
 
 
 func set_on_fire():
+	if is_frozen:
+		_log("is frozen and can't burn.")
+		return
 	if elemental_properties & ElementalProperties.FLAMMABLE:
 		if is_on_fire:
 			return # Already burning.
@@ -346,6 +399,7 @@ func extinguish(play_sound: bool = true):
 		return
 	is_on_fire = false
 	element_levels.erase(Element.FIRE)
+	_cold_vs_fire = 0.0
 	_stop_heat()
 	if !damage_timer.is_stopped():
 		damage_timer.stop()
@@ -357,7 +411,7 @@ func extinguish(play_sound: bool = true):
 	has_been_extinguished.emit()
 
 
-## Frees spawned VFX. With a kind (VFX_FIRE, VFX_WET, VFX_ELECTRIC) only that state's VFX are cleared.
+## Frees spawned VFX. With a kind (VFX_FIRE, VFX_WET, VFX_ELECTRIC, VFX_CHILLED, ...) only that state's VFX are cleared.
 func clear_spawned_effects(kind: StringName = &""):
 	var kept : Array[Node] = []
 	for node in spawned_effects:
@@ -437,8 +491,10 @@ func recheck_systemic_reactions():
 
 #region Elements: buildup, reactions, resistances
 
-## Wet objects conduct electricity like CONDUCTIVE ones.
+## Wet objects conduct electricity like CONDUCTIVE ones. Frozen objects don't conduct.
 func can_conduct() -> bool:
+	if is_frozen:
+		return false
 	return bool(elemental_properties & ElementalProperties.CONDUCTIVE) or is_wet
 
 
@@ -472,7 +528,7 @@ func get_damage_multiplier(element: Element) -> float:
 
 
 ## Exposes this object to an element. Amount is measured in buildup_threshold units:
-## reaching the threshold ignites, wets or electrifies the object. States caused this way wear off
+## reaching the threshold ignites, wets, electrifies, chills (freezes if wet) or poisons the object. States caused this way wear off
 ## (wetness dries, applied charge runs out); a fire keeps burning until extinguished.
 ## Returns the amount that was actually applied after resistances and reactions.
 func apply_element(element: Element, amount: float, source: Node = null) -> float:
@@ -489,9 +545,10 @@ func apply_element(element: Element, amount: float, source: Node = null) -> floa
 			amount = _react_water(amount)
 		Element.SHOCK:
 			amount = _react_shock(amount)
-		_:
-			# COLD and POISON only build up for now.
-			_add_level(element, amount)
+		Element.COLD:
+			amount = _react_cold(amount)
+		Element.POISON:
+			amount = _react_poison(amount)
 	
 	if amount > 0.0:
 		_log("applied " + Element.keys()[element] + " x" + str(snappedf(amount, 0.01)))
@@ -581,6 +638,27 @@ func _radiate_heat(delta: float) -> void:
 
 
 func _react_fire(amount: float) -> float:
+	# Fire melts ice and warms up a chill first.
+	var absorbed := 0.0
+	if is_frozen or is_chilled:
+		var cold := get_element_level(Element.COLD)
+		if amount < cold:
+			_set_level(Element.COLD, cold - amount)
+			return amount
+		absorbed = cold
+		amount -= cold
+		if is_frozen:
+			thaw()
+			reaction_triggered.emit(&"thaw")
+		else:
+			_set_level(Element.COLD, 0.0)
+			_warm_up()
+		if amount <= 0.0:
+			return absorbed
+	return absorbed + _heat_up(amount)
+
+
+func _heat_up(amount: float) -> float:
 	if is_wet:
 		if !_timed_states.has(Element.WATER):
 			# Permanently wet objects swallow the heat.
@@ -600,6 +678,8 @@ func _react_fire(amount: float) -> float:
 
 
 func _react_water(amount: float) -> float:
+	if is_frozen:
+		return 0.0
 	if is_on_fire:
 		reaction_triggered.emit(&"douse")
 		extinguish()
@@ -615,6 +695,142 @@ func _react_water(amount: float) -> float:
 		_timed_states[Element.WATER] = true
 		_set_level(Element.WATER, level)
 	return amount
+
+
+func _react_cold(amount: float) -> float:
+	if is_on_fire:
+		# Cold has to beat the fire; what is left over is discarded.
+		_cold_vs_fire += amount
+		if _cold_vs_fire >= buildup_threshold:
+			_cold_vs_fire = 0.0
+			extinguish()
+			reaction_triggered.emit(&"quench")
+		return amount
+	if is_frozen:
+		if _timed_states.has(Element.COLD):
+			_add_level(Element.COLD, amount) # Refreshes the freeze.
+		return amount
+	var rest := amount
+	var heat := get_element_level(Element.FIRE)
+	if heat > 0.0:
+		# Cools down heat that hasn't ignited yet.
+		var cooled := minf(heat, rest)
+		_set_level(Element.FIRE, heat - cooled)
+		rest -= cooled
+	if rest <= 0.0:
+		return amount
+	var level := _add_level(Element.COLD, rest)
+	if level >= buildup_threshold:
+		if is_wet:
+			_freeze(true)
+			reaction_triggered.emit(&"freeze")
+		elif !is_chilled:
+			_chill()
+	return amount
+
+
+func _react_poison(amount: float) -> float:
+	if _add_level(Element.POISON, amount) >= buildup_threshold and !is_poisoned:
+		is_poisoned = true
+		_timed_states[Element.POISON] = true
+		if spawn_on_poisoned:
+			spawn_elemental_vfx(spawn_on_poisoned, VFX_POISONED)
+		has_been_poisoned.emit()
+	return amount
+
+
+func _chill() -> void:
+	is_chilled = true
+	_timed_states[Element.COLD] = true
+	if spawn_on_chilled:
+		spawn_elemental_vfx(spawn_on_chilled, VFX_CHILLED)
+	has_become_chilled.emit()
+
+
+func _warm_up() -> void:
+	if !is_chilled:
+		return
+	is_chilled = false
+	_timed_states.erase(Element.COLD)
+	clear_spawned_effects(VFX_CHILLED)
+	has_warmed_up.emit()
+
+
+## Freezes a wet object and keeps it frozen until thaw() or fire. Does nothing if the object isn't wet.
+func freeze() -> void:
+	_freeze(false)
+
+
+## Freezes a wet object. A timed freeze thaws by itself after freeze_time.
+func _freeze(timed: bool) -> void:
+	if is_frozen:
+		return
+	if !is_wet:
+		_log("is not wet and can't freeze.")
+		return
+	# The wetness is given back on thaw. It froze, it didn't dry, so has_become_dry isn't emitted.
+	_frozen_wet_sustained = !_timed_states.has(Element.WATER)
+	is_wet = false
+	elemental_properties &= ~ElementalProperties.WET
+	_timed_states.erase(Element.WATER)
+	element_levels.erase(Element.WATER)
+	clear_spawned_effects(VFX_WET)
+	loose_electricity()
+	# Frozen supersedes chilled.
+	is_chilled = false
+	clear_spawned_effects(VFX_CHILLED)
+	is_frozen = true
+	if timed:
+		_timed_states[Element.COLD] = true
+		element_levels[Element.COLD] = buildup_threshold
+	else:
+		_timed_states.erase(Element.COLD)
+		element_levels[Element.COLD] = buildup_max
+	var body := get_parent() as RigidBody3D
+	if body:
+		_rigid_freeze_before = body.freeze
+		body.freeze = true
+	if spawn_on_frozen:
+		spawn_elemental_vfx(spawn_on_frozen, VFX_FROZEN)
+	_log("froze.")
+	has_frozen.emit()
+	_update_processing()
+
+
+## Melts a frozen object. It becomes wet again, as it was before it froze.
+func thaw() -> void:
+	if !is_frozen:
+		return
+	is_frozen = false
+	_timed_states.erase(Element.COLD)
+	element_levels.erase(Element.COLD)
+	var body := get_parent() as RigidBody3D
+	if body:
+		body.freeze = _rigid_freeze_before
+	clear_spawned_effects(VFX_FROZEN)
+	_log("thawed.")
+	has_thawed.emit()
+	make_wet()
+	if !_frozen_wet_sustained:
+		_timed_states[Element.WATER] = true
+		_set_level(Element.WATER, buildup_threshold)
+	_update_processing()
+
+
+## Removes all poison buildup and the poisoned state.
+func cure_poison() -> void:
+	element_levels.erase(Element.POISON)
+	_timed_states.erase(Element.POISON)
+	_end_poison()
+	_update_processing()
+
+
+func _end_poison() -> void:
+	if !is_poisoned:
+		return
+	is_poisoned = false
+	clear_spawned_effects(VFX_POISONED)
+	has_been_cured.emit()
 
 
 func _react_shock(amount: float) -> float:
@@ -652,11 +868,27 @@ func _is_decaying(element: Element) -> bool:
 		Element.FIRE: return !is_on_fire
 		Element.WATER: return !is_wet or _timed_states.has(Element.WATER)
 		Element.SHOCK: return !is_electric or _timed_states.has(Element.SHOCK)
+		Element.COLD:
+			if is_frozen:
+				return _timed_states.has(Element.COLD) and freeze_time > 0.0
+			if is_chilled:
+				return chill_time > 0.0
+		Element.POISON:
+			if is_poisoned:
+				return poison_time > 0.0
 	return true
+
+
+## True while cold or poison damage ticks are due.
+func _has_state_ticks() -> bool:
+	return (is_poisoned and poison_damage_per_second > 0.0) or ((is_chilled or is_frozen) and cold_damage_per_second > 0.0)
 
 
 func _update_processing() -> void:
 	if is_on_fire and (fuel >= 0.0 or _heat_sensor):
+		set_process(true)
+		return
+	if _has_state_ticks() or _cold_vs_fire > 0.0:
 		set_process(true)
 		return
 	for element in element_levels:
@@ -675,8 +907,28 @@ func _process(delta: float) -> void:
 			if dry_time <= 0.0:
 				continue
 			rate = buildup_threshold / dry_time
+		elif element == Element.COLD:
+			if is_frozen:
+				rate = buildup_threshold / freeze_time
+			elif is_chilled:
+				rate = buildup_threshold / chill_time
+		elif element == Element.POISON and is_poisoned:
+			rate = buildup_threshold / poison_time
 		if _set_level(element, get_element_level(element) - rate * delta) <= 0.0:
 			_on_level_depleted(element)
+	if _cold_vs_fire > 0.0:
+		_cold_vs_fire = maxf(0.0, _cold_vs_fire - buildup_decay_per_second * delta)
+	if _has_state_ticks():
+		_state_tick += delta
+		var interval := maxf(state_damage_interval, 0.01)
+		while _state_tick >= interval:
+			_state_tick -= interval
+			if is_poisoned and poison_damage_per_second > 0.0:
+				deal_elemental_damage(get_parent(), poison_damage_per_second * interval, Element.POISON, get_parent())
+			if (is_chilled or is_frozen) and cold_damage_per_second > 0.0:
+				deal_elemental_damage(get_parent(), cold_damage_per_second * interval, Element.COLD, get_parent())
+	else:
+		_state_tick = 0.0
 	if is_on_fire:
 		if _heat_sensor:
 			_heat_tick += delta
@@ -698,6 +950,13 @@ func _on_level_depleted(element: Element) -> void:
 			make_dry()
 		Element.SHOCK:
 			loose_electricity()
+		Element.COLD:
+			if is_frozen:
+				thaw()
+			else:
+				_warm_up()
+		Element.POISON:
+			_end_poison()
 	_timed_states.erase(element)
 
 #endregion
