@@ -71,10 +71,17 @@ var reaction_collider : Node3D = null
 var spawned_effects : Array[Node] # Used to store and clear out spawned effects
 var is_on_fire : bool = false
 var is_electric : bool = false
+var is_wet : bool = false
 var player_is_touching : bool = false
 var player_node : Node3D = null
 
 var reaction_bodies : Array[Node3D] #Used to keep track of bodies with systemic properties.
+
+## Meta key used to tag spawned VFX with the state that spawned them, so clearing one state keeps the others.
+const VFX_KIND_META := &"cogito_vfx_kind"
+const VFX_FIRE := &"fire"
+const VFX_WET := &"wet"
+const VFX_ELECTRIC := &"electric"
 
 
 func _ready():
@@ -93,13 +100,21 @@ func _ready():
 	if electric_on_ready:
 		make_electric.call_deferred()
 		
-	if elemental_properties == ElementalProperties.WET:
+	if elemental_properties & ElementalProperties.WET:
 		make_wet.call_deferred()
+
+
+## Returns the CogitoProperties of a node, or null if it has none (or no such member at all).
+static func get_properties_of(node: Object) -> CogitoProperties:
+	if node == null or not is_instance_valid(node):
+		return null
+	var props = node.get("cogito_properties")
+	return props as CogitoProperties
 
 
 func start_reaction_threshold_timer(passed_collider: Node3D):
 	# Quick check to see if the collider has any CogitoProperties.
-	if( !passed_collider.cogito_properties):
+	if !get_properties_of(passed_collider):
 		CogitoGlobals.debug_log(is_logging, "cogito_properties.gd", "Collider " + passed_collider.name + " has no properties.")
 		return
 	
@@ -117,7 +132,7 @@ func start_reaction_threshold_timer(passed_collider: Node3D):
 func check_for_reaction_timer_interrupt(passed_collider: Node3D):
 
 	# Quick check to see if the collider has any CogitoProperties.
-	if( !passed_collider.cogito_properties):
+	if !get_properties_of(passed_collider):
 		CogitoGlobals.debug_log(is_logging, "cogito_properties.gd", "Collider " + passed_collider.name + " has no properties.")
 		return
 	
@@ -125,92 +140,88 @@ func check_for_reaction_timer_interrupt(passed_collider: Node3D):
 	
 	# If the passed_collider is the reaction_collider, then this reaction needs to be stopped.
 	if passed_collider == reaction_collider:
-		print(get_parent().name , ": Passed collider and current reaction collider match! Reaction timer is stopped is ", reaction_timer.is_stopped())
 		if !reaction_timer.is_stopped():
-			print(get_parent().name , " has stopped reaction timer as the collider ", passed_collider, " is no longer in contact.")
+			_log("stopped reaction timer, " + passed_collider.name + " is no longer in contact.")
 			reaction_timer.stop()
 	
 	if reaction_bodies.size() == 0:
-		if !electric_on_ready:
+		if is_electric and !electric_on_ready:
 			loose_electricity()
 
 
 func check_for_systemic_reactions():
-	if !reaction_collider:
+	if !is_instance_valid(reaction_collider):
 		CogitoGlobals.debug_log(is_logging, "cogito_properties.gd","Reaction collider was null.")
 		return
-	if !reaction_collider.cogito_properties:
+	var other : CogitoProperties = get_properties_of(reaction_collider)
+	if !other:
 		# Case where the object has no properties defined.
-		print("Collider ", reaction_collider.name, " has no properties.")
+		_log("Collider " + reaction_collider.name + " has no properties.")
 		return
 	
-	if reaction_collider.cogito_properties:
-		### FIRE REACTIONS
-		if reaction_collider.cogito_properties.is_on_fire:
-			if elemental_properties & ElementalProperties.FLAMMABLE:
-				print(get_parent().name, ": Touched burning collider ", reaction_collider.name, ". I'm flammable, igniting self.")
-				set_on_fire()
-			else:
-				print(get_parent().name, ": Touched collider ", reaction_collider.name, " which is on fire, but I'm not flammable, so nothing happens.")
-			if elemental_properties & ElementalProperties.WET:
-				print(get_parent().name, ": Touched burning collider ", reaction_collider.name, ". I'm wet so I'll extinguish the collider.")
-				reaction_collider.cogito_properties.extinguish()
+	### FIRE REACTIONS
+	if other.is_on_fire:
+		if elemental_properties & ElementalProperties.FLAMMABLE:
+			_log("Touched burning collider " + reaction_collider.name + ". I'm flammable, igniting self.")
+			set_on_fire()
+		else:
+			_log("Touched collider " + reaction_collider.name + " which is on fire, but I'm not flammable, so nothing happens.")
+		if elemental_properties & ElementalProperties.WET:
+			_log("Touched burning collider " + reaction_collider.name + ". I'm wet so I'll extinguish the collider.")
+			other.extinguish()
 
-		if elemental_properties & ElementalProperties.CONDUCTIVE: ### ELECTRICITY REACTIONS
-			if is_electric:
-				print("Electrified ", get_parent().name, " touched condictive collider ", reaction_collider.name, ". Trying to pass on electricity!")
-				reaction_collider.cogito_properties.make_electric()
-			if reaction_collider.cogito_properties.is_electric:
-				print(get_parent().name, ": Touched by electrified collider ", reaction_collider.name, ". Getting electric.")
-				make_electric()
+	### ELECTRICITY REACTIONS
+	if elemental_properties & ElementalProperties.CONDUCTIVE:
+		if is_electric:
+			_log("Electrified, touched collider " + reaction_collider.name + ". Trying to pass on electricity!")
+			other.make_electric()
+		if other.is_electric:
+			_log("Touched by electrified collider " + reaction_collider.name + ". Getting electric.")
+			make_electric()
 
-		#print("Collider ", reaction_collider.name, " elemental properties: ", reaction_collider.cogito_properties.elemental_properties)
-		match reaction_collider.cogito_properties.elemental_properties:
-			ElementalProperties.WET: ### WATER REACTIONS
-				if is_on_fire:
-					print(get_parent().name, ": Touched by wet collider ", reaction_collider.name, " while on fire. Extinguishing self.")
-					extinguish()
-					make_wet()
-				else:
-					print(get_parent().name, ": Touched by wet collider ", reaction_collider.name, " but wasn't on fire. Getting wet.")
-					make_wet()
-
-
+	### WATER REACTIONS
+	if other.elemental_properties & ElementalProperties.WET:
+		_log("Touched by wet collider " + reaction_collider.name + ". Getting wet.")
+		make_wet()
 
 
 func make_conductive():
-	elemental_properties = elemental_properties ^ ElementalProperties.CONDUCTIVE
+	elemental_properties |= ElementalProperties.CONDUCTIVE
 
 
 func make_flammable():
-	elemental_properties = elemental_properties ^ ElementalProperties.FLAMMABLE
+	elemental_properties |= ElementalProperties.FLAMMABLE
 
 
 func make_wet():
-	if( elemental_properties & ElementalProperties.WET):
-		pass
-	else:
-		elemental_properties = elemental_properties ^ ElementalProperties.WET
-		
 	if is_on_fire:
 		extinguish()
+	elemental_properties |= ElementalProperties.WET
+	if is_wet:
+		return # Already wet.
+	is_wet = true
 	if spawn_on_wet:
-		spawn_elemental_vfx(spawn_on_wet)
+		spawn_elemental_vfx(spawn_on_wet, VFX_WET)
 	has_become_wet.emit()
 
 
 func make_dry():
-	elemental_properties = elemental_properties ^ ElementalProperties.WET
-	clear_spawned_effects()
+	if !(elemental_properties & ElementalProperties.WET):
+		return
+	elemental_properties &= ~ElementalProperties.WET
+	is_wet = false
+	clear_spawned_effects(VFX_WET)
 	has_become_dry.emit()
 
 
 func set_on_fire():
 	if elemental_properties & ElementalProperties.FLAMMABLE:
+		if is_on_fire:
+			return # Already burning.
 		is_on_fire = true
 		if spawn_on_ignite:
-			spawn_elemental_vfx(spawn_on_ignite) 
-			CogitoAudio.play_sound_3d_attached(audio_igniting, self)
+			spawn_elemental_vfx(spawn_on_ignite, VFX_FIRE)
+		CogitoAudio.play_sound_3d_attached(audio_igniting, self)
 		has_ignited.emit()
 		
 		if burn_damage_amount > 0:
@@ -232,33 +243,47 @@ func start_burn_damage_timer():
 func apply_burn_damage():
 	deal_burn_damage.emit(burn_damage_amount)
 	# Calling damage received on Cogito Object or Enemy parent node.
-	get_parent().damage_received.emit(burn_damage_amount)
+	if get_parent().has_signal("damage_received"):
+		get_parent().damage_received.emit(burn_damage_amount)
 	
 	if is_on_fire:
 		start_burn_damage_timer()
 
 
 func extinguish():
+	if !is_on_fire:
+		return
 	is_on_fire = false
 	if !damage_timer.is_stopped():
 		damage_timer.stop()
-	audio_stream_player_3d.stop()
+	if audio_stream_player_3d:
+		audio_stream_player_3d.stop()
 	CogitoAudio.play_sound_3d(audio_extinguishing, global_position)
-	clear_spawned_effects()
+	clear_spawned_effects(VFX_FIRE)
 	has_been_extinguished.emit()
 
 
-func clear_spawned_effects():
+## Frees spawned VFX. With a kind (VFX_FIRE, VFX_WET, VFX_ELECTRIC) only that state's VFX are cleared.
+func clear_spawned_effects(kind: StringName = &""):
+	var kept : Array[Node] = []
 	for node in spawned_effects:
+		if !is_instance_valid(node):
+			continue
+		if kind != &"" and node.get_meta(VFX_KIND_META, &"") != kind:
+			kept.append(node)
+			continue
 		CogitoGlobals.debug_log(is_logging, "cogito_properties.gd", "Clearing out spawned effect " + node.name)
 		node.queue_free()
-	spawned_effects.clear()
+	spawned_effects = kept
 
 
 func make_electric():
 	if elemental_properties & ElementalProperties.CONDUCTIVE:
+		if is_electric:
+			return # Already electric.
 		is_electric = true
-		spawn_elemental_vfx(spawn_on_electrified)
+		if spawn_on_electrified:
+			spawn_elemental_vfx(spawn_on_electrified, VFX_ELECTRIC)
 		CogitoGlobals.debug_log(is_logging, "cogito_properties.gd", get_parent().name + " has become electric.")
 		has_become_electric.emit()
 		
@@ -268,21 +293,28 @@ func make_electric():
 
 
 func loose_electricity():
+	if !is_electric:
+		return
 	is_electric = false
-	clear_spawned_effects()
+	clear_spawned_effects(VFX_ELECTRIC)
 	has_lost_electricity.emit()
 
 
-func spawn_elemental_vfx(vfx_packed_scene:PackedScene):
+func spawn_elemental_vfx(vfx_packed_scene:PackedScene, kind: StringName = &""):
+	if !vfx_packed_scene:
+		return
+	# If max spawned vfx is reached, the oldest ones are freed.
+	while spawned_effects.size() >= max(max_spawned_vfx, 1):
+		var oldest : Node = spawned_effects.pop_front()
+		if is_instance_valid(oldest):
+			oldest.queue_free()
 	var spawned_object = vfx_packed_scene.instantiate()
-	await get_tree().process_frame
-	get_parent().add_child(spawned_object)
-	
-	# If max spawned vfx is reached, all spawned vfx will be cleared.
-	if spawned_effects.size() <= max_spawned_vfx + 1:
-		clear_spawned_effects()
-		
+	spawned_object.set_meta(VFX_KIND_META, kind)
 	spawned_effects.append(spawned_object)
+	await get_tree().process_frame
+	if !is_instance_valid(spawned_object) or spawned_object.is_queued_for_deletion():
+		return # Cleared while waiting a frame.
+	get_parent().add_child(spawned_object)
 
 
 func add_systemic_body(body: Node3D):
@@ -303,3 +335,7 @@ func recheck_systemic_reactions():
 		
 	for reaction_body in reaction_bodies:
 		start_reaction_threshold_timer(reaction_body)
+
+
+func _log(message: String) -> void:
+	CogitoGlobals.debug_log(is_logging, "cogito_properties.gd", get_parent().name + ": " + message)
