@@ -1,4 +1,5 @@
-extends Area3D
+extends CogitoElementArea
+## Water volume: makes floating bodies float, soaks and douses everything inside and conducts electricity.
 class_name FluidArea3D
 
 @export var density: float = 1.0
@@ -8,7 +9,15 @@ class_name FluidArea3D
 @onready var noise := FastNoiseLite.new()
 var surface_height: float = 0.0
 
+func _init() -> void:
+	element = CogitoProperties.Element.WATER
+	amount_per_second = 4.0
+	conducts_shock = true
+	shock_damage_per_second = 10.0
+
+
 func _ready() -> void:
+	super()
 	surface_height = position.y
 	for owner_id in get_shape_owners():
 		var collision = shape_owner_get_owner(owner_id)

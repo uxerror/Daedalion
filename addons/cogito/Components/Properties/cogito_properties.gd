@@ -14,6 +14,8 @@ signal has_lost_electricity()
 signal element_applied(element: Element, amount: float, source: Node)
 ## Emitted when two elements react with each other, e.g. &"steam" (fire on wet), &"douse" (water on fire).
 signal reaction_triggered(reaction: StringName)
+## Emitted when a burning object ran out of fuel (see fuel and burn_out_result).
+signal burned_out()
 
 ## Elements used for buildup, reactions, resistances and damage types.
 enum Element {
@@ -29,6 +31,13 @@ enum ElementalProperties{
 	CONDUCTIVE = 1,
 	FLAMMABLE = 2,
 	WET = 4,
+}
+
+## What happens when a burning object runs out of fuel.
+enum BurnOutResult {
+	NOTHING, ## Goes out and can be lit again with full fuel.
+	CHAR, ## Goes out and is no longer FLAMMABLE.
+	DESTROY, ## Goes out and frees the parent object.
 }
 
 enum MaterialProperties{
@@ -55,6 +64,20 @@ enum MaterialProperties{
 @export var burn_damage_amount : float
 ## Interval the burn damage is applied in seconds.
 @export var burn_damage_interval : float = 1.0
+
+
+@export_group("Heat and Fuel")
+## Radius in meters in which a burning object heats up its surroundings, so fire can spread. 0 = off.
+@export var heat_radius : float = 0.0
+## FIRE buildup per second applied to everything inside heat_radius while burning.
+## Has to be higher than the neighbours' buildup_decay_per_second to ignite them.
+@export var heat_per_second : float = 2.0
+## Physics layers scanned for things to heat up (bodies and element areas).
+@export_flags_3d_physics var heat_collision_mask : int = 1 | 2 | 4 | 32
+## Seconds this object can burn before it burns out. Negative = burns forever.
+@export var fuel : float = -1.0
+## What happens when the fuel runs out.
+@export var burn_out_result : BurnOutResult = BurnOutResult.CHAR
 
 
 @export_group("Electricity Parameters")
@@ -123,6 +146,13 @@ var element_levels : Dictionary = {}
 ## Elements whose state was caused by buildup and wears off by itself (Element -> true).
 ## States set directly (contact, on ready, set_on_fire() etc.) are sustained and don't wear off.
 var _timed_states : Dictionary = {}
+## Seconds of burning left (only used when fuel >= 0).
+var fuel_remaining : float = -1.0
+var _heat_sensor : Area3D = null
+var _heat_tick : float = 0.0
+
+## Interval of heat radiation ticks, in seconds.
+const HEAT_TICK := 0.25
 
 ## Meta key used to tag spawned VFX with the state that spawned them, so clearing one state keeps the others.
 const VFX_KIND_META := &"cogito_vfx_kind"
@@ -136,6 +166,7 @@ func _ready():
 		var players: Array[Node] = find_children("", "AudioStreamPlayer3D")
 		if len(players): audio_stream_player_3d = players[0]
 		
+	fuel_remaining = fuel
 	reaction_timer.timeout.connect(check_for_systemic_reactions)
 	damage_timer.timeout.connect(apply_burn_damage)
 	
@@ -284,6 +315,11 @@ func set_on_fire():
 		if audio_stream_player_3d and audio_burning:
 			audio_stream_player_3d.stream = audio_burning
 			audio_stream_player_3d.play()
+		
+		if fuel >= 0.0 and fuel_remaining < 0.0:
+			fuel_remaining = fuel # Fuel was set after _ready().
+		_start_heat()
+		_update_processing()
 	else:
 		CogitoGlobals.debug_log(is_logging, "cogito_properties.gd", get_parent().name + " is not FLAMMABLE.")
 
@@ -305,16 +341,18 @@ func apply_burn_damage():
 		start_burn_damage_timer()
 
 
-func extinguish():
+func extinguish(play_sound: bool = true):
 	if !is_on_fire:
 		return
 	is_on_fire = false
 	element_levels.erase(Element.FIRE)
+	_stop_heat()
 	if !damage_timer.is_stopped():
 		damage_timer.stop()
 	if audio_stream_player_3d:
 		audio_stream_player_3d.stop()
-	CogitoAudio.play_sound_3d(audio_extinguishing, global_position)
+	if play_sound:
+		CogitoAudio.play_sound_3d(audio_extinguishing, global_position)
 	clear_spawned_effects(VFX_FIRE)
 	has_been_extinguished.emit()
 
@@ -477,6 +515,71 @@ static func deal_elemental_damage(target: Node, amount: float, element: Element,
 	return amount
 
 
+## Applies an element to any node: its CogitoProperties, or its own apply_element() (e.g. CogitoElementArea).
+## Returns the amount that was actually applied.
+static func apply_element_to(target: Node, element: Element, amount: float, source: Node = null) -> float:
+	if !is_instance_valid(target):
+		return 0.0
+	var props := get_properties_of(target)
+	if props:
+		return props.apply_element(element, amount, source)
+	if target.has_method("apply_element"):
+		return target.apply_element(element, amount, source)
+	return 0.0
+
+
+## Called when the fuel runs out. Puts the fire out and applies burn_out_result.
+func burn_out():
+	if !is_on_fire:
+		return
+	_log("burned out.")
+	extinguish(false)
+	match burn_out_result:
+		BurnOutResult.NOTHING:
+			fuel_remaining = fuel
+		BurnOutResult.CHAR:
+			elemental_properties &= ~ElementalProperties.FLAMMABLE
+	burned_out.emit()
+	if burn_out_result == BurnOutResult.DESTROY:
+		get_parent().queue_free()
+
+
+func _start_heat() -> void:
+	if heat_radius <= 0.0 or _heat_sensor:
+		return
+	_heat_sensor = Area3D.new()
+	_heat_sensor.name = "HeatSensor"
+	_heat_sensor.monitorable = false
+	_heat_sensor.collision_layer = 0
+	_heat_sensor.collision_mask = heat_collision_mask
+	var shape := CollisionShape3D.new()
+	var sphere := SphereShape3D.new()
+	sphere.radius = heat_radius
+	shape.shape = sphere
+	_heat_sensor.add_child(shape)
+	add_child(_heat_sensor)
+	_heat_tick = 0.0
+
+
+func _stop_heat() -> void:
+	if _heat_sensor:
+		_heat_sensor.queue_free()
+		_heat_sensor = null
+
+
+func _radiate_heat(delta: float) -> void:
+	var amount := heat_per_second * delta
+	if amount <= 0.0:
+		return
+	var targets : Array = []
+	targets.append_array(_heat_sensor.get_overlapping_bodies())
+	targets.append_array(_heat_sensor.get_overlapping_areas())
+	for target in targets:
+		if target == get_parent() or get_properties_of(target) == self:
+			continue
+		apply_element_to(target, Element.FIRE, amount, get_parent())
+
+
 func _react_fire(amount: float) -> float:
 	if is_wet:
 		if !_timed_states.has(Element.WATER):
@@ -553,6 +656,9 @@ func _is_decaying(element: Element) -> bool:
 
 
 func _update_processing() -> void:
+	if is_on_fire and (fuel >= 0.0 or _heat_sensor):
+		set_process(true)
+		return
 	for element in element_levels:
 		if _is_decaying(element):
 			set_process(true)
@@ -571,6 +677,16 @@ func _process(delta: float) -> void:
 			rate = buildup_threshold / dry_time
 		if _set_level(element, get_element_level(element) - rate * delta) <= 0.0:
 			_on_level_depleted(element)
+	if is_on_fire:
+		if _heat_sensor:
+			_heat_tick += delta
+			if _heat_tick >= HEAT_TICK:
+				_radiate_heat(_heat_tick)
+				_heat_tick = 0.0
+		if fuel >= 0.0:
+			fuel_remaining -= delta
+			if fuel_remaining <= 0.0:
+				burn_out()
 	_update_processing()
 
 
