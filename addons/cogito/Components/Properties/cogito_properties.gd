@@ -127,6 +127,10 @@ enum MaterialProperties{
 @export var freeze_time : float = 15.0
 ## COLD damage per second dealt to the object while it is chilled or frozen.
 @export var cold_damage_per_second : float = 0.0
+## While frozen, incoming COLD refreshes the freeze (adds to the COLD level). Turn off for actors (CogitoActorElements does)
+## so they can struggle free inside a cold source: COLD applied to a frozen object is then ignored and the freeze only
+## wears off (freeze_time), melts (fire) or is struggled away.
+@export var frozen_absorbs_cold : bool = true
 ## Seconds one buildup_threshold of poison lasts while poisoned.
 @export var poison_time : float = 10.0
 ## POISON damage per second dealt to the object while it is poisoned.
@@ -182,6 +186,9 @@ var is_wet : bool = false
 var is_chilled : bool = false
 var is_frozen : bool = false
 var is_poisoned : bool = false
+## Runtime flag, not exported. While true, COLD can chill the object but never freeze it
+## (a wet chilled object just stays chilled). CogitoActorElements sets it for a while after a freeze ended.
+var freeze_immune : bool = false
 var player_is_touching : bool = false
 var player_node : Node3D = null
 
@@ -727,6 +734,8 @@ func _react_cold(amount: float) -> float:
 			reaction_triggered.emit(&"quench")
 		return amount
 	if is_frozen:
+		if !frozen_absorbs_cold:
+			return 0.0
 		if _timed_states.has(Element.COLD):
 			_add_level(Element.COLD, amount) # Refreshes the freeze.
 		return amount
@@ -741,7 +750,7 @@ func _react_cold(amount: float) -> float:
 		return amount
 	var level := _add_level(Element.COLD, rest)
 	if level >= buildup_threshold:
-		if is_wet:
+		if is_wet and !freeze_immune:
 			_freeze(true)
 			reaction_triggered.emit(&"freeze")
 		elif !is_chilled:

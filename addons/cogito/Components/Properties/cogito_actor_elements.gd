@@ -23,7 +23,12 @@ signal struggled(remaining: float)
 ## If on, a frozen actor can't act (interact, use wieldables or items). It can always look around.
 @export var frozen_blocks_actions : bool = true
 ## COLD removed per struggle() call, in buildup_threshold units. When the level runs out the actor thaws.
-@export var struggle_per_press : float = 0.15
+@export var struggle_per_press : float = 0.2
+## Seconds after a freeze ended in which the actor can be chilled but not frozen again, so it can walk out of a cold source.
+@export var refreeze_immunity_time : float = 3.0
+## If off (default), COLD doesn't refresh a freeze on this actor (properties.frozen_absorbs_cold is turned off),
+## so struggling always gets it free, even inside a cold source. Turn on for the object-like behaviour.
+@export var absorb_cold_while_frozen : bool = false
 ## If on, the actor struggles by itself every npc_struggle_interval seconds while frozen (for NPCs).
 ## Players call struggle() on movement input instead.
 @export var auto_struggle : bool = false
@@ -47,6 +52,7 @@ var stun_time_left : float = 0.0
 var stun_cooldown_left : float = 0.0
 
 var _struggle_tick : float = 0.0
+var _immunity_left : float = 0.0
 
 
 func _ready() -> void:
@@ -56,7 +62,8 @@ func _ready() -> void:
 		properties.has_become_chilled.connect(_update_movement)
 		properties.has_warmed_up.connect(_update_movement)
 		properties.has_frozen.connect(_on_frozen)
-		properties.has_thawed.connect(_update_movement)
+		properties.has_thawed.connect(_on_thawed)
+		properties.frozen_absorbs_cold = absorb_cold_while_frozen
 		properties.element_applied.connect(_on_element_applied)
 		properties.has_become_electric.connect(_on_shocked)
 		properties.elemental_damage_taken.connect(_on_damage_taken)
@@ -152,6 +159,13 @@ func _on_frozen() -> void:
 	_update_movement()
 
 
+func _on_thawed() -> void:
+	if refreeze_immunity_time > 0.0:
+		_immunity_left = refreeze_immunity_time
+		properties.freeze_immune = true
+	_update_movement()
+
+
 func _update_movement() -> void:
 	var value := 1.0
 	if is_stunned or is_frozen():
@@ -165,10 +179,16 @@ func _update_movement() -> void:
 
 
 func _update_processing() -> void:
-	set_process(is_stunned or stun_cooldown_left > 0.0 or (auto_struggle and is_frozen()))
+	set_process(is_stunned or stun_cooldown_left > 0.0 or _immunity_left > 0.0 or (auto_struggle and is_frozen()))
 
 
 func _process(delta: float) -> void:
+	if _immunity_left > 0.0:
+		_immunity_left -= delta
+		if _immunity_left <= 0.0:
+			_immunity_left = 0.0
+			if properties:
+				properties.freeze_immune = false
 	if is_stunned:
 		stun_time_left -= delta
 		if stun_time_left <= 0.0:
