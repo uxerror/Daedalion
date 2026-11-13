@@ -1,0 +1,339 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/cogito/DemoScenes/DemoPrefabs/ElementStands/element_stand.gd" id="stand"]
+[ext_resource type="FontFile" uid="uid://0n6rmlh8d60u" path="res://addons/cogito/Assets/Fonts/Montserrat/Montserrat-ExtraBold.ttf" id="font"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Properties/cogito_element_area.gd" id="area"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Properties/cogito_element_debug_label.gd" id="dbg"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Assets/VFX/vfx_cold_mist.tscn" id="mist"]
+[ext_resource type="PackedScene" path="res://addons/cogito/DemoScenes/DemoPrefabs/ElementStands/element_crate.tscn" id="crate"]
+[ext_resource type="Script" uid="uid://dmeh01c5ccjqc" path="res://addons/cogito/CogitoObjects/cogito_object.gd" id="obj"]
+[ext_resource type="PackedScene" uid="uid://cio4x05ipvslu" path="res://addons/cogito/Components/Interactions/CarryableComponent.tscn" id="carry"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Assets/VFX/vfx_chilled.tscn" id="chilled"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Assets/VFX/vfx_frozen.tscn" id="frozen"]
+[ext_resource type="PackedScene" uid="uid://cj0yaeh3yg7tu" path="res://addons/cogito/Components/Properties/CogitoProperties.tscn" id="props"]
+[ext_resource type="PackedScene" uid="uid://bw16ij33r272n" path="res://addons/cogito/Assets/VFX/small_flames.tscn" id="flames"]
+[ext_resource type="PackedScene" uid="uid://6k5rvlwcpys1" path="res://addons/cogito/DemoScenes/DemoPrefabs/generic_switch.tscn" id="switch"]
+[ext_resource type="PackedScene" uid="uid://cs6raqlyejqul" path="res://addons/cogito/DemoScenes/DemoPrefabs/generic_button.tscn" id="button"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
+albedo_color = Color(0.22, 0.24, 0.27, 1)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_2"]
+material = SubResource("StandardMaterial3D_1")
+size = Vector2(4, 4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_3"]
+albedo_color = Color(0.3, 0.32, 0.36, 1)
+metallic = 0.6
+roughness = 0.5
+
+[sub_resource type="BoxMesh" id="BoxMesh_4"]
+material = SubResource("StandardMaterial3D_3")
+size = Vector3(2.6, 0.9, 0.35)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_5"]
+size = Vector3(2.6, 0.9, 0.35)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_6"]
+albedo_color = Color(0.55, 0.75, 0.9, 1)
+metallic = 0.5
+
+[sub_resource type="BoxMesh" id="BoxMesh_7"]
+material = SubResource("StandardMaterial3D_6")
+size = Vector3(0.06, 2.1, 0.06)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_8"]
+size = Vector3(2.0, 2.0, 2.0)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_9"]
+albedo_color = Color(0.3, 0.55, 0.85, 1)
+roughness = 0.3
+
+[sub_resource type="SphereMesh" id="SphereMesh_10"]
+material = SubResource("StandardMaterial3D_9")
+radius = 0.15
+height = 0.3
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_11"]
+radius = 0.15
+
+[sub_resource type="BoxMesh" id="BoxMesh_12"]
+material = SubResource("StandardMaterial3D_6")
+size = Vector3(0.3, 0.04, 0.3)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_13"]
+albedo_color = Color(0.25, 0.22, 0.2, 1)
+metallic = 0.8
+roughness = 0.6
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_14"]
+material = SubResource("StandardMaterial3D_13")
+top_radius = 0.45
+bottom_radius = 0.35
+height = 0.15
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_15"]
+size = Vector3(0.9, 0.9, 0.9)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_16"]
+albedo_color = Color(0.5, 0.52, 0.55, 1)
+metallic = 0.7
+roughness = 0.4
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_17"]
+material = SubResource("StandardMaterial3D_16")
+top_radius = 0.32
+bottom_radius = 0.26
+height = 0.4
+cap_top = false
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_18"]
+transparency = 1
+albedo_color = Color(0.25, 0.5, 0.8, 0.7)
+roughness = 0.05
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_19"]
+material = SubResource("StandardMaterial3D_18")
+top_radius = 0.3
+bottom_radius = 0.3
+height = 0.02
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_20"]
+size = Vector3(0.7, 0.9, 0.7)
+
+[node name="StandCold" type="Node3D"]
+script = ExtResource("stand")
+reset_nodes = Array[NodePath]([NodePath("WetCrate"), NodePath("DryCrate"), NodePath("Ball")])
+release_bodies = Array[NodePath]([NodePath("Ball")])
+
+[node name="Base" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
+mesh = SubResource("PlaneMesh_2")
+cast_shadow = 0
+
+[node name="Title" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.55, -1.9)
+text = "COLD: CHILL, FREEZE, THAW"
+font = ExtResource("font")
+font_size = 48
+outline_size = 10
+
+[node name="Instructions" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, -1.9)
+text = "Cold chills dry things and freezes wet ones.
+Dip things in the bucket to wet them, drop the ball into the freezer.
+The brazier thaws whatever you put into it."
+font = ExtResource("font")
+font_size = 22
+outline_size = 8
+line_spacing = -4.0
+
+[node name="Console" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.75)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, 0)
+mesh = SubResource("BoxMesh_4")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, 0)
+shape = SubResource("BoxShape3D_5")
+
+[node name="Freezer" type="Area3D" parent="." node_paths=PackedStringArray("visuals")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.9, 1, -0.6)
+collision_layer = 0
+collision_mask = 34
+script = ExtResource("area")
+element = 2
+enabled = false
+amount_per_second = 2.0
+visuals = [NodePath("Mist")]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Freezer"]
+shape = SubResource("BoxShape3D_8")
+
+[node name="ElementDebugLabel" type="Label3D" parent="Freezer"]
+script = ExtResource("dbg")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, 0)
+
+[node name="Mist" parent="Freezer" instance=ExtResource("mist")]
+
+[node name="FreezerPost1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.9, 1.05, -1.6)
+mesh = SubResource("BoxMesh_7")
+
+[node name="FreezerPost2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, 1.05, -1.6)
+mesh = SubResource("BoxMesh_7")
+
+[node name="FreezerPost3" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.9, 1.05, 0.4)
+mesh = SubResource("BoxMesh_7")
+
+[node name="FreezerPost4" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, 1.05, 0.4)
+mesh = SubResource("BoxMesh_7")
+
+[node name="WetCrate" parent="." instance=ExtResource("crate")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.4, 0.25, -1)
+
+[node name="CogitoProperties" parent="WetCrate"]
+elemental_properties = 4
+
+[node name="DryCrate" parent="." instance=ExtResource("crate")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 0.25, -1)
+
+[node name="WetCrateLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.4, 0.12, -0.7)
+text = "WET"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[node name="DryCrateLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 0.12, -0.7)
+text = "DRY"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[node name="BallHolder" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.9, 2.67, 0)
+mesh = SubResource("BoxMesh_12")
+
+[node name="Ball" type="RigidBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.9, 2.5, 0)
+collision_layer = 3
+mass = 1.0
+freeze = true
+contact_monitor = true
+max_contacts_reported = 4
+script = ExtResource("obj")
+cogito_name = "Wet Ball"
+display_name = "Wet Ball"
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Ball"]
+mesh = SubResource("SphereMesh_10")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Ball"]
+shape = SubResource("SphereShape3D_11")
+
+[node name="CarryableComponent" parent="Ball" instance=ExtResource("carry")]
+
+[node name="CogitoProperties" parent="Ball" instance=ExtResource("props")]
+elemental_properties = 4
+reaction_threshold_time = 1.0
+chill_time = 4.0
+freeze_time = 10.0
+spawn_on_chilled = ExtResource("chilled")
+spawn_on_frozen = ExtResource("frozen")
+is_logging = false
+
+[node name="ElementDebugLabel" type="Label3D" parent="Ball"]
+script = ExtResource("dbg")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
+
+[node name="BrazierBowl" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 0.075, -0.6)
+mesh = SubResource("CylinderMesh_14")
+
+[node name="Brazier" type="Area3D" parent="." node_paths=PackedStringArray("visuals")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 0.45, -0.6)
+collision_layer = 0
+collision_mask = 34
+script = ExtResource("area")
+element = 1
+enabled = false
+amount_per_second = 2.0
+visuals = [NodePath("Flames")]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Brazier"]
+shape = SubResource("BoxShape3D_15")
+
+[node name="ElementDebugLabel" type="Label3D" parent="Brazier"]
+script = ExtResource("dbg")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
+
+[node name="Flames" parent="Brazier" instance=ExtResource("flames")]
+transform = Transform3D(0.7, 0, 0, 0, 0.7, 0, 0, 0, 0.7, 0, -0.2, 0)
+
+[node name="BucketModel" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 0, 0.75)
+
+[node name="Bucket" type="MeshInstance3D" parent="BucketModel"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
+mesh = SubResource("CylinderMesh_17")
+
+[node name="Water" type="MeshInstance3D" parent="BucketModel"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.33, 0)
+mesh = SubResource("CylinderMesh_19")
+
+[node name="WaterBucket" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 0.45, 0.75)
+collision_layer = 0
+collision_mask = 34
+script = ExtResource("area")
+element = 4
+amount_per_second = 3.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WaterBucket"]
+shape = SubResource("BoxShape3D_20")
+
+[node name="ElementDebugLabel" type="Label3D" parent="WaterBucket"]
+script = ExtResource("dbg")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
+
+[node name="FreezerSwitch" parent="Console" instance=ExtResource("switch")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0.975, 0)
+display_name = "Freezer"
+
+[node name="FreezerSwitchLabel" type="Label3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 1.15, 0)
+text = "FREEZER"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[node name="DropButton" parent="Console" instance=ExtResource("button")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.35, 0.975, 0)
+display_name = "Drop ball"
+usable_interaction_text = "Drop"
+
+[node name="DropButtonLabel" type="Label3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.35, 1.15, 0)
+text = "DROP BALL"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[node name="BrazierSwitch" parent="Console" instance=ExtResource("switch")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.35, 0.975, 0)
+display_name = "Brazier"
+
+[node name="BrazierSwitchLabel" type="Label3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.35, 1.15, 0)
+text = "BRAZIER"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[node name="ResetButton" parent="Console" instance=ExtResource("button")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0.975, 0)
+display_name = "Reset"
+usable_interaction_text = "Reset"
+
+[node name="ResetButtonLabel" type="Label3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1.15, 0)
+text = "RESET"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[connection signal="body_entered" from="Ball" to="Ball" method="_on_body_entered"]
+[connection signal="body_exited" from="Ball" to="Ball" method="_on_body_exited"]
+[connection signal="switched" from="Console/FreezerSwitch" to="Freezer" method="set_enabled"]
+[connection signal="switched" from="Console/BrazierSwitch" to="Brazier" method="set_enabled"]
+[connection signal="pressed" from="Console/DropButton" to="." method="release"]
+[connection signal="pressed" from="Console/ResetButton" to="." method="reset_stand"]
+
+[editable path="WetCrate"]

@@ -1,0 +1,198 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/cogito/DemoScenes/DemoPrefabs/ElementStands/element_stand.gd" id="stand"]
+[ext_resource type="FontFile" uid="uid://0n6rmlh8d60u" path="res://addons/cogito/Assets/Fonts/Montserrat/Montserrat-ExtraBold.ttf" id="font"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Properties/cogito_element_area.gd" id="area"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Properties/cogito_element_debug_label.gd" id="dbg"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Assets/VFX/vfx_charred.tscn" id="charred"]
+[ext_resource type="PackedScene" uid="uid://bw16ij33r272n" path="res://addons/cogito/Assets/VFX/small_flames.tscn" id="flames"]
+[ext_resource type="PackedScene" path="res://addons/cogito/DemoScenes/DemoPrefabs/ElementStands/grass_patch.tscn" id="grass"]
+[ext_resource type="PackedScene" uid="uid://d3m4ni301eso7" path="res://addons/cogito/PackedScenes/carriable_box.tscn" id="box"]
+[ext_resource type="PackedScene" uid="uid://6k5rvlwcpys1" path="res://addons/cogito/DemoScenes/DemoPrefabs/generic_switch.tscn" id="switch"]
+[ext_resource type="PackedScene" uid="uid://cs6raqlyejqul" path="res://addons/cogito/DemoScenes/DemoPrefabs/generic_button.tscn" id="button"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
+albedo_color = Color(0.22, 0.24, 0.27, 1)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_2"]
+material = SubResource("StandardMaterial3D_1")
+size = Vector2(4, 4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_3"]
+albedo_color = Color(0.3, 0.32, 0.36, 1)
+metallic = 0.6
+roughness = 0.5
+
+[sub_resource type="BoxMesh" id="BoxMesh_4"]
+material = SubResource("StandardMaterial3D_3")
+size = Vector3(2.6, 0.9, 0.35)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_5"]
+size = Vector3(2.6, 0.9, 0.35)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_6"]
+albedo_color = Color(0.4, 0.4, 0.42, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_7"]
+albedo_color = Color(0.35, 0.22, 0.12, 1)
+
+[sub_resource type="TorusMesh" id="TorusMesh_8"]
+material = SubResource("StandardMaterial3D_6")
+inner_radius = 0.28
+outer_radius = 0.42
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_9"]
+material = SubResource("StandardMaterial3D_7")
+top_radius = 0.05
+bottom_radius = 0.05
+height = 0.6
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_10"]
+size = Vector3(1.2, 0.8, 1.0)
+
+[node name="StandFire" type="Node3D"]
+script = ExtResource("stand")
+reset_nodes = Array[NodePath]([NodePath("Grass1"), NodePath("Grass2"), NodePath("Grass3"), NodePath("Grass4"), NodePath("CrateA"), NodePath("CrateB")])
+
+[node name="Base" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
+mesh = SubResource("PlaneMesh_2")
+cast_shadow = 0
+
+[node name="Title" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.55, -1.9)
+text = "FIRE: SPREAD, FUEL, BURN OUT"
+font = ExtResource("font")
+font_size = 48
+outline_size = 10
+
+[node name="Instructions" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, -1.9)
+text = "Light the campfire or throw a fire dart.
+Heat spreads through the dry grass, which burns away.
+The crates catch fire, burn out and stay charred."
+font = ExtResource("font")
+font_size = 22
+outline_size = 8
+line_spacing = -4.0
+
+[node name="Console" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.75)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, 0)
+mesh = SubResource("BoxMesh_4")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, 0)
+shape = SubResource("BoxShape3D_5")
+
+[node name="CampfireModel" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0, 0.3)
+
+[node name="Stones" type="MeshInstance3D" parent="CampfireModel"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
+mesh = SubResource("TorusMesh_8")
+
+[node name="Log1" type="MeshInstance3D" parent="CampfireModel"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0.08, 0)
+mesh = SubResource("CylinderMesh_9")
+
+[node name="Log2" type="MeshInstance3D" parent="CampfireModel"]
+transform = Transform3D(0, 1, 0, 0, 0, -1, -1, 0, 0, 0, 0.14, 0)
+mesh = SubResource("CylinderMesh_9")
+
+[node name="Campfire" type="Area3D" parent="." node_paths=PackedStringArray("visuals")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.4, 0.3)
+collision_layer = 0
+collision_mask = 34
+script = ExtResource("area")
+element = 1
+enabled = false
+amount_per_second = 2.0
+visuals = [NodePath("Flames")]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Campfire"]
+shape = SubResource("BoxShape3D_10")
+
+[node name="ElementDebugLabel" type="Label3D" parent="Campfire"]
+script = ExtResource("dbg")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65, 0)
+
+[node name="Flames" parent="Campfire" instance=ExtResource("flames")]
+transform = Transform3D(0.8, 0, 0, 0, 0.8, 0, 0, 0, 0.8, 0, -0.15, 0)
+
+[node name="Grass1" parent="." instance=ExtResource("grass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.7, 0, 0.3)
+
+[node name="Grass2" parent="." instance=ExtResource("grass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.3)
+
+[node name="Grass3" parent="." instance=ExtResource("grass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.7, 0, 0.3)
+
+[node name="Grass4" parent="." instance=ExtResource("grass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.4, 0, 0.3)
+
+[node name="CrateA" parent="." instance=ExtResource("box")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, 0.5, -0.95)
+
+[node name="CogitoProperties" parent="CrateA"]
+elemental_properties = 2
+reaction_threshold_time = 1.0
+heat_radius = 1.0
+heat_per_second = 1.5
+fuel = 10.0
+burn_out_result = 1
+spawn_on_charred = ExtResource("charred")
+is_logging = false
+
+[node name="ElementDebugLabel" type="Label3D" parent="CrateA"]
+script = ExtResource("dbg")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+
+[node name="CrateB" parent="." instance=ExtResource("box")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 0.5, -0.95)
+
+[node name="CogitoProperties" parent="CrateB"]
+elemental_properties = 2
+reaction_threshold_time = 1.0
+heat_radius = 1.0
+heat_per_second = 1.5
+fuel = 10.0
+burn_out_result = 1
+spawn_on_charred = ExtResource("charred")
+is_logging = false
+
+[node name="ElementDebugLabel" type="Label3D" parent="CrateB"]
+script = ExtResource("dbg")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+
+[node name="CampfireSwitch" parent="Console" instance=ExtResource("switch")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, 0.975, 0)
+display_name = "Campfire"
+
+[node name="CampfireSwitchLabel" type="Label3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, 1.15, 0)
+text = "CAMPFIRE"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[node name="ResetButton" parent="Console" instance=ExtResource("button")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6, 0.975, 0)
+display_name = "Reset"
+usable_interaction_text = "Reset"
+
+[node name="ResetButtonLabel" type="Label3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6, 1.15, 0)
+text = "RESET"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[connection signal="switched" from="Console/CampfireSwitch" to="Campfire" method="set_enabled"]
+[connection signal="pressed" from="Console/ResetButton" to="." method="reset_stand"]
+
+[editable path="CrateA"]
+[editable path="CrateB"]

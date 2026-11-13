@@ -1,0 +1,272 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/cogito/DemoScenes/DemoPrefabs/ElementStands/element_stand.gd" id="stand"]
+[ext_resource type="FontFile" uid="uid://0n6rmlh8d60u" path="res://addons/cogito/Assets/Fonts/Montserrat/Montserrat-ExtraBold.ttf" id="font"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Properties/cogito_element_area.gd" id="area"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Properties/cogito_element_debug_label.gd" id="dbg"]
+[ext_resource type="PackedScene" path="res://addons/cogito/DemoScenes/DemoPrefabs/ElementStands/element_dummy.tscn" id="dummy"]
+[ext_resource type="Script" uid="uid://dmeh01c5ccjqc" path="res://addons/cogito/CogitoObjects/cogito_object.gd" id="obj"]
+[ext_resource type="PackedScene" uid="uid://cio4x05ipvslu" path="res://addons/cogito/Components/Interactions/CarryableComponent.tscn" id="carry"]
+[ext_resource type="PackedScene" uid="uid://cj0yaeh3yg7tu" path="res://addons/cogito/Components/Properties/CogitoProperties.tscn" id="props"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Assets/VFX/vfx_rain.tscn" id="rain"]
+[ext_resource type="PackedScene" uid="uid://6k5rvlwcpys1" path="res://addons/cogito/DemoScenes/DemoPrefabs/generic_switch.tscn" id="switch"]
+[ext_resource type="PackedScene" uid="uid://cs6raqlyejqul" path="res://addons/cogito/DemoScenes/DemoPrefabs/generic_button.tscn" id="button"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
+albedo_color = Color(0.22, 0.24, 0.27, 1)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_2"]
+material = SubResource("StandardMaterial3D_1")
+size = Vector2(4, 4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_3"]
+albedo_color = Color(0.3, 0.32, 0.36, 1)
+metallic = 0.6
+roughness = 0.5
+
+[sub_resource type="BoxMesh" id="BoxMesh_4"]
+material = SubResource("StandardMaterial3D_3")
+size = Vector3(2.6, 0.9, 0.35)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_5"]
+size = Vector3(2.6, 0.9, 0.35)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_6"]
+transparency = 1
+albedo_color = Color(0.25, 0.5, 0.8, 0.55)
+roughness = 0.05
+metallic_specular = 1.0
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_7"]
+material = SubResource("StandardMaterial3D_6")
+size = Vector2(2, 2)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_8"]
+size = Vector3(2.0, 0.3, 2.0)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_9"]
+albedo_color = Color(0.75, 0.7, 0.3, 1)
+metallic = 1.0
+roughness = 0.3
+emission_enabled = true
+emission = Color(1, 0.9, 0.3, 1)
+emission_energy_multiplier = 0.4
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_10"]
+material = SubResource("StandardMaterial3D_9")
+top_radius = 0.05
+bottom_radius = 0.05
+height = 0.8
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_11"]
+radius = 0.05
+height = 0.8
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_12"]
+albedo_color = Color(0.25, 0.22, 0.2, 1)
+metallic = 0.8
+roughness = 0.6
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_13"]
+material = SubResource("StandardMaterial3D_12")
+top_radius = 0.3
+bottom_radius = 0.18
+height = 0.25
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_14"]
+material = SubResource("StandardMaterial3D_12")
+top_radius = 0.05
+bottom_radius = 0.12
+height = 0.5
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_15"]
+radius = 0.3
+height = 0.75
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_16"]
+size = Vector3(1.5, 2.6, 1.5)
+
+[node name="StandWaterShock" type="Node3D"]
+script = ExtResource("stand")
+reset_nodes = Array[NodePath]([NodePath("DummyA"), NodePath("DummyB"), NodePath("ChargedRod"), NodePath("Brazier")])
+
+[node name="Base" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
+mesh = SubResource("PlaneMesh_2")
+cast_shadow = 0
+
+[node name="Title" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.55, -1.9)
+text = "WATER AND ELECTRICITY"
+font = ExtResource("font")
+font_size = 48
+outline_size = 10
+
+[node name="Instructions" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, -1.9)
+text = "Drop the charged rod into the puddle: the water conducts
+and shocks the dummies standing in it.
+Rain puts the brazier out. A fire dart lights it again."
+font = ExtResource("font")
+font_size = 22
+outline_size = 8
+line_spacing = -4.0
+
+[node name="Console" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.75)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, 0)
+mesh = SubResource("BoxMesh_4")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, 0)
+shape = SubResource("BoxShape3D_5")
+
+[node name="Puddle" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.8, 0.15, -0.1)
+collision_layer = 0
+collision_mask = 34
+script = ExtResource("area")
+element = 4
+amount_per_second = 2.0
+conducts_shock = true
+shock_damage_per_second = 5.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Puddle"]
+shape = SubResource("BoxShape3D_8")
+
+[node name="ElementDebugLabel" type="Label3D" parent="Puddle"]
+script = ExtResource("dbg")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+
+[node name="Water" type="MeshInstance3D" parent="Puddle"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.13, 0)
+mesh = SubResource("PlaneMesh_7")
+cast_shadow = 0
+
+[node name="DummyA" parent="." instance=ExtResource("dummy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.3, 0, -0.4)
+
+[node name="DummyB" parent="." instance=ExtResource("dummy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 0, -0.4)
+
+[node name="ChargedRod" type="RigidBody3D" parent="."]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 1.3, 0.06, 0.9)
+collision_layer = 3
+mass = 2.0
+contact_monitor = true
+max_contacts_reported = 4
+script = ExtResource("obj")
+cogito_name = "Charged Rod"
+display_name = "Charged Rod"
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="ChargedRod"]
+mesh = SubResource("CylinderMesh_10")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="ChargedRod"]
+shape = SubResource("CylinderShape3D_11")
+
+[node name="CarryableComponent" parent="ChargedRod" instance=ExtResource("carry")]
+
+[node name="CogitoProperties" parent="ChargedRod" instance=ExtResource("props")]
+elemental_properties = 1
+reaction_threshold_time = 1.0
+electric_on_ready = true
+is_logging = false
+
+[node name="ElementDebugLabel" type="Label3D" parent="ChargedRod"]
+script = ExtResource("dbg")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.35, 0, 0)
+
+[node name="Brazier" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.2, 0, -0.8)
+collision_layer = 3
+script = ExtResource("obj")
+cogito_name = "Brazier"
+display_name = "Brazier"
+
+[node name="Stem" type="MeshInstance3D" parent="Brazier"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0)
+mesh = SubResource("CylinderMesh_14")
+
+[node name="Bowl" type="MeshInstance3D" parent="Brazier"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.62, 0)
+mesh = SubResource("CylinderMesh_13")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Brazier"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.375, 0)
+shape = SubResource("CylinderShape3D_15")
+
+[node name="CogitoProperties" parent="Brazier" instance=ExtResource("props")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+elemental_properties = 2
+reaction_threshold_time = 1.0
+ignite_on_ready = true
+burn_out_result = 0
+dry_time = 6.0
+is_logging = false
+
+[node name="ElementDebugLabel" type="Label3D" parent="Brazier"]
+script = ExtResource("dbg")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4, 0)
+
+[node name="Rain" type="Area3D" parent="." node_paths=PackedStringArray("visuals")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.2, 1.3, -0.8)
+collision_layer = 0
+collision_mask = 34
+script = ExtResource("area")
+element = 4
+enabled = false
+amount_per_second = 2.0
+visuals = [NodePath("RainVFX")]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Rain"]
+shape = SubResource("BoxShape3D_16")
+
+[node name="ElementDebugLabel" type="Label3D" parent="Rain"]
+script = ExtResource("dbg")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.55, 0)
+
+[node name="RainVFX" parent="Rain" instance=ExtResource("rain")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
+
+[node name="PuddleLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.8, 0.35, 0.95)
+text = "PUDDLE"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[node name="RodLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 0.3, 1.25)
+text = "CHARGED ROD"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[node name="RainSwitch" parent="Console" instance=ExtResource("switch")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, 0.975, 0)
+display_name = "Rain"
+
+[node name="RainSwitchLabel" type="Label3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, 1.15, 0)
+text = "RAIN"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[node name="ResetButton" parent="Console" instance=ExtResource("button")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6, 0.975, 0)
+display_name = "Reset"
+usable_interaction_text = "Reset"
+
+[node name="ResetButtonLabel" type="Label3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6, 1.15, 0)
+text = "RESET"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[connection signal="switched" from="Console/RainSwitch" to="Rain" method="set_enabled"]
+[connection signal="pressed" from="Console/ResetButton" to="." method="reset_stand"]

@@ -20,6 +20,17 @@ var damage_amount : int = 0
 @export_range(0.1, 3.0, 0.1, "or_greater") var pick_up_delay: float = 0.5
 var can_pick_up: bool = false
 
+@export_group("Element on Impact")
+## Element applied to whatever the projectile hits (its CogitoProperties or element area). PHYSICAL = none.
+@export var impact_element : CogitoProperties.Element = CogitoProperties.Element.PHYSICAL
+## Element buildup applied on impact, in buildup_threshold units of the target (1.0 = exactly enough to change its state).
+@export var impact_element_amount : float = 1.0
+## Extra damage of impact_element dealt on impact. Scaled by the target's resistances. 0 = none.
+@export var impact_damage : float = 0.0
+
+## True once the impact element was applied, so a bouncing projectile applies it only once.
+var _impact_element_applied : bool = false
+
 var direction
 
 func _ready():
@@ -49,6 +60,7 @@ func on_timeout():
 
 ## Checking collision event for property tags.
 func _on_body_entered(collider: Node):
+	_apply_impact_element(collider)
 	
 	if rigid_body and noise_magnitude_when_impacting > 0:
 		var noise = ObjectNoise.new(show_noise_as_debug_mesh)
@@ -56,7 +68,10 @@ func _on_body_entered(collider: Node):
 		get_tree().current_scene.add_child(noise)
 	
 	var collision_point = global_transform.origin
-	var bullet_direction = (collision_point - CogitoSceneManager.get_player().get_global_transform().origin).normalized() ##This is hacky TODO needs to be fixed for Multiplayer support
+	var bullet_direction = self.linear_velocity.normalized()
+	var player = CogitoSceneManager.get_player()
+	if player:
+		bullet_direction = (collision_point - player.get_global_transform().origin).normalized() ##This is hacky TODO needs to be fixed for Multiplayer support
 	
 	if stick_on_impact:
 		self.linear_velocity = Vector3.ZERO
@@ -96,6 +111,16 @@ func _on_body_entered(collider: Node):
 		if destroy_on_impact:
 			die()
 
+
+
+## Applies impact_element (and impact_damage) to the hit object, once per projectile.
+func _apply_impact_element(collider: Node) -> void:
+	if impact_element == CogitoProperties.Element.PHYSICAL or _impact_element_applied:
+		return
+	_impact_element_applied = true
+	CogitoProperties.apply_element_to(collider, impact_element, impact_element_amount, self)
+	if impact_damage > 0.0:
+		CogitoProperties.deal_elemental_damage(collider, impact_damage, impact_element, self, self.linear_velocity.normalized(), global_position)
 
 
 # Make the projectile stick to the object it hits using a pin joint

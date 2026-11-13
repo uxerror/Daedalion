@@ -154,6 +154,8 @@ enum MaterialProperties{
 @export var spawn_on_frozen : PackedScene
 ## PackedScene of VFX etc that gets spawned when object gets poisoned.
 @export var spawn_on_poisoned : PackedScene
+## PackedScene of VFX etc that gets spawned when the object burns out as CHAR. It stays for good and is never cleared.
+@export var spawn_on_charred : PackedScene
 
 
 @export_group("Audio")
@@ -206,6 +208,7 @@ const VFX_ELECTRIC := &"electric"
 const VFX_CHILLED := &"chilled"
 const VFX_FROZEN := &"frozen"
 const VFX_POISONED := &"poisoned"
+const VFX_CHARRED := &"charred"
 
 
 func _ready():
@@ -596,6 +599,8 @@ func burn_out():
 			fuel_remaining = fuel
 		BurnOutResult.CHAR:
 			elemental_properties &= ~ElementalProperties.FLAMMABLE
+			if spawn_on_charred:
+				spawn_elemental_vfx(spawn_on_charred, VFX_CHARRED)
 	burned_out.emit()
 	if burn_out_result == BurnOutResult.DESTROY:
 		get_parent().queue_free()
