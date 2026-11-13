@@ -72,7 +72,7 @@ shape = SubResource("BoxShape3D_5")
 [node name="PoisonGas" type="Area3D" parent="." node_paths=PackedStringArray("visuals")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, -0.7)
 collision_layer = 0
-collision_mask = 34
+collision_mask = 50
 script = ExtResource("area")
 element = 5
 enabled = false

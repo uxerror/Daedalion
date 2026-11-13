@@ -9,6 +9,8 @@ signal menu_pressed(player_interaction_component: PlayerInteractionComponent)
 signal player_state_loaded()
 ## Used to hide UI elements like the crosshair when another interface is active (like a container or readable)
 signal toggled_interface(is_showing_ui:bool)
+## Emitted when elemental damage (fire, cold, poison, shock...) was dealt to the player, see CogitoProperties.deal_elemental_damage().
+signal elemental_damage_received(amount: float, element: CogitoProperties.Element, source: Node)
 
 ## Refereence to Player HUD node
 @export var player_hud : CogitoHud
@@ -39,6 +41,12 @@ var main_velocity : Vector3 = Vector3.ZERO
 var is_dead : bool = false
 ## Radius of the player's collision shapes, set with _calculate_player_radius().
 var radius : float
+
+### ELEMENTS
+## The player's CogitoProperties (element states), or null. Lets CogitoProperties.get_properties_of() find it.
+var cogito_properties : CogitoProperties = null
+## The player's CogitoActorElements (element effects on movement and actions), or null.
+var actor_elements : CogitoActorElements = null
 
 @export_group("Node Paths")
 ## The PlayerInteractionComponent of this player. Required.
@@ -103,6 +111,37 @@ func setup_attributes_and_currencies() -> void:
 	for currency in find_children("", "CogitoCurrency", false):
 		player_currencies[currency.currency_name] = currency
 		CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Cogito Currency found: " + currency.currency_name)
+
+
+## Finds the player's CogitoActorElements and CogitoProperties children. Player controllers that support
+## element states call this in _ready().
+func setup_elements() -> void:
+	for child in get_children():
+		if child is CogitoActorElements and !actor_elements:
+			actor_elements = child
+		elif child is CogitoProperties and !cogito_properties:
+			cogito_properties = child
+	if actor_elements and actor_elements.properties:
+		cogito_properties = actor_elements.properties
+
+
+## False while an element state keeps the player from acting (stunned, frozen). Checked before
+## interacting, using wieldables and using items.
+func can_act() -> bool:
+	return actor_elements == null or actor_elements.can_act()
+
+
+## Multiplier for the player's movement speed from element states (chilled, frozen, stunned). 1 without CogitoActorElements.
+func get_element_speed_multiplier() -> float:
+	return actor_elements.speed_multiplier if actor_elements else 1.0
+
+
+## Called by CogitoProperties.deal_elemental_damage(): the damage already has resistances applied.
+func receive_elemental_damage(amount: float, element: CogitoProperties.Element, source: Node = null, _hit_direction := Vector3.ZERO, _hit_position := Vector3.ZERO) -> void:
+	if is_dead:
+		return
+	decrease_attribute("health", amount)
+	elemental_damage_received.emit(amount, element, source)
 
 
 func _on_death():

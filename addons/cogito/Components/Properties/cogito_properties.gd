@@ -29,6 +29,8 @@ signal element_applied(element: Element, amount: float, source: Node)
 signal reaction_triggered(reaction: StringName)
 ## Emitted when a burning object ran out of fuel (see fuel and burn_out_result).
 signal burned_out()
+## Emitted when deal_elemental_damage() dealt damage to the object (after resistances), with its element.
+signal elemental_damage_taken(amount: float, element: Element, source: Node)
 
 ## Elements used for buildup, reactions, resistances and damage types.
 enum Element {
@@ -77,6 +79,10 @@ enum MaterialProperties{
 @export var burn_damage_amount : float
 ## Interval the burn damage is applied in seconds.
 @export var burn_damage_interval : float = 1.0
+## FIRE damage per second dealt to the object while it burns. Unlike burn_damage_amount it goes through
+## deal_elemental_damage(), so it reaches HitboxComponents and players and keeps its damage type.
+## Ticks with state_damage_interval.
+@export var fire_damage_per_second : float = 0.0
 
 
 @export_group("Heat and Fuel")
@@ -86,7 +92,7 @@ enum MaterialProperties{
 ## Has to be higher than the neighbours' buildup_decay_per_second to ignite them.
 @export var heat_per_second : float = 2.0
 ## Physics layers scanned for things to heat up (bodies and element areas).
-@export_flags_3d_physics var heat_collision_mask : int = 1 | 2 | 4 | 32
+@export_flags_3d_physics var heat_collision_mask : int = 1 | 2 | 4 | 16 | 32
 ## Seconds this object can burn before it burns out. Negative = burns forever.
 @export var fuel : float = -1.0
 ## What happens when the fuel runs out.
@@ -561,17 +567,26 @@ func apply_element(element: Element, amount: float, source: Node = null) -> floa
 
 
 ## Deals damage of an element to a target, scaled by the target's resistances and states.
-## Works with anything that has a damage_received signal (CogitoObject, CogitoNPC, ...).
-## Returns the damage that was dealt.
+## Works with anything that has a damage_received signal (CogitoObject, CogitoNPC, ...) or a
+## receive_elemental_damage(amount, element, source, hit_direction, hit_position) method (e.g. CogitoPlayer),
+## which gets the damage type too. Returns the damage that was dealt.
 static func deal_elemental_damage(target: Node, amount: float, element: Element, source: Node = null, hit_direction := Vector3.ZERO, hit_position := Vector3.ZERO) -> float:
-	if !is_instance_valid(target) or !target.has_signal("damage_received"):
+	if !is_instance_valid(target):
+		return 0.0
+	var typed := target.has_method("receive_elemental_damage")
+	if !typed and !target.has_signal("damage_received"):
 		return 0.0
 	var props := get_properties_of(target)
 	if props:
 		amount *= props.get_damage_multiplier(element)
 	if amount <= 0.0:
 		return 0.0
-	target.damage_received.emit(amount, source, hit_direction, hit_position)
+	if typed:
+		target.receive_elemental_damage(amount, element, source, hit_direction, hit_position)
+	else:
+		target.damage_received.emit(amount, source, hit_direction, hit_position)
+	if props:
+		props.elemental_damage_taken.emit(amount, element, source)
 	return amount
 
 
@@ -822,6 +837,22 @@ func thaw() -> void:
 	_update_processing()
 
 
+## Lowers the buildup of an element, e.g. a frozen actor struggling free (see CogitoActorElements.struggle()).
+## When the level runs out the state ends as if it had worn off: a frozen object thaws (and is wet again),
+## a chill warms up, poison ends. Returns the new level.
+func reduce_element(element: Element, amount: float) -> float:
+	if amount <= 0.0:
+		return get_element_level(element)
+	var level := _set_level(element, get_element_level(element) - amount)
+	if level <= 0.0:
+		if _timed_states.has(element):
+			_on_level_depleted(element)
+		elif element == Element.COLD and is_frozen:
+			thaw() # Frozen with freeze(): struggling free still melts it.
+	_update_processing()
+	return level
+
+
 ## Removes all poison buildup and the poisoned state.
 func cure_poison() -> void:
 	element_levels.erase(Element.POISON)
@@ -884,9 +915,10 @@ func _is_decaying(element: Element) -> bool:
 	return true
 
 
-## True while cold or poison damage ticks are due.
+## True while fire, cold or poison damage ticks are due.
 func _has_state_ticks() -> bool:
-	return (is_poisoned and poison_damage_per_second > 0.0) or ((is_chilled or is_frozen) and cold_damage_per_second > 0.0)
+	return (is_poisoned and poison_damage_per_second > 0.0) or ((is_chilled or is_frozen) and cold_damage_per_second > 0.0) \
+		or (is_on_fire and fire_damage_per_second > 0.0)
 
 
 func _update_processing() -> void:
@@ -932,6 +964,8 @@ func _process(delta: float) -> void:
 				deal_elemental_damage(get_parent(), poison_damage_per_second * interval, Element.POISON, get_parent())
 			if (is_chilled or is_frozen) and cold_damage_per_second > 0.0:
 				deal_elemental_damage(get_parent(), cold_damage_per_second * interval, Element.COLD, get_parent())
+			if is_on_fire and fire_damage_per_second > 0.0:
+				deal_elemental_damage(get_parent(), fire_damage_per_second * interval, Element.FIRE, get_parent())
 	else:
 		_state_tick = 0.0
 	if is_on_fire:

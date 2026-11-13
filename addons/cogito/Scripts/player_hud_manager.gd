@@ -31,6 +31,8 @@ extends CogitoHud
 @export var fixed_stamina_bar : CogitoAttributeUi
 ## If you want to have the oxygen bar outside of the other attributes, you can set a reference here. This will remove it from the main attribute container
 @export var fixed_oxygen_bar : CogitoAttributeUi
+## Element state icons and screen overlay (optional). Bound to the player's CogitoProperties on setup.
+@export var element_status_hud : CogitoElementStatusHud
 @export var default_crosshair : Texture2D
 ## Crosshair that appears when a interactable object is detected. Leave empty if you don't want to use an interaction crosshair.
 @export var interaction_crosshair : Texture2D
@@ -93,6 +95,8 @@ func _setup_player():
 	instantiate_player_attribute_ui()
 	instantiate_interface_attributes()
 	instantiate_player_currency_ui()
+	if element_status_hud:
+		element_status_hud.bind_player(player)
 	
 	# Fill inventory HUD with player inventory
 	inventory_interface.set_player_inventory_data(player.inventory_data)
