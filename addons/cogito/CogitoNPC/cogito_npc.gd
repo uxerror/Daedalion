@@ -383,7 +383,13 @@ func load_state_chart():
 	CogitoGlobals.debug_log(true, "CogitoNPC", "Deserialising state chart, errors: %s" % errors)
 	# Deserializing doesn't emit state_entered, so the state processors' enter_state() doesn't run.
 	_restore_current_behaviour()
-	# Element states aren't saved yet: don't keep panicking without a fire.
+	# The element states of a scene state are restored after set_state() (CogitoSceneManager applies them deferred),
+	# so the panic is checked against the fire once they are.
+	_end_panic_without_fire.call_deferred()
+
+
+## A loaded NPC keeps panicking only if it is still on fire.
+func _end_panic_without_fire() -> void:
 	if is_panicking() and !(cogito_properties and cogito_properties.is_on_fire):
 		state_chart.send_event("calm_down")
 

@@ -56,9 +56,11 @@ var _immunity_left : float = 0.0
 
 
 func _ready() -> void:
+	add_to_group(CogitoProperties.ELEMENT_STATE_GROUP)
 	if !properties:
 		properties = _find_properties()
 	if properties:
+		properties.element_state_restored.connect(_update_movement)
 		properties.has_become_chilled.connect(_update_movement)
 		properties.has_warmed_up.connect(_update_movement)
 		properties.has_frozen.connect(_on_frozen)
@@ -138,6 +140,33 @@ func stun(seconds: float = shock_stun_time) -> bool:
 	_update_processing()
 	stunned.emit()
 	return true
+
+
+## Returns the stun and freeze timers as a dictionary of plain values, see CogitoProperties.get_element_save_data().
+func get_element_save_data() -> Dictionary:
+	return {
+		"v": CogitoProperties.ELEMENT_SAVE_VERSION,
+		"stunned": is_stunned,
+		"stun_time_left": stun_time_left,
+		"stun_cooldown_left": stun_cooldown_left,
+		"immunity_left": _immunity_left,
+		"struggle_tick": _struggle_tick,
+	}
+
+
+## Restores timers saved with get_element_save_data(). Apply the CogitoProperties data first.
+## Doesn't emit stunned or stun_ended.
+func apply_element_save_data(data: Dictionary) -> void:
+	if data.is_empty():
+		return
+	is_stunned = bool(data.get("stunned", false))
+	stun_time_left = float(data.get("stun_time_left", 0.0))
+	stun_cooldown_left = float(data.get("stun_cooldown_left", 0.0))
+	_immunity_left = float(data.get("immunity_left", 0.0))
+	_struggle_tick = float(data.get("struggle_tick", 0.0))
+	if properties:
+		properties.freeze_immune = _immunity_left > 0.0
+	_update_movement()
 
 
 func _on_element_applied(element: CogitoProperties.Element, _amount: float, _source: Node) -> void:

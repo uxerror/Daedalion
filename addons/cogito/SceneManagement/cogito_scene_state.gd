@@ -5,6 +5,12 @@ var scene_state_dir : String = CogitoSceneManager.cogito_state_dir + CogitoScene
 
 @export var saved_nodes : Array
 @export var saved_states : Array
+## Element states (CogitoProperties, CogitoElementArea, CogitoActorElements) of the scene.
+## Entries: {"cogito_id", "path", "data"}, see CogitoSceneManager.get_element_state_key().
+@export var saved_element_states : Array
+## Nodes destroyed during play that aren't Persist nodes (e.g. burned out with BurnOutResult.DESTROY).
+## Entries: {"cogito_id", "path"}. They get freed again when the scene state loads.
+@export var saved_destroyed_nodes : Array
 
 
 func clear_saved_nodes():

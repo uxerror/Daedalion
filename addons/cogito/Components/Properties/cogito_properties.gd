@@ -31,6 +31,9 @@ signal reaction_triggered(reaction: StringName)
 signal burned_out()
 ## Emitted when deal_elemental_damage() dealt damage to the object (after resistances), with its element.
 signal elemental_damage_taken(amount: float, element: Element, source: Node)
+## Emitted after apply_element_save_data() restored the element states from a save.
+## The single state signals (has_ignited, ...) are not emitted by a restore, so listeners refresh on this one.
+signal element_state_restored()
 
 ## Elements used for buildup, reactions, resistances and damage types.
 enum Element {
@@ -189,6 +192,8 @@ var is_poisoned : bool = false
 ## Runtime flag, not exported. While true, COLD can chill the object but never freeze it
 ## (a wet chilled object just stays chilled). CogitoActorElements sets it for a while after a freeze ended.
 var freeze_immune : bool = false
+## True after the object burned out with BurnOutResult.CHAR.
+var is_charred : bool = false
 var player_is_touching : bool = false
 var player_node : Node3D = null
 
@@ -223,8 +228,14 @@ const VFX_FROZEN := &"frozen"
 const VFX_POISONED := &"poisoned"
 const VFX_CHARRED := &"charred"
 
+## Group of nodes whose element states are saved with the scene (see CogitoSceneManager.save_scene_state()).
+const ELEMENT_STATE_GROUP := &"cogito_element_state"
+## Version of the dictionary returned by get_element_save_data().
+const ELEMENT_SAVE_VERSION := 1
+
 
 func _ready():
+	add_to_group(ELEMENT_STATE_GROUP)
 	if !audio_stream_player_3d:
 		var players: Array[Node] = find_children("", "AudioStreamPlayer3D")
 		if len(players): audio_stream_player_3d = players[0]
@@ -621,10 +632,13 @@ func burn_out():
 			fuel_remaining = fuel
 		BurnOutResult.CHAR:
 			elemental_properties &= ~ElementalProperties.FLAMMABLE
+			is_charred = true
 			if spawn_on_charred:
 				spawn_elemental_vfx(spawn_on_charred, VFX_CHARRED)
 	burned_out.emit()
 	if burn_out_result == BurnOutResult.DESTROY:
+		# Lets a save remember that the object is gone, also when it isn't a Persist node.
+		CogitoSceneManager.register_destroyed_node(get_parent())
 		get_parent().queue_free()
 
 
@@ -1006,6 +1020,115 @@ func _on_level_depleted(element: Element) -> void:
 		Element.POISON:
 			_end_poison()
 	_timed_states.erase(element)
+
+#endregion
+
+
+#region Saving
+
+## Returns the runtime element state as a dictionary of plain values (safe for resources and JSON),
+## so apply_element_save_data() can continue it after a load.
+func get_element_save_data() -> Dictionary:
+	var levels := {}
+	for element in element_levels:
+		levels[str(element)] = float(element_levels[element])
+	var timed : Array = []
+	for element in _timed_states:
+		timed.append(int(element))
+	var burn_damage_left := 0.0
+	if damage_timer and !damage_timer.is_stopped():
+		burn_damage_left = damage_timer.time_left
+	return {
+		"v": ELEMENT_SAVE_VERSION,
+		"elemental_properties": elemental_properties,
+		"on_fire": is_on_fire,
+		"wet": is_wet,
+		"electric": is_electric,
+		"chilled": is_chilled,
+		"frozen": is_frozen,
+		"poisoned": is_poisoned,
+		"charred": is_charred,
+		"freeze_immune": freeze_immune,
+		"levels": levels,
+		"timed": timed,
+		"fuel_remaining": fuel_remaining,
+		"cold_vs_fire": _cold_vs_fire,
+		"frozen_wet_sustained": _frozen_wet_sustained,
+		"rigid_freeze_before": _rigid_freeze_before,
+		"state_tick": _state_tick,
+		"heat_tick": _heat_tick,
+		"burn_damage_left": burn_damage_left,
+	}
+
+
+## Restores element states saved with get_element_save_data(). States, levels and timers continue where they were.
+## Nothing reacts to the restore: no reactions, damage, burn out or state signals, only element_state_restored.
+func apply_element_save_data(data: Dictionary) -> void:
+	if data.is_empty():
+		return
+	var body := get_parent() as RigidBody3D
+	# Back to a neutral state, silently.
+	clear_spawned_effects()
+	_stop_heat()
+	if damage_timer:
+		damage_timer.stop()
+	if is_on_fire and audio_stream_player_3d:
+		audio_stream_player_3d.stop()
+	if is_frozen and body:
+		body.freeze = _rigid_freeze_before
+	
+	elemental_properties = int(data.get("elemental_properties", elemental_properties))
+	is_on_fire = bool(data.get("on_fire", false))
+	is_wet = bool(data.get("wet", false))
+	is_electric = bool(data.get("electric", false))
+	is_chilled = bool(data.get("chilled", false))
+	is_frozen = bool(data.get("frozen", false))
+	is_poisoned = bool(data.get("poisoned", false))
+	is_charred = bool(data.get("charred", false))
+	freeze_immune = bool(data.get("freeze_immune", false))
+	element_levels.clear()
+	var levels : Dictionary = data.get("levels", {})
+	for key in levels:
+		element_levels[int(key)] = float(levels[key])
+	_timed_states.clear()
+	for element in data.get("timed", []):
+		_timed_states[int(element)] = true
+	fuel_remaining = float(data.get("fuel_remaining", fuel))
+	_cold_vs_fire = float(data.get("cold_vs_fire", 0.0))
+	_frozen_wet_sustained = bool(data.get("frozen_wet_sustained", false))
+	_rigid_freeze_before = bool(data.get("rigid_freeze_before", body.freeze if body else false))
+	_state_tick = float(data.get("state_tick", 0.0))
+	
+	# Rebuild what follows from the states.
+	if is_frozen and body:
+		body.freeze = true
+	if is_charred and spawn_on_charred:
+		spawn_elemental_vfx(spawn_on_charred, VFX_CHARRED)
+	if is_wet and spawn_on_wet:
+		spawn_elemental_vfx(spawn_on_wet, VFX_WET)
+	if is_electric and spawn_on_electrified:
+		spawn_elemental_vfx(spawn_on_electrified, VFX_ELECTRIC)
+	if is_chilled and spawn_on_chilled:
+		spawn_elemental_vfx(spawn_on_chilled, VFX_CHILLED)
+	if is_frozen and spawn_on_frozen:
+		spawn_elemental_vfx(spawn_on_frozen, VFX_FROZEN)
+	if is_poisoned and spawn_on_poisoned:
+		spawn_elemental_vfx(spawn_on_poisoned, VFX_POISONED)
+	if is_on_fire:
+		if spawn_on_ignite:
+			spawn_elemental_vfx(spawn_on_ignite, VFX_FIRE)
+		if audio_stream_player_3d and audio_burning:
+			audio_stream_player_3d.stream = audio_burning
+			audio_stream_player_3d.play()
+		_start_heat()
+		_heat_tick = float(data.get("heat_tick", 0.0))
+		if burn_damage_amount > 0.0 and damage_timer:
+			var burn_damage_left := float(data.get("burn_damage_left", 0.0))
+			damage_timer.wait_time = burn_damage_left if burn_damage_left > 0.0 else burn_damage_interval
+			damage_timer.start()
+	_update_processing()
+	_log("element state restored.")
+	element_state_restored.emit()
 
 #endregion
 

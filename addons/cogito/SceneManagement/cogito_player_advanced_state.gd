@@ -61,6 +61,10 @@ extends CogitoPlayerState
 
 @export var state_chart: SerializedStateChart = null
 
+## Element states of the player: {"properties": CogitoProperties.get_element_save_data(),
+## "actor": CogitoActorElements.get_element_save_data()}. Empty in saves made before element states were saved.
+@export var element_state : Dictionary = {}
+
 
 func populate_player_data(player):
 	load_common_data(player)
@@ -93,6 +97,8 @@ func populate_player_data(player):
 	player.swimming_head_shapecast.global_position = swimming_head_shapecast_position
 	player.under_water_effect.visible = is_under_water_effect_visible
 	
+	_load_element_state(player)
+	
 
 func _load_state_chart(player):
 	StateChartSerializer.deserialize(state_chart, player.state_chart)
@@ -121,10 +127,33 @@ func populate_save_data(player, slot):
 	is_under_water_effect_visible = player.under_water_effect.visible
 	
 	_save_state_chart(player)
+	_save_element_state(player)
 
 
 func _save_state_chart(player):
 	state_chart = StateChartSerializer.serialize(player.state_chart)
+
+
+func _save_element_state(player):
+	element_state = {}
+	var props : CogitoProperties = player.get("cogito_properties")
+	if props:
+		element_state["properties"] = props.get_element_save_data()
+	var actor_elements : CogitoActorElements = player.get("actor_elements")
+	if actor_elements:
+		element_state["actor"] = actor_elements.get_element_save_data()
+
+
+func _load_element_state(player):
+	if element_state.is_empty():
+		return
+	# Deferred like the scene's element states, so the on-ready states of a freshly loaded level come first.
+	var props : CogitoProperties = player.get("cogito_properties")
+	if props and element_state.has("properties"):
+		props.apply_element_save_data.call_deferred(element_state["properties"].duplicate(true))
+	var actor_elements : CogitoActorElements = player.get("actor_elements")
+	if actor_elements and element_state.has("actor"):
+		actor_elements.apply_element_save_data.call_deferred(element_state["actor"].duplicate(true))
 
 
 func save_node_transforms(player):

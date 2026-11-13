@@ -97,6 +97,7 @@ func bind(new_properties: CogitoProperties, new_actor_elements: CogitoActorEleme
 				properties.has_become_chilled, properties.has_warmed_up, properties.has_frozen, properties.has_thawed,
 				properties.has_been_poisoned, properties.has_been_cured, properties.burned_out]:
 			_connect(sig, refresh)
+		_connect(properties.element_state_restored, refresh)
 		_connect(properties.element_applied, _on_element_applied)
 		_connect(properties.reaction_triggered, _on_reaction)
 		if !actor_elements:

@@ -57,6 +57,7 @@ var _timer : Timer
 
 
 func _ready() -> void:
+	add_to_group(CogitoProperties.ELEMENT_STATE_GROUP)
 	_timer = Timer.new()
 	_timer.wait_time = TICK
 	_timer.autostart = true
@@ -107,6 +108,45 @@ func apply_element(applied: CogitoProperties.Element, amount: float, _source: No
 				_set_electric(true)
 				return amount
 	return 0.0
+
+
+## Returns the runtime state as a dictionary of plain values, see CogitoProperties.get_element_save_data().
+func get_element_save_data() -> Dictionary:
+	var levels := {}
+	for key in _levels:
+		levels[str(key)] = float(_levels[key])
+	var charged : Array = []
+	for props in _charged_by_me:
+		if is_instance_valid(props) and props.is_inside_tree():
+			charged.append(CogitoSceneManager.get_element_state_key(props))
+	return {
+		"v": CogitoProperties.ELEMENT_SAVE_VERSION,
+		"enabled": enabled,
+		"levels": levels,
+		"electric": is_electric,
+		"shock_time_left": _shock_time_left,
+		"charged": charged,
+	}
+
+
+## Restores a state saved with get_element_save_data(). Doesn't emit reaction_triggered.
+func apply_element_save_data(data: Dictionary) -> void:
+	if data.is_empty():
+		return
+	set_enabled(bool(data.get("enabled", enabled)))
+	_levels.clear()
+	var levels : Dictionary = data.get("levels", {})
+	for key in levels:
+		_levels[int(key)] = float(levels[key])
+	is_electric = bool(data.get("electric", false))
+	_shock_time_left = float(data.get("shock_time_left", 0.0))
+	_charged_by_me.clear()
+	for key in data.get("charged", []):
+		var props := CogitoSceneManager.find_element_state_node(key) as CogitoProperties
+		if props:
+			_charged_by_me[props] = true
+	if is_inside_tree():
+		_update_visuals()
 
 
 func _tick() -> void:
