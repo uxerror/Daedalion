@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="CogitoQuestObjective" format=3 uid="uid://d2xrniunn3k76"]
+
+[ext_resource type="Script" uid="uid://cb0bb7a4drtej" path="res://addons/cogito/QuestSystem/Flags/cogito_flag_group.gd" id="1_cmpeh"]
+[ext_resource type="Resource" uid="uid://ca0wjra4aq00v" path="res://addons/cogito/InventoryPD/Items/Cogito_LaptopReal.tres" id="2_tvv0g"]
+[ext_resource type="Script" uid="uid://dnniljhhtx2pl" path="res://addons/cogito/QuestSystem/Flags/inventory_flag.gd" id="3_l5ycy"]
+[ext_resource type="Script" uid="uid://dc2atholvyqaf" path="res://addons/cogito/QuestSystem/Flags/single_flag_group.gd" id="4_0xxww"]
+[ext_resource type="Resource" uid="uid://b7myxblvr7lty" path="res://addons/cogito/InventoryPD/Items/Cogito_Laptop.tres" id="5_20ado"]
+[ext_resource type="Script" uid="uid://dqjgrpxl8eywm" path="res://addons/cogito/QuestSystem/CustomResources/cogito_quest_objective.gd" id="6_v7q8l"]
+
+[sub_resource type="Resource" id="Resource_v0uas"]
+script = ExtResource("3_l5ycy")
+expected_item = ExtResource("2_tvv0g")
+metadata/_custom_type_script = "uid://dnniljhhtx2pl"
+
+[sub_resource type="Resource" id="Resource_p1ri8"]
+script = ExtResource("4_0xxww")
+flag = SubResource("Resource_v0uas")
+metadata/_custom_type_script = "uid://dc2atholvyqaf"
+
+[sub_resource type="Resource" id="Resource_td38l"]
+script = ExtResource("3_l5ycy")
+expected_item = ExtResource("5_20ado")
+metadata/_custom_type_script = "uid://dnniljhhtx2pl"
+
+[sub_resource type="Resource" id="Resource_4oksg"]
+script = ExtResource("4_0xxww")
+flag = SubResource("Resource_td38l")
+metadata/_custom_type_script = "uid://dc2atholvyqaf"
+
+[resource]
+script = ExtResource("6_v7q8l")
+objective_description = "Find and steal the CEOs laptop."
+completion_flags = Array[ExtResource("1_cmpeh")]([SubResource("Resource_p1ri8"), SubResource("Resource_4oksg")])
+metadata/_custom_type_script = "uid://dqjgrpxl8eywm"

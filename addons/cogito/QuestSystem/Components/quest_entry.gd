@@ -3,15 +3,13 @@ class_name QuestEntry
 
 @onready var quest_name_label: Label = $VBoxContainer/QuestName
 @onready var quest_description_label: Label = $VBoxContainer/QuestDescription
-@onready var quest_counter_label: Label = $VBoxContainer/QuestCounter
+@onready var quest_objectives_label: Label = $VBoxContainer/QuestObjectives
 
-func set_quest_info(_passed_quest_name:String, _passed_quest_description:String, _passed_quest_counter:String):
-	quest_name_label.text = _passed_quest_name
-	quest_description_label.text = _passed_quest_description
+func set_quest_info(_passed_quest: CogitoQuest):
+	quest_name_label.text = _passed_quest.quest_title
+	quest_description_label.text = _passed_quest.quest_description
 	
-	if _passed_quest_counter == "0/0":
-		quest_counter_label.text = ""
-	else:
-		quest_counter_label.text = _passed_quest_counter
-	
-	
+	quest_objectives_label.text = ""
+	for objective in _passed_quest.quest_objectives:
+		if objective.objective_state != CogitoQuestObjective.ObjectiveState.Hidden:
+			quest_objectives_label.text += "\n- %s" % objective.get_description(CogitoSceneManager._current_world_dict)

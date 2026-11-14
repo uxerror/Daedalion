@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CogitoQuestObjective" format=3 uid="uid://tk7o40koca1a"]
+
+[ext_resource type="Script" uid="uid://cb0bb7a4drtej" path="res://addons/cogito/QuestSystem/Flags/cogito_flag_group.gd" id="1_r7ear"]
+[ext_resource type="Script" uid="uid://cdu5jo471lb8u" path="res://addons/cogito/QuestSystem/Flags/bool_flag.gd" id="2_nemob"]
+[ext_resource type="Script" uid="uid://dc2atholvyqaf" path="res://addons/cogito/QuestSystem/Flags/single_flag_group.gd" id="3_6hrsp"]
+[ext_resource type="Script" uid="uid://dqjgrpxl8eywm" path="res://addons/cogito/QuestSystem/CustomResources/cogito_quest_objective.gd" id="4_babx0"]
+
+[sub_resource type="Resource" id="Resource_gxiae"]
+script = ExtResource("2_nemob")
+flag_name = "ArchiveAccessed"
+metadata/_custom_type_script = "uid://cdu5jo471lb8u"
+
+[sub_resource type="Resource" id="Resource_fay3r"]
+script = ExtResource("3_6hrsp")
+flag = SubResource("Resource_gxiae")
+metadata/_custom_type_script = "uid://dc2atholvyqaf"
+
+[resource]
+script = ExtResource("4_babx0")
+objective_description = "CQO_EnterArchive"
+completion_flags = Array[ExtResource("1_r7ear")]([SubResource("Resource_fay3r")])
+metadata/_custom_type_script = "uid://dqjgrpxl8eywm"

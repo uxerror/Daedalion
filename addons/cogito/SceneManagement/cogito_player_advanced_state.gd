@@ -198,11 +198,6 @@ func populate_save_data(player, slot):
 	for quest in CogitoQuestManager.failed.quests:
 		self.player_failed_quests.append(quest)  # FIXED: Save failed quests to correct list
 	
-	# Saving active quests with progression counter
-	self.player_active_quest_progression.clear()
-	for quest in CogitoQuestManager.active.quests:
-		self.add_to_active_quest_dictionary(quest.quest_name, quest.quest_counter_current)
-	
 	self.clear_saved_wieldable_charges()
 	for item_slot in player.inventory_data.inventory_slots:
 		if item_slot and item_slot.inventory_item and item_slot.inventory_item.has_method("update_wieldable_data"): # Checking for wieldables.
@@ -378,10 +373,10 @@ func add_to_world_dictionary(world_property_name: String, world_property_data):
 		CogitoGlobals.debug_log(true, "CogitoPlayerState", "world dict key not found. Added and value saved: " + str(world_property_name) + " " + str(world_property_data) )
 
 
-func add_to_active_quest_dictionary(quest_name: String, current_quest_counter: int):
+func add_to_active_quest_flags(quest_name: String, flags: Dictionary):
 	player_active_quest_progression.get_or_add(quest_name)
-	player_active_quest_progression[quest_name] = current_quest_counter
-	CogitoGlobals.debug_log(true, "CogitoPlayerState", "Acitve quest added and counter value saved: " + str(quest_name) + " " + str(current_quest_counter) )
+	player_active_quest_progression[quest_name] = flags
+	CogitoGlobals.debug_log(true, "CogitoPlayerState", "Saved dictionary flags: " + str(quest_name) + " " + str(flags) )
 
 
 func clear_world_dictionary():

@@ -17,7 +17,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Poedit 3.9\n"
+"X-Generator: Poedit 3.10\n"
 
 #: addons/cogito/EasyMenus/Scenes/OptionsTabMenu.tscn
 msgid "TAB_GAMEPLAY"
@@ -132,12 +132,12 @@ msgid "Master Volume"
 msgstr "Master Volume"
 
 #: addons/cogito/EasyMenus/Scenes/OptionsTabMenu.tscn
-msgid "SFX Volume"
-msgstr "SFX Volume"
-
-#: addons/cogito/EasyMenus/Scenes/OptionsTabMenu.tscn
 msgid "0 %"
 msgstr ""
+
+#: addons/cogito/EasyMenus/Scenes/OptionsTabMenu.tscn
+msgid "SFX Volume"
+msgstr "SFX Volume"
 
 #: addons/cogito/EasyMenus/Scenes/OptionsTabMenu.tscn
 msgid "Music Volume"
@@ -804,74 +804,6 @@ msgstr "Useless item"
 msgid "This item has no use function."
 msgstr "This item has no use function."
 
-#. TRANSLATORS: quest title
-#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_AccessArchive.tres
-msgid "Gain access to the archive."
-msgstr "Gain access to the archive."
-
-#. TRANSLATORS: quest description active
-#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_AccessArchive.tres
-msgid "You won't be able to just walk in, but we're sure you'll find away."
-msgstr "You won't be able to just walk in, but we're sure you'll find away."
-
-#. TRANSLATORS: quest description completed
-#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_AccessArchive.tres
-msgid "You're in!"
-msgstr "You're in!"
-
-#. TRANSLATORS: quest description failed
-#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_AccessArchive.tres
-msgid "You should've not been able to fail this."
-msgstr "You should've not been able to fail this."
-
-#. TRANSLATORS: quest title
-#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_DeliverLaptop.tres
-msgid "Deliver the CEO's laptop"
-msgstr "Deliver the CEO's laptop"
-
-#. TRANSLATORS: quest description active
-#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_DeliverLaptop.tres
-msgid ""
-"We have a hidden compartment in the fridge, so drop the laptop in there and "
-"we can retriefe it."
-msgstr ""
-"We have a hidden compartment in the fridge, so drop the laptop in there and "
-"we can retrieve it."
-
-#. TRANSLATORS: quest description completed
-#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_DeliverLaptop.tres
-msgid "We got the data we needed. Great work!"
-msgstr "We got the data we needed. Great work!"
-
-#. TRANSLATORS: quest description failed
-#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_DeliverLaptop.tres
-msgid "The laptop you delivered was fake! Do not contact us again."
-msgstr "The laptop you delivered was fake! Do not contact us again."
-
-#. TRANSLATORS: quest title
-#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_StealLaptop.tres
-msgid "Steal the CEO's laptop"
-msgstr "Steal the CEO's laptop"
-
-#. TRANSLATORS: quest description active
-#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_StealLaptop.tres
-msgid ""
-"We need the data on that laptop. As soon as you have it in your possession, "
-"we'll let you know the next steps."
-msgstr ""
-"We need the data on that laptop. As soon as you have it in your possession, "
-"we'll let you know the next steps."
-
-#. TRANSLATORS: quest description completed
-#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_StealLaptop.tres
-msgid "You found the laptop."
-msgstr "You found the laptop."
-
-#. TRANSLATORS: quest description failed
-#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_StealLaptop.tres
-msgid "You failed this quest."
-msgstr "You failed this quest."
-
 #. TRANSLATORS: translation_key_dict entry
 #: addons/cogito/Localization/translation_keys_resources/loc_keys_quest_system.tres
 msgid "QUEST_start"
@@ -1050,8 +982,115 @@ msgstr "Lockpick"
 msgid "Breaks easily but can come in handy."
 msgstr "Breaks easily but can come in handy."
 
-msgid "Cogito"
+#. TRANSLATORS: quest objective description
+#: addons/cogito/QuestSystem/Quests/DemoSceneObjectives/Demo_AccessArchiveObj.tres
+msgid "CQO_EnterArchive"
+msgstr "Find a way into the archive."
+
+#. TRANSLATORS: quest objective description
+#: addons/cogito/QuestSystem/Quests/DemoSceneObjectives/Demo_StealLaptopObj1.tres
+msgid "Find and steal the CEOs laptop."
+msgstr "Steal the CEO's laptop"
+
+#. TRANSLATORS: quest objective description
+#: addons/cogito/QuestSystem/Quests/DemoSceneObjectives/Demo_StealLaptopObj2.tres
+msgid "Deliver the laptop to the hidden compartment in the fridge."
+msgstr "Deliver the laptop to the hidden compartment in the fridge."
+
+#. TRANSLATORS: quest objective description
+#: addons/cogito/QuestSystem/Quests/DemoSceneObjectives/Demo_TargetPracticeObj.tres
+msgid "Destroy 5 targets."
+msgstr "Destroy 5 targets."
+
+#. TRANSLATORS: quest title
+#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_AccessArchive.tres
+msgid "Gain access to the archive."
+msgstr "Gain access to the archive."
+
+#. TRANSLATORS: quest description active
+#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_AccessArchive.tres
+msgid "You won't be able to just walk in, but we're sure you'll find away."
+msgstr "You won't be able to just walk in, but we're sure you'll find away."
+
+#. TRANSLATORS: quest description completed
+#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_AccessArchive.tres
+msgid "You're in!"
+msgstr "You're in!"
+
+#. TRANSLATORS: quest description failed
+#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_AccessArchive.tres
+msgid "You should've not been able to fail this."
+msgstr "You should've not been able to fail this."
+
+#. TRANSLATORS: quest title
+#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_StealLaptop.tres
+msgid "Steal the CEO's laptop"
+msgstr "Steal the CEO's laptop"
+
+#. TRANSLATORS: quest description active
+#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_StealLaptop.tres
+msgid ""
+"We need the data on that laptop. As soon as you have it in your possession, "
+"we'll let you know the next steps."
 msgstr ""
+"We need the data on that laptop. As soon as you have it in your possession, "
+"we'll let you know the next steps."
+
+#. TRANSLATORS: quest description completed
+#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_StealLaptop.tres
+msgid ""
+"You managed to find the laptop and deliver the data we needed. Great work!"
+msgstr ""
+"You managed to find the laptop and deliver the data we needed. Great work!"
+
+#. TRANSLATORS: quest description failed
+#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_StealLaptop.tres
+msgid "The laptop you delivered was fake! Do not contact us again."
+msgstr "The laptop you delivered was fake! Do not contact us again."
+
+#. TRANSLATORS: quest title
+#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_TargetPractice.tres
+msgid "Target Practice"
+msgstr "Target Practice"
+
+#. TRANSLATORS: quest description active
+#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_TargetPractice.tres
+msgid ""
+"Time to show off your skills with a weapon! Pick one up and give it a go!"
+msgstr ""
+"Time to show off your skills with a weapon! Pick one up and give it a go!"
+
+#. TRANSLATORS: quest description completed
+#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_TargetPractice.tres
+msgid "You showed those targets who's boss."
+msgstr "You showed those targets who's boss."
+
+#. TRANSLATORS: quest description failed
+#: addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_TargetPractice.tres
+msgid "You should not be able to fail this."
+msgstr "You should not be able to fail this."
+
+msgid "Cogito"
+msgstr "Cogito"
+
+#~ msgid "Find a way into the archive."
+#~ msgstr "Gain access to the archive."
+
+#~ msgid "Deliver the CEO's laptop"
+#~ msgstr "Deliver the CEO's laptop"
+
+#~ msgid ""
+#~ "We have a hidden compartment in the fridge, so drop the laptop in there "
+#~ "and we can retriefe it."
+#~ msgstr ""
+#~ "We have a hidden compartment in the fridge, so drop the laptop in there "
+#~ "and we can retrieve it."
+
+#~ msgid "You found the laptop."
+#~ msgstr "You found the laptop."
+
+#~ msgid "You failed this quest."
+#~ msgstr "You failed this quest."
 
 #~ msgid "BTN_load"
 #~ msgstr "Load"

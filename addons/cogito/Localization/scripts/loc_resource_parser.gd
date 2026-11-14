@@ -2,7 +2,7 @@
 extends EditorTranslationParserPlugin
 
 func _parse_file(path: String) -> Array[PackedStringArray]: 
-	var res: Resource = load(path)	
+	var res: Resource = load(path)
 	var ret: Array[PackedStringArray] = []
 
 	if not res:
@@ -37,8 +37,16 @@ func _parse_file(path: String) -> Array[PackedStringArray]:
 		ret.append(PackedStringArray([quest.quest_description_active, msgtxt, msgid_plural, "quest description active"]))
 		ret.append(PackedStringArray([quest.quest_description_completed, msgtxt, msgid_plural, "quest description completed"]))
 		ret.append(PackedStringArray([quest.quest_description_failed, msgtxt, msgid_plural, "quest description failed"]))
-
-
+	
+	#	Processing Quest Objectives for Localization
+	if res is CogitoQuestObjective:
+		print("Parsing file: ", path, ": File is CogitoQuestObjective.")
+		var quest_objective = res
+		var msgtxt = ""
+		var msgid_plural = ""
+		
+		ret.append(PackedStringArray([quest_objective.objective_description, msgtxt, msgid_plural, "quest objective description"]))
+	
 #	Processing Translation Key Dictionaries for Localization
 	if res is TranslationKeyDict:
 		print("Parsing file: ", path, ": File is TranslationKeyDict.")

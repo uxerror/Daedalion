@@ -7,7 +7,6 @@
 [ext_resource type="Script" uid="uid://di15gqemrkk0x" path="res://addons/cogito/InventoryPD/CustomResources/InventorySlotPD.gd" id="5_cln8f"]
 [ext_resource type="Script" uid="uid://d2jjqadlnhp6x" path="res://addons/cogito/QuestSystem/Components/cogito_quest_updater.gd" id="6_xhh5j"]
 [ext_resource type="Resource" uid="uid://b7wrhr74mptlf" path="res://addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_StealLaptop.tres" id="7_ccijb"]
-[ext_resource type="Resource" uid="uid://dhadvbqjxigfo" path="res://addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_DeliverLaptop.tres" id="8_n8ylu"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_0826t"]
 resource_name = "metalDark"
@@ -145,9 +144,4 @@ script = ExtResource("6_xhh5j")
 quest_to_update = ExtResource("7_ccijb")
 update_type = 1
 
-[node name="QuestUpdaterB" type="Node3D" parent="." unique_id=1526047677]
-script = ExtResource("6_xhh5j")
-quest_to_update = ExtResource("8_n8ylu")
-
 [connection signal="was_interacted_with" from="PickupComponent" to="QuestUpdaterA" method="_on_pickup_component_was_interacted_with"]
-[connection signal="was_interacted_with" from="PickupComponent" to="QuestUpdaterB" method="_on_pickup_component_was_interacted_with"]

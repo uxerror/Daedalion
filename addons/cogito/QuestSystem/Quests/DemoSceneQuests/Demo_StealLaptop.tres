@@ -1,10 +1,15 @@
 [gd_resource type="Resource" script_class="CogitoQuest" format=3 uid="uid://b7wrhr74mptlf"]
 
+[ext_resource type="Script" uid="uid://dqjgrpxl8eywm" path="res://addons/cogito/QuestSystem/CustomResources/cogito_quest_objective.gd" id="1_hfa3p"]
 [ext_resource type="Script" uid="uid://bb3ww0nivppeq" path="res://addons/cogito/QuestSystem/CustomResources/cogito_quest.gd" id="1_l7t02"]
+[ext_resource type="Resource" uid="uid://d2xrniunn3k76" path="res://addons/cogito/QuestSystem/Quests/DemoSceneObjectives/Demo_StealLaptopObj1.tres" id="2_7nwxf"]
+[ext_resource type="Resource" uid="uid://e34iyv5vevb5" path="res://addons/cogito/QuestSystem/Quests/DemoSceneObjectives/Demo_StealLaptopObj2.tres" id="3_ta3pn"]
 
 [resource]
 script = ExtResource("1_l7t02")
 quest_name = "demo_steal_laptop"
 quest_title = "Steal the CEO's laptop"
+quest_objectives = Array[ExtResource("1_hfa3p")]([ExtResource("2_7nwxf"), ExtResource("3_ta3pn")])
 quest_description_active = "We need the data on that laptop. As soon as you have it in your possession, we'll let you know the next steps."
-quest_description_completed = "You found the laptop."
+quest_description_completed = "You managed to find the laptop and deliver the data we needed. Great work!"
+quest_description_failed = "The laptop you delivered was fake! Do not contact us again."

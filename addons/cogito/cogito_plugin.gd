@@ -5,6 +5,7 @@ const DEFAULT_COGITO_SETTINGS_FILEPATH := "res://addons/cogito/CogitoSettings.tr
 const COGITO_SETTINGS_PROJECT_SETTING := "cogito/settings/settings_file"
 
 var parser_plugin: EditorTranslationParserPlugin
+var inspector_plugin: EditorInspectorPlugin
 
 func _enter_tree():
 	_register_project_settings()
@@ -22,6 +23,10 @@ func _enter_tree():
 	# Initialization of the plugin goes here.
 	parser_plugin = load("res://addons/cogito/Localization/scripts/loc_resource_parser.gd").new()
 	add_translation_parser_plugin(parser_plugin)
+	
+	inspector_plugin = preload("res://addons/cogito/QuestSystem/FlagInspector/flag_inspector_plugin.gd").new()
+	add_inspector_plugin(inspector_plugin)
+	resource_saved.connect(inspector_plugin.on_resource_saved)
 
 
 func _exit_tree():
@@ -37,6 +42,8 @@ func _exit_tree():
 	remove_autoload_singleton("CogitoGlobals")
 	
 	remove_translation_parser_plugin(parser_plugin)
+	
+	remove_inspector_plugin(inspector_plugin)
 
 
 func _register_project_settings() -> void:

@@ -1,5 +1,6 @@
 extends Node
 
+# Signals for sending UI hints to the player
 signal quest_activated(quest: CogitoQuest) #Emitted when a quest gets added to the active quests group
 signal quest_updated(quest: CogitoQuest) #Emitted when a quests gets updated (used for the quest counter)
 signal quest_completed(quest: CogitoQuest) #Emitted when a quest gets completed / moved to the completed quests group.
@@ -56,7 +57,7 @@ func complete_quest(quest: CogitoQuest) -> CogitoQuest:
 	if not active.is_quest_inside(quest):
 		return quest
 
-	if quest.quest_completed == false:
+	if quest.quest_state != CogitoQuest.QuestState.Completed:
 		return quest
 
 	quest.complete()
@@ -69,7 +70,7 @@ func complete_quest(quest: CogitoQuest) -> CogitoQuest:
 	return quest
 
 
-## Moves a quest to the completed group. Quest needs to be active to be completed.
+## Moves a quest to the failed group. Quest needs to be active to be completed.
 func fail_quest(quest: CogitoQuest) -> CogitoQuest:
 	if not active.is_quest_inside(quest):
 		return quest
@@ -84,20 +85,29 @@ func fail_quest(quest: CogitoQuest) -> CogitoQuest:
 	return quest
 
 
-## Changes quest counter value. Quest needs to be active.
-func change_quest_counter(quest: CogitoQuest, value_change:int) -> CogitoQuest:
+## Updates the quest state with an optional world flag added to the world state. Quest needs to be active.
+func update_quest(quest: CogitoQuest, flags: Array[WorldFlag]) -> CogitoQuest:
 	if not active.is_quest_inside(quest):
 		return quest
 	
-	quest.quest_counter_current += value_change
-	quest_updated.emit(quest)
+	var world_state = CogitoSceneManager._current_world_dict
+	for flag in flags:
+		if not world_state.has(flag.flag_name):
+			world_state.set(flag.flag_name, flag.value)
+		else:
+			# If the value is numeric, combine the existing value
+			var value = flag.value
+			var set_value = value if value is bool else world_state[flag.flag_name] as int + value as int
+			world_state.set(flag.flag_name, set_value)
 	
-	# Checks if counter goal is reached:
-	if quest.quest_counter_current == quest.quest_counter_goal:
-		CogitoGlobals.debug_log(true, "QuestManager.gd", quest.quest_name + ": Quest coal reached!")
-		quest.update()
+	var quest_state = quest.update()
+	if quest_state == CogitoQuest.QuestState.Completed:
 		complete_quest(quest)
-	
+	elif quest_state == CogitoQuest.QuestState.Failed:
+		fail_quest(quest)
+	else:
+		quest_updated.emit(quest)
+
 	return quest
 
 
@@ -149,51 +159,6 @@ func is_quest_in_group(quest: CogitoQuest, group_name: String) -> bool:
 	var group := get_node(group_name)
 	if group.is_quest_inside(quest): return true
 	return false
-
-
-func call_quest_method(quest_id: int, method: String, args: Array) -> void:
-	var quest: CogitoQuest = null
-
-	# Find the quest if present
-	for pools in get_children():
-		if pools.get_quest_from_id(quest_id) != null:
-			quest = pools.get_quest_from_id(quest_id)
-			break
-
-	# Make sure we've got the quest
-	if quest == null: return
-
-	if quest.has_method(method):
-		quest.callv(method, args)
-
-
-func set_quest_property(quest_id: int, property: String, value: Variant) -> void:
-	var quest: CogitoQuest = null
-
-	# Find the quest
-	for groups in get_children():
-		if groups.get_quest_from_id(quest_id) != null:
-			quest = groups.get_quest_from_id(quest_id)
-
-	if quest == null: return
-
-	# Now check if the quest has the property
-
-	# First if the property is null -> we return
-	if property == null: return
-
-	var was_property_found: bool = false
-	# Then we check if the property is present
-	for p in quest.get_property_list():
-		if p.name == property:
-			was_property_found = true
-			break
-
-	# Return if the property was not found
-	if not was_property_found: return
-
-	# Finally we set the value
-	quest.set(property, value)
 
 
 ## Force moves a quest to a group.

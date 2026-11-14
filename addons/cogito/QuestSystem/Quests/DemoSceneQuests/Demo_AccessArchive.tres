@@ -1,11 +1,14 @@
 [gd_resource type="Resource" script_class="CogitoQuest" format=3 uid="uid://drmtc0tqmwquk"]
 
 [ext_resource type="Script" uid="uid://bb3ww0nivppeq" path="res://addons/cogito/QuestSystem/CustomResources/cogito_quest.gd" id="1_53ru2"]
+[ext_resource type="Script" uid="uid://dqjgrpxl8eywm" path="res://addons/cogito/QuestSystem/CustomResources/cogito_quest_objective.gd" id="1_tl1bj"]
+[ext_resource type="Resource" uid="uid://tk7o40koca1a" path="res://addons/cogito/QuestSystem/Quests/DemoSceneObjectives/Demo_AccessArchiveObj.tres" id="2_td8du"]
 
 [resource]
 script = ExtResource("1_53ru2")
 quest_name = "demo_access_archive"
 quest_title = "Gain access to the archive."
+quest_objectives = Array[ExtResource("1_tl1bj")]([ExtResource("2_td8du")])
 quest_description_active = "You won't be able to just walk in, but we're sure you'll find away."
 quest_description_completed = "You're in!"
 quest_description_failed = "You should've not been able to fail this."
