@@ -46,7 +46,7 @@ func get_description(flags: Dictionary) -> String:
 	for flag in completion_flags:
 		for num in flag.get_numeric_descriptions(flags):
 			numeric_descs += "\n%s" % num if len(num) > 0 else ""
-	return objective_description + " [%s]" % ObjectiveState.keys()[objective_state] + numeric_descs
+	return tr(objective_description) + " [%s]" % ObjectiveState.keys()[objective_state] + numeric_descs
 
 func update(flags: Dictionary, previous_objective_completed: bool) -> ObjectiveState:
 	## If objective state is hidden, check reveal flags

@@ -17,6 +17,6 @@ metadata/_custom_type_script = "uid://dc2atholvyqaf"
 
 [resource]
 script = ExtResource("4_babx0")
-objective_description = "Find a way into the archive."
+objective_description = "CQO_EnterArchive"
 completion_flags = Array[ExtResource("1_r7ear")]([SubResource("Resource_fay3r")])
 metadata/_custom_type_script = "uid://dqjgrpxl8eywm"

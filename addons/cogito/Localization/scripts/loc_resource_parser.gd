@@ -2,7 +2,7 @@
 extends EditorTranslationParserPlugin
 
 func _parse_file(path: String) -> Array[PackedStringArray]: 
-	var res: Resource = load(path)	
+	var res: Resource = load(path)
 	var ret: Array[PackedStringArray] = []
 
 	if not res:
@@ -45,7 +45,7 @@ func _parse_file(path: String) -> Array[PackedStringArray]:
 		var msgtxt = ""
 		var msgid_plural = ""
 		
-		ret.append(PackedStringArray([quest_objective.quest_description, msgtxt, msgid_plural, "quest objective description"]))
+		ret.append(PackedStringArray([quest_objective.objective_description, msgtxt, msgid_plural, "quest objective description"]))
 	
 #	Processing Translation Key Dictionaries for Localization
 	if res is TranslationKeyDict:
