@@ -5,6 +5,8 @@ class_name PlayerInteractionComponent
 signal interaction_prompt(interaction_text: String)
 signal hint_prompt(hint_icon: Texture2D, hint_text: String)
 signal updated_wieldable_data(wielded_item: WieldableItemPD, ammo_in_inventory: int, ammo_item: AmmoItemPD)
+## Emitted when equipped_wieldable_node changes (equipped, unequipped, swapped, re-equipped after loading). Null if nothing is equipped.
+signal equipped_wieldable_node_changed(wieldable_node: CogitoWieldable)
 # Signals for Interaction raycast system
 signal interactive_object_detected(interaction_nodes: Array[Node])
 signal nothing_detected()
@@ -56,7 +58,12 @@ var player: CogitoPlayer
 var is_changing_wieldables: bool = false # Used to avoid any input acitons while wieldables are being swapped
 # Various variables used for wieldable handling
 var equipped_wieldable_item: WieldableItemPD = null
-var equipped_wieldable_node: CogitoWieldable = null
+var equipped_wieldable_node: CogitoWieldable = null:
+	set(value):
+		if equipped_wieldable_node == value:
+			return
+		equipped_wieldable_node = value
+		equipped_wieldable_node_changed.emit(equipped_wieldable_node)
 var wieldable_was_on: bool = false
 var is_wielding: bool:
 	get: return equipped_wieldable_item != null

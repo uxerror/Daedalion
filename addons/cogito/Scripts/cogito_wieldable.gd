@@ -20,7 +20,13 @@ var item_reference : WieldableItemPD
 @export var anim_action_secondary: String = "action_secondary"
 @export var anim_reload: String = "reload"
 
+@export_group("Quickslots")
+## If true and the item has more than one ammo type, get_quickslot_set() returns one CogitoAmmoQuickslotEntry per ammo type,
+## so the quickslot wheel can switch to a specific ammo type while this wieldable is equipped.
+@export var ammo_quickslot_set : bool = true
+
 var player_interaction_component : PlayerInteractionComponent
+var _ammo_quickslot_set : CogitoQuickslotSet
 
 ### Every wieldable needs the following functions:
 ### equip(_player_interaction_component), unequip(), action_primary(), action_secondary(), reload()
@@ -116,6 +122,61 @@ func change_ammo():
 	
 func set_ammo_type(index: int) -> void:
 	pass
+
+
+## Switches to exactly the ammo type at index of item_reference.ammo_types (used by CogitoAmmoQuickslotEntry).
+## Blocked while an animation plays. Returns true if the ammo type changed.
+## Override this if your wieldable changes ammo differently.
+func change_ammo_to(index: int) -> bool:
+	if animation_player and animation_player.is_playing():
+		player_interaction_component.send_hint(null, tr("HINT_ammo_change_blocked"))
+		return false
+	if !item_reference.switch_to_ammo_type(index):
+		return false
+	apply_current_ammo_type()
+	return true
+
+
+## Applies item_reference.current_ammo_type to this node after the item switched ammo types, then reloads.
+func apply_current_ammo_type() -> void:
+	set_ammo_type(item_reference.current_ammo_type)
+	item_reference.update_wieldable_data(player_interaction_component)
+	reload()
+	_refresh_ammo_quickslot_set()
+	if _ammo_quickslot_set:
+		_ammo_quickslot_set.select(item_reference.current_ammo_type)
+
+
+## Virtual: the quickslot set this wieldable offers while it is equipped (fire modes, ammo types, spells...), or null for none.
+## CogitoQuickslots shows it in views with shows_wieldable_set (the quickslot wheel), the quickslot bar keeps the inventory set.
+## Entries get the same activation context as inventory entries (the player node), so they can reach
+## player.player_interaction_component and its equipped_wieldable_node / equipped_wieldable_item.
+## It gets asked once the wieldable is equipped, entries should call emit_changed() when their data changes.
+## By default this returns one entry per ammo type if the item has more than one (see ammo_quickslot_set).
+func get_quickslot_set() -> CogitoQuickslotSet:
+	if !ammo_quickslot_set or !item_reference or item_reference.ammo_types.size() <= 1:
+		return null
+	if !_ammo_quickslot_set:
+		_ammo_quickslot_set = CogitoAmmoQuickslotEntry.create_set(self)
+		# Ammo counts follow the inventory. Connected to this node, so it disconnects when the node gets freed on unequip.
+		var inventory : CogitoInventory = player_interaction_component.get_inventory() if player_interaction_component else null
+		if inventory and !inventory.inventory_updated.is_connected(_on_ammo_inventory_updated):
+			inventory.inventory_updated.connect(_on_ammo_inventory_updated)
+	return _ammo_quickslot_set
+
+
+# Refreshes the ammo entries (counts, availability). Doesn't touch the selection, the wheel may be hovering a slot.
+func _refresh_ammo_quickslot_set() -> void:
+	if !_ammo_quickslot_set:
+		return
+	for i in _ammo_quickslot_set.size():
+		var entry := _ammo_quickslot_set.get_entry(i)
+		if entry:
+			entry.emit_changed()
+
+
+func _on_ammo_inventory_updated(_inventory: CogitoInventory) -> void:
+	_refresh_ammo_quickslot_set()
 	
 # Override this with your debug stats
 func debug(id, data):

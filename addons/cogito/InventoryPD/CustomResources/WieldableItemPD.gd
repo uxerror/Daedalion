@@ -159,19 +159,29 @@ func switch_to_next_ammo_type() -> bool:
 	if len(ammo_types) <= 1:
 		player_interaction_component.send_hint(square_icon, "There are no other ammo types for this weapon.")
 		return false
-	var inventory = player_interaction_component.get_inventory()
 	var next_type = current_ammo_type
 	for _i in range(len(ammo_types)):
 		next_type = wrapi(next_type+1, 0, len(ammo_types))
-		var next_ammo = get_ammo_item(ammo_types[next_type])
-		if next_ammo and next_type != current_ammo_type:
-			# Unload the Wieldable if it is currently loaded, change ammo type to next
-			unload_wieldable()
-			current_ammo_type = next_type
-			player_interaction_component.send_hint(next_ammo.square_icon, tr(hint_changed_ammo_type) + " " + tr(next_ammo.name) )
+		if next_type != current_ammo_type and switch_to_ammo_type(next_type):
 			return true
 	player_interaction_component.send_hint(square_icon, tr(hint_no_other_ammo_types) )
 	return false
+
+
+## Attempts a switch to the ammo type at index in ammo_types. Only works if that ammo is in the inventory
+## and it isn't the current type. Unloads the current ammo into the inventory and sends the changed ammo hint.
+## Returns true if it was successful. Doesn't touch the wieldable node, see CogitoWieldable.change_ammo_to().
+func switch_to_ammo_type(index: int) -> bool:
+	if index < 0 or index >= len(ammo_types) or index == current_ammo_type:
+		return false
+	var next_ammo = get_ammo_item(ammo_types[index])
+	if !next_ammo:
+		return false
+	# Unload the Wieldable if it is currently loaded, change ammo type
+	unload_wieldable()
+	current_ammo_type = index
+	player_interaction_component.send_hint(next_ammo.square_icon, tr(hint_changed_ammo_type) + " " + tr(next_ammo.name) )
+	return true
 
 func save():
 	var saved_item_data = {

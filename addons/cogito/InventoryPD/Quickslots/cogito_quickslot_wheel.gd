@@ -117,6 +117,13 @@ func _process(_delta: float) -> void:
 		close(false)
 
 
+## Replacing the set while the wheel is open (for example the equipped wieldable changed) closes it without activating anything.
+func set_quickslot_set(new_set: CogitoQuickslotSet) -> void:
+	if is_open and new_set != quickslot_set:
+		close(false)
+	super.set_quickslot_set(new_set)
+
+
 ## Called by CogitoQuickslots with input it receives while the player has input focus.
 ## Opens the wheel when open_action gets pressed. Returns true if the event was consumed.
 func handle_quickslot_input(event: InputEvent, context: Object) -> bool:
@@ -160,9 +167,8 @@ func close(activate: bool = false) -> int:
 	_restore_time_scale()
 	_return_stick_to_input()
 	var activated_index : int = -1
-	if activate:
-		if _activate_hovered():
-			activated_index = hovered_index
+	if activate and _activate_hovered():
+		activated_index = hovered_index
 	elif quickslot_set and !_activated_while_open:
 		quickslot_set.select(_selection_before_open)
 	hide()
@@ -351,7 +357,8 @@ func _update_centre() -> void:
 	if !_name_label:
 		return
 	var entry := quickslot_set.get_entry(hovered_index) if quickslot_set else null
-	_name_label.text = entry.get_display_name() if entry else ""
+	# Nothing hovered: show the set's name as a title (for example the equipped wieldable).
+	_name_label.text = entry.get_display_name() if entry else (quickslot_set.display_name if quickslot_set else "")
 	var count : int = entry.get_count() if entry else -1
 	_count_label.text = "x" + str(count) if count >= 0 else ""
 	_count_label.visible = count >= 0

@@ -20,7 +20,14 @@ enum SlotInputMode {
 @export var allow_unequip_when_cycling_wieldables: bool = true
 ## One container per quickslot. Each container's input_action activates its quickslot.
 @export var quickslot_containers : Array[CogitoQuickslotContainer]
-var player_interaction_component: PlayerInteractionComponent
+var player_interaction_component: PlayerInteractionComponent:
+	set(value):
+		if player_interaction_component and player_interaction_component.equipped_wieldable_node_changed.is_connected(_on_equipped_wieldable_node_changed):
+			player_interaction_component.equipped_wieldable_node_changed.disconnect(_on_equipped_wieldable_node_changed)
+		player_interaction_component = value
+		if player_interaction_component:
+			player_interaction_component.equipped_wieldable_node_changed.connect(_on_equipped_wieldable_node_changed)
+		refresh_view_sets()
 
 @export var inventory_reference : CogitoInventory:
 	set(passed_inventory):
@@ -36,6 +43,7 @@ var player_interaction_component: PlayerInteractionComponent
 			inventory_reference.picked_up_new_inventory_item.connect(on_auto_quickslot_new_item)
 		
 		set_inventory_quickslots(inventory_reference)
+		refresh_view_sets()
 		
 @export_group("Input")
 ## ACTIVATE_ON_PRESS: quickslot actions activate their slot. SELECT_THEN_CONFIRM: they select it and confirm_action activates it.
@@ -172,13 +180,27 @@ func on_input(event: InputEvent) -> void:
 			_cycle_through_quickslotted_wieldables(true)
 
 
-## Returns the set a view displays. By default every view displays the inventory set.
-## Extend this to show another set in a view, for example a wieldable's own set in the wheel, and call refresh_view_sets().
-func get_view_set(_view: CogitoQuickslotView) -> CogitoQuickslotSet:
+## Returns the set a view displays: the equipped wieldable's set (see get_wieldable_set()) for views with
+## shows_wieldable_set, otherwise the inventory set. Override this to route other sets, and call refresh_view_sets().
+func get_view_set(view: CogitoQuickslotView) -> CogitoQuickslotSet:
+	if view and view.shows_wieldable_set:
+		var wieldable_set := get_wieldable_set()
+		if wieldable_set:
+			return wieldable_set
 	return inventory_set
 
 
-## Gives every view the set returned by get_view_set().
+## Returns the quickslot set offered by the equipped wieldable (CogitoWieldable.get_quickslot_set()), or null.
+func get_wieldable_set() -> CogitoQuickslotSet:
+	if !player_interaction_component:
+		return null
+	var wieldable : CogitoWieldable = player_interaction_component.equipped_wieldable_node
+	if !is_instance_valid(wieldable) or wieldable.is_queued_for_deletion():
+		return null
+	return wieldable.get_quickslot_set()
+
+
+## Gives every view the set returned by get_view_set(). Called when the equipped wieldable changes.
 func refresh_view_sets() -> void:
 	for view in views:
 		if view:
@@ -249,6 +271,12 @@ func _disconnect_inventory_signals(inventory: CogitoInventory) -> void:
 		inventory.picked_up_new_inventory_item.disconnect(on_auto_quickslot_new_item)
 
 
+# Deferred: the signal fires as soon as the node gets assigned, before the wieldable is fully set up.
+func _on_equipped_wieldable_node_changed(_wieldable_node: CogitoWieldable) -> void:
+	refresh_view_sets.call_deferred()
+
+
+# Entries of the inventory set and of wieldable sets get the player node.
 func _get_activation_context() -> Object:
 	return inventory_reference.owner if inventory_reference else null
 

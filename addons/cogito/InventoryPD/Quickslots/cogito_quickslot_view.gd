@@ -5,6 +5,11 @@ class_name CogitoQuickslotView
 ## Extend this class and override the _on_... methods to render the set.
 ## Views only display the set and call its API, they don't own the data.
 
+## If true, CogitoQuickslots shows the equipped wieldable's own set (CogitoWieldable.get_quickslot_set(), for example
+## its ammo types) in this view while the wieldable offers one, otherwise the inventory set.
+## The default quickslot wheel uses this. The quickslot bar (CogitoQuickslots itself) always shows the inventory set.
+@export var shows_wieldable_set : bool = false
+
 ## The set this view displays. Setting it reconnects the signals and refreshes the view.
 var quickslot_set : CogitoQuickslotSet:
 	set = set_quickslot_set

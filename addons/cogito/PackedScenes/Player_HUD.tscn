@@ -730,6 +730,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme = ExtResource("5_j6s1a")
 script = ExtResource("31_w7h3l")
+shows_wieldable_set = true
 sound_hover = ExtResource("32_k2c8s")
 
 [node name="DeathScreen" parent="." unique_id=1145877818 instance=ExtResource("23_4avie")]

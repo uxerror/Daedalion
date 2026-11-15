@@ -122,6 +122,4 @@ func change_ammo() -> void:
 		return
 		
 	if item_reference.switch_to_next_ammo_type():
-		set_ammo_type(item_reference.current_ammo_type)
-		item_reference.update_wieldable_data(player_interaction_component)
-		reload()
+		apply_current_ammo_type()
