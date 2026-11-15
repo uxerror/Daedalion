@@ -26,6 +26,12 @@ extends InteractionComponent
 @export var mouse_dead_zone : float = 20.0
 ## Right stick deflection below which gamepad input is ignored.
 @export var stick_dead_zone : float = 0.3
+## Show where the mouse or right stick points while interacting: a dot inside a ring at the screen centre.
+## The cursor itself stays hidden, so this is the only feedback for fine adjustments.
+@export var show_input_indicator : bool = true
+## Radius of the indicator ring on screen, in pixels.
+@export var indicator_radius : float = 48.0
+@export var indicator_color : Color = Color(0.974511, 0.772854, 0.0, 1.0)
 
 @export_group("Spinner Signal Setting")
 ## The value the spinner starts at. Does not get saved.
@@ -51,6 +57,8 @@ var previous_angle : float = NAN
 var spin_accumulator : float = 0.0
 ## Virtual stick offset collected from relative mouse motion, in pixels.
 var mouse_stick : Vector2 = Vector2.ZERO
+## Screen overlay showing the current input direction, created on enter, freed on exit.
+var input_indicator : CanvasLayer
 ## Spinner value is used as a goal for signals. Eg. Spin from 0 to 100 to meet the goal.
 var spinner_value : float = 0.0 :
 	set(value):
@@ -109,10 +117,13 @@ func enter(_pic: PlayerInteractionComponent) -> void:
 	if interacting_gizmo: interacting_gizmo.set_visible(true)
 
 	mouse_stick = Vector2.ZERO
+	if show_input_indicator:
+		_show_input_indicator()
 
 
 func exit(_player: PlayerInteractionComponent) -> void:
 	if interacting_gizmo: interacting_gizmo.set_visible(false)
+	_hide_input_indicator()
 	_player.get_parent().toggled_interface.emit(false)
 	InputRouter.pop()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -127,6 +138,8 @@ func force_exit() -> void:
 func _process(_delta: float) -> void:
 	if !is_being_controlled:
 		return
+	if input_indicator:
+		input_indicator.get_child(0).queue_redraw()
 
 	# Switch between mouse spin detection or gamepad spin detection based on input device
 	var angle : float
@@ -153,6 +166,56 @@ func get_mouse_angle() -> float:
 	if mouse_stick.length() < mouse_dead_zone:
 		return NAN
 	return -mouse_stick.angle()
+
+
+## Current input direction for the indicator, length 0-1 (1 = edge of the stick range).
+func get_input_offset() -> Vector2:
+	if InputHelper.device_index == -1:
+		return mouse_stick / maxf(maxf(mouse_stick_radius, mouse_dead_zone), 1.0)
+	return Vector2(Input.get_joy_axis(0, JOY_AXIS_RIGHT_X), Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)).limit_length(1.0)
+
+
+## Input offset (0-1) below which the input is ignored.
+func get_input_dead_zone() -> float:
+	if InputHelper.device_index == -1:
+		return mouse_dead_zone / maxf(maxf(mouse_stick_radius, mouse_dead_zone), 1.0)
+	return stick_dead_zone
+
+
+## True while rotating is possible: the mouse hold is pressed or not required, or a gamepad is used.
+func is_input_active() -> bool:
+	return InputHelper.device_index != -1 or !mouse_requires_hold or Input.is_action_pressed("action_primary")
+
+
+func _show_input_indicator() -> void:
+	_hide_input_indicator()
+	input_indicator = CanvasLayer.new()
+	input_indicator.name = "SpinnerInputIndicator"
+	var canvas := Control.new()
+	canvas.set_anchors_preset(Control.PRESET_FULL_RECT)
+	canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	canvas.draw.connect(_draw_input_indicator.bind(canvas))
+	input_indicator.add_child(canvas)
+	add_child(input_indicator)
+
+
+func _hide_input_indicator() -> void:
+	if is_instance_valid(input_indicator):
+		input_indicator.queue_free()
+		input_indicator = null
+
+
+func _draw_input_indicator(canvas: Control) -> void:
+	var centre := canvas.size / 2.0
+	var faded := Color(indicator_color, indicator_color.a * 0.35)
+	var color := indicator_color if is_input_active() else faded
+	canvas.draw_arc(centre, indicator_radius, 0.0, TAU, 48, faded, 2.0, true)
+	var dead_zone := get_input_dead_zone() * indicator_radius
+	if dead_zone > 1.0:
+		canvas.draw_arc(centre, dead_zone, 0.0, TAU, 24, faded, 1.0, true)
+	var dot := centre + get_input_offset() * indicator_radius
+	canvas.draw_line(centre, dot, faded, 1.0, true)
+	canvas.draw_circle(dot, 4.0, color)
 
 
 ## Right stick angle, in radians, or NAN inside the dead zone. Decreases when the stick moves clockwise.
