@@ -21,6 +21,7 @@ static func create_set(passed_wieldable: CogitoWieldable) -> CogitoQuickslotSet:
 	var ammo_set := CogitoQuickslotSet.new()
 	var item := passed_wieldable.item_reference
 	ammo_set.display_name = item.name
+	ammo_set.icon = item.icon
 	ammo_set.resize(item.ammo_types.size())
 	for i in item.ammo_types.size():
 		ammo_set.bind(i, CogitoAmmoQuickslotEntry.new(passed_wieldable, i))

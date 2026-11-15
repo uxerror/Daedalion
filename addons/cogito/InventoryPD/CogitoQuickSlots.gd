@@ -66,6 +66,8 @@ var inventory_is_open : bool
 
 func _init() -> void:
 	inventory_set.slot_changed.connect(_store_assigned_quickslot)
+	# A rebound slot can move the equipped wieldable's slot (see get_view_context_slot()).
+	inventory_set.slot_changed.connect(_on_inventory_slot_changed)
 	quickslot_set = inventory_set
 
 
@@ -180,14 +182,34 @@ func on_input(event: InputEvent) -> void:
 			_cycle_through_quickslotted_wieldables(true)
 
 
-## Returns the set a view displays: the equipped wieldable's set (see get_wieldable_set()) for views with
-## shows_wieldable_set, otherwise the inventory set. Override this to route other sets, and call refresh_view_sets().
-func get_view_set(view: CogitoQuickslotView) -> CogitoQuickslotSet:
-	if view and view.shows_wieldable_set:
-		var wieldable_set := get_wieldable_set()
-		if wieldable_set:
-			return wieldable_set
+## Returns the set a view displays: the inventory set. Override this to route other sets, and call refresh_view_sets().
+func get_view_set(_view: CogitoQuickslotView) -> CogitoQuickslotSet:
 	return inventory_set
+
+
+## Returns the context set of a view: the equipped wieldable's set (see get_wieldable_set()) for views with
+## shows_wieldable_set, otherwise null. Override this to route other sets, and call refresh_view_sets().
+func get_view_context_set(view: CogitoQuickslotView) -> CogitoQuickslotSet:
+	if view and view.shows_wieldable_set:
+		return get_wieldable_set()
+	return null
+
+
+## Returns the slot of the view's set that owns its context set, -1 if none: the first slot holding the equipped wieldable's item
+## (with allow_multiple_quickslot_binds it can sit in several slots). The quickslot wheel uses that slot as the entrance to the
+## context set instead of an extra segment. Override this together with get_view_context_set(), and call refresh_view_sets().
+func get_view_context_slot(view: CogitoQuickslotView) -> int:
+	var view_set := get_view_set(view)
+	if !view_set or !get_view_context_set(view) or !player_interaction_component:
+		return -1
+	var wieldable : CogitoWieldable = player_interaction_component.equipped_wieldable_node
+	if !is_instance_valid(wieldable) or !wieldable.item_reference:
+		return -1
+	for i in view_set.size():
+		var item_entry := view_set.get_entry(i) as CogitoItemQuickslotEntry
+		if item_entry and item_entry.get_item() == wieldable.item_reference:
+			return i
+	return -1
 
 
 ## Returns the quickslot set offered by the equipped wieldable (CogitoWieldable.get_quickslot_set()), or null.
@@ -200,13 +222,20 @@ func get_wieldable_set() -> CogitoQuickslotSet:
 	return wieldable.get_quickslot_set()
 
 
-## Gives every view the set returned by get_view_set(). Called when the equipped wieldable changes.
+## Gives every view the sets returned by get_view_set() and get_view_context_set() and the slot from get_view_context_slot().
+## Called when the equipped wieldable or a slot of the inventory set changes.
 func refresh_view_sets() -> void:
 	for view in views:
 		if view:
 			var view_set := get_view_set(view)
 			if view.quickslot_set != view_set:
 				view.quickslot_set = view_set
+			var view_context_set := get_view_context_set(view)
+			if view.context_set != view_context_set:
+				view.context_set = view_context_set
+			var view_context_slot := get_view_context_slot(view)
+			if view.context_slot_index != view_context_slot:
+				view.context_slot_index = view_context_slot
 
 
 func update_inventory_status(is_open: bool):
@@ -252,6 +281,11 @@ func set_quickslot_focus(enabled:bool) -> void:
 func _on_slot_changed(index: int) -> void:
 	if index < quickslot_containers.size():
 		quickslot_containers[index].display_entry(inventory_set.get_entry(index))
+
+
+func _on_inventory_slot_changed(_index: int) -> void:
+	if is_node_ready():
+		refresh_view_sets()
 
 
 # Keeps CogitoInventory.assigned_quickslots (the saved form of the inventory set) in sync with the set.

@@ -8,20 +8,43 @@ class_name CogitoQuickslotWheel
 ## While open, the wheel takes over input through the InputRouter, so the player doesn't look around, move or use wieldables.
 ## Slots keep their position: slot 0 is at the top, the others follow clockwise. Empty slots are drawn as empty segments.
 ## Add the wheel to CogitoQuickslots.views, CogitoQuickslots then gives it its set and forwards the open_action to it.
-## Without CogitoQuickslots, set quickslot_set and call open()/close() yourself.
+## Without CogitoQuickslots, set quickslot_set (and context_set) and call open()/close() yourself.
+##
+## Submenus: quickslot_set is the root menu. Entries of type CogitoSubmenuQuickslotEntry open their set as a submenu,
+## submenus can contain submenus again. Inside a submenu the wheel adds a Back segment.
+## The context_set (the equipped wieldable's set, for example its ammo types) is entered through the root slot that holds
+## the wieldable (context_slot_index), that slot gets a small marker. If the wieldable isn't in a root slot (for example
+## equipped from the inventory), the root gets an extra context segment instead, drawn with the context set's icon.
+## Back and the context segment are drawn by the wheel, they are not entries of any set, so slot indices and other views
+## (the quickslot bar) don't change. They are always the last segment, just counter-clockwise of slot 0.
+## Press confirm_action on a submenu, the context slot / segment or Back to navigate (or hover it for submenu_hover_time).
+## Releasing open_action over a submenu, the context segment or Back closes the wheel without activating anything.
+## Releasing it over the context slot activates that slot's entry like its quickslot key does (the equipped wieldable
+## gets put away), so release always uses the hovered slot.
 
 ## Emitted when the wheel opens.
 signal opened
 ## Emitted when the wheel closes. activated_index is the slot that got activated on close, -1 if none.
 signal closed(activated_index: int)
+## Emitted when the wheel entered a submenu or went back. current_set is the set that is shown now.
+signal menu_changed(current_set: CogitoQuickslotSet)
+
+## Shown in the centre while the Back segment is hovered.
+const BACK_TEXT : String = "QUICKSLOT_back"
 
 ## Holding this action keeps the wheel open.
 @export var open_action : String = "quickslot_wheel"
 ## If true, releasing open_action activates the hovered slot. If false, confirm_action activates the hovered slot
 ## (the wheel stays open) and releasing open_action only closes the wheel.
 @export var activate_on_release : bool = true
-## Activates the hovered slot when activate_on_release is false.
+## Enters the hovered submenu / goes back when the Back segment is hovered.
+## Also activates the hovered slot when activate_on_release is false.
 @export var confirm_action : String = "action_primary"
+## If true and there is a context_set (the equipped wieldable's set), the wheel opens inside it, Back leads to quickslot_set.
+## If false, the wheel opens at quickslot_set and the context set is one segment of it.
+@export var open_in_wieldable_set : bool = true
+## Hovering a submenu, the context set segment or Back for this many seconds (real time) navigates without confirm_action. 0 = off.
+@export var submenu_hover_time : float = 0.0
 ## These actions close the wheel and are then passed on, so for example the pause menu or the inventory still open.
 @export var passthrough_actions : Array[String] = ["menu", "inventory"]
 ## Engine.time_scale while the wheel is open. 1 = no slow motion. The previous time scale is restored on close.
@@ -48,17 +71,27 @@ signal closed(activated_index: int)
 @export var segment_color : Color = Color(0.101961, 0.101961, 0.101961, 0.784314)
 @export var hovered_color : Color = Color(0.974511, 0.772854, 0.0, 0.35)
 @export var outline_color : Color = Color(0.974511, 0.772854, 0.0, 1.0)
+## Fill of segments that navigate (submenus, the context set segment, Back), and the marker of the context slot.
+@export var navigation_color : Color = Color(0.2, 0.2, 0.2, 0.85)
+## Icon of the Back segment. If empty, an arrow is drawn.
+@export var back_icon : Texture2D
 
 @export_group("Sounds")
 ## Plays when the wheel opens.
 @export var sound_open : AudioStream
 ## Plays when a non-empty slot gets hovered.
 @export var sound_hover : AudioStream
+## Plays when the wheel enters a submenu or goes back.
+@export var sound_navigate : AudioStream
 
 ## True while the wheel is open.
 var is_open : bool = false
-## The slot that is currently hovered, -1 if none.
+## The segment that is currently hovered, -1 if none. Segments 0 to current_set.size() - 1 are the slots of current_set,
+## get_navigation_index() is the Back / context set segment.
 var hovered_index : int = -1
+## The set that is shown right now: quickslot_set at the root, otherwise the submenu that was entered last.
+var current_set : CogitoQuickslotSet:
+	get: return _path.back() if !_path.is_empty() else quickslot_set
 ## Context passed to CogitoQuickslotSet.activate() (usually the player). Set by CogitoQuickslots when it opens the wheel.
 var activation_context : Object
 
@@ -66,8 +99,15 @@ var activation_context : Object
 var _stick : Vector2 = Vector2.ZERO
 var _joy : Vector2 = Vector2.ZERO
 var _joy_device : int = -1
-var _selection_before_open : int = -1
-var _activated_while_open : bool = false
+# After navigating, the gamepad stick has to return to the centre before it hovers again.
+var _joy_needs_recentre : bool = false
+# Submenus entered since opening, below the root (quickslot_set).
+var _path : Array[CogitoQuickslotSet] = []
+# The set whose signals are connected (the shown set while open).
+var _shown_set : CogitoQuickslotSet
+# Selection of every set shown while open, from before it got shown (or after an activation). Restored on leaving / closing.
+var _selection_before : Dictionary = {}
+var _hover_started_msec : int = 0
 var _time_scale_before_open : float = 1.0
 var _icons : Array[TextureRect] = []
 var _counters : Array[Label] = []
@@ -115,13 +155,33 @@ func _process(_delta: float) -> void:
 	# Something else took over input (pause menu, death screen, a keypad...) or the release got lost.
 	if !InputRouter.is_input_active(self) or (open_action != "" and InputMap.has_action(open_action) and !Input.is_action_pressed(open_action)):
 		close(false)
+		return
+	if submenu_hover_time > 0.0 and _is_hovering_navigation() and Time.get_ticks_msec() - _hover_started_msec >= submenu_hover_time * 1000.0:
+		_navigate_hovered()
 
 
-## Replacing the set while the wheel is open (for example the equipped wieldable changed) closes it without activating anything.
+## Replacing the set while the wheel is open closes it without activating anything.
 func set_quickslot_set(new_set: CogitoQuickslotSet) -> void:
 	if is_open and new_set != quickslot_set:
 		close(false)
 	super.set_quickslot_set(new_set)
+
+
+## Replacing the context set while the wheel is open (for example the equipped wieldable changed) closes it without activating anything.
+func set_context_set(new_set: CogitoQuickslotSet) -> void:
+	if is_open and new_set != context_set:
+		close(false)
+	super.set_context_set(new_set)
+
+
+## Changing the context slot while the wheel is open redraws it (the context segment can appear or disappear).
+func set_context_slot_index(new_index: int) -> void:
+	if new_index == context_slot_index:
+		return
+	super.set_context_slot_index(new_index)
+	if is_open and is_at_root():
+		_rebuild()
+		_update_hover()
 
 
 ## Called by CogitoQuickslots with input it receives while the player has input focus.
@@ -133,26 +193,31 @@ func handle_quickslot_input(event: InputEvent, context: Object) -> bool:
 	return open()
 
 
-## Opens the wheel. Returns false if there is nothing to show.
+## Opens the wheel, inside the context set if open_in_wieldable_set. Returns false if there is nothing to show.
 func open() -> bool:
-	if is_open or !quickslot_set or quickslot_set.size() == 0 or !is_inside_tree():
+	if is_open or !is_inside_tree():
+		return false
+	_path.clear()
+	if open_in_wieldable_set and _has_context_set():
+		_path.append(context_set)
+	if get_segment_count() == 0:
+		_path.clear()
 		return false
 	is_open = true
 	_stick = Vector2.ZERO
 	_joy = Vector2.ZERO
 	_joy_device = -1
-	hovered_index = -1
-	_activated_while_open = false
-	_selection_before_open = quickslot_set.selected_index
+	_joy_needs_recentre = false
+	_selection_before.clear()
+	_show_set(current_set)
 	_time_scale_before_open = Engine.time_scale
 	if time_scale_while_open < 1.0:
 		Engine.time_scale = time_scale_while_open
 	InputRouter.push(_on_router_input)
 	set_process(true)
-	_rebuild()
 	show()
 	CogitoAudio.play_sound(sound_open)
-	CogitoGlobals.debug_log(true, "cogito_quickslot_wheel.gd", "Opened with " + str(quickslot_set.size()) + " slots.")
+	CogitoGlobals.debug_log(true, "cogito_quickslot_wheel.gd", "Opened with " + str(get_segment_count()) + " segments, in a submenu: " + str(!_path.is_empty()))
 	opened.emit()
 	return true
 
@@ -169,8 +234,12 @@ func close(activate: bool = false) -> int:
 	var activated_index : int = -1
 	if activate and _activate_hovered():
 		activated_index = hovered_index
-	elif quickslot_set and !_activated_while_open:
-		quickslot_set.select(_selection_before_open)
+	# Activated sets keep their new selection (_activate_hovered() stored it), everything else is restored.
+	for touched_set: CogitoQuickslotSet in _selection_before:
+		touched_set.select(_selection_before[touched_set])
+	_selection_before.clear()
+	_path.clear()
+	_show_set(null)
 	hide()
 	CogitoGlobals.debug_log(true, "cogito_quickslot_wheel.gd", "Closed, activated slot: " + str(activated_index))
 	closed.emit(activated_index)
@@ -197,10 +266,60 @@ func get_stick() -> Vector2:
 	return _stick
 
 
+## Number of segments: the slots of current_set, plus the Back / context set segment if there is one.
+## At the root there is no context set segment if a slot enters the context set (see get_context_slot()).
+func get_segment_count() -> int:
+	var slot_count := current_set.size() if current_set else 0
+	return slot_count + (1 if _has_navigation_segment() else 0)
+
+
+## Index of the Back segment (inside a submenu) or the context set segment (at the root), -1 if there is none.
+## It is always the last segment.
+func get_navigation_index() -> int:
+	if !_has_navigation_segment():
+		return -1
+	return current_set.size() if current_set else 0
+
+
+## The slot of the shown set that enters the context set (drawn with a marker), -1 if none.
+## Only at the root, and only if context_slot_index points to a filled slot of quickslot_set.
+func get_context_slot() -> int:
+	if !is_at_root() or !_has_context_set() or !quickslot_set or !quickslot_set.get_entry(context_slot_index):
+		return -1
+	return context_slot_index
+
+
+## True if the wheel shows quickslot_set (not a submenu).
+func is_at_root() -> bool:
+	return _path.is_empty()
+
+
+## Enters a set as a submenu while the wheel is open. Returns false if the wheel is closed or the set has no slots.
+func enter_set(target_set: CogitoQuickslotSet) -> bool:
+	if !is_open or !target_set or target_set.size() == 0:
+		return false
+	_leave_current_set()
+	_path.append(target_set)
+	_on_navigated()
+	return true
+
+
+## Goes back to the previous set while the wheel is open. Returns false at the root.
+func go_back() -> bool:
+	if !is_open or _path.is_empty():
+		return false
+	_leave_current_set()
+	_path.pop_back()
+	_on_navigated()
+	return true
+
+
 func _on_router_input(event: InputEvent) -> void:
 	if !is_open:
 		return
 	if _is_action(event, open_action):
+		# Over a submenu or Back this closes without activation: submenus can't be activated, Back is no entry.
+		# Over the context slot its entry gets activated like any slot.
 		if event.is_released():
 			close(activate_on_release)
 		return
@@ -211,8 +330,9 @@ func _on_router_input(event: InputEvent) -> void:
 	if event is InputEventJoypadMotion:
 		_on_joypad_motion(event)
 		return
-	if !activate_on_release and _is_action(event, confirm_action) and event.is_pressed() and !event.is_echo():
-		_activate_hovered()
+	if _is_action(event, confirm_action) and event.is_pressed() and !event.is_echo():
+		if !_navigate_hovered() and !activate_on_release:
+			_activate_hovered()
 		return
 	for action in passthrough_actions:
 		if _is_action(event, action) and event.is_pressed() and !event.is_echo():
@@ -229,38 +349,115 @@ func _on_joypad_motion(event: InputEventJoypadMotion) -> void:
 	else:
 		return
 	_joy_device = event.device
+	if _joy_needs_recentre:
+		if _joy.length() > deadzone:
+			return
+		_joy_needs_recentre = false
 	if _joy.length() > deadzone or !gamepad_keeps_hover:
 		_stick = _joy.limit_length(1.0)
 		_update_hover()
 
 
 func _update_hover() -> void:
-	var new_index := get_slot_at(_stick, quickslot_set.size(), deadzone) if quickslot_set else -1
+	var new_index := get_slot_at(_stick, get_segment_count(), deadzone)
 	if new_index == hovered_index:
 		queue_redraw()
 		return
 	hovered_index = new_index
-	var entry := quickslot_set.get_entry(hovered_index) if quickslot_set else null
+	_hover_started_msec = Time.get_ticks_msec()
+	var shown := current_set
+	var entry := _get_hovered_entry()
 	if entry:
-		quickslot_set.select(hovered_index)
+		shown.select(hovered_index)
+	elif shown:
+		shown.select(_selection_before.get(shown, -1))
+	if entry or _is_hovering_navigation():
 		CogitoAudio.play_sound(sound_hover)
-	elif quickslot_set:
-		quickslot_set.select(_selection_before_open)
 	_update_centre()
 	queue_redraw()
 
 
 func _activate_hovered() -> bool:
-	if !quickslot_set:
-		return false
-	var entry := quickslot_set.get_entry(hovered_index)
+	var shown := current_set
+	var entry := _get_hovered_entry()
 	if !entry or !entry.is_available():
 		return false
-	quickslot_set.select(hovered_index)
-	if !quickslot_set.activate(hovered_index, activation_context):
+	shown.select(hovered_index)
+	if !shown.activate(hovered_index, activation_context):
 		return false
-	_activated_while_open = true
+	# Keep the selection the activation left (for example the new ammo type) when closing.
+	_selection_before[shown] = shown.selected_index
 	return true
+
+
+func _get_hovered_entry() -> CogitoQuickslotEntry:
+	return current_set.get_entry(hovered_index) if current_set else null
+
+
+func _has_context_set() -> bool:
+	return context_set != null and context_set.size() > 0 and context_set != quickslot_set
+
+
+func _has_navigation_segment() -> bool:
+	return !_path.is_empty() or (_has_context_set() and get_context_slot() == -1)
+
+
+# True if the segment navigates: a submenu entry, Back, the context set segment or the context slot.
+func _is_navigation_segment(index: int) -> bool:
+	if index < 0:
+		return false
+	if index == get_navigation_index() or index == get_context_slot():
+		return true
+	return current_set != null and current_set.get_entry(index) is CogitoSubmenuQuickslotEntry
+
+
+func _is_hovering_navigation() -> bool:
+	return _is_navigation_segment(hovered_index)
+
+
+# Enters the hovered submenu / the context set, or goes back. Returns false if the hovered segment doesn't navigate.
+func _navigate_hovered() -> bool:
+	if hovered_index >= 0 and hovered_index == get_navigation_index():
+		return go_back() if !_path.is_empty() else enter_set(context_set)
+	if hovered_index >= 0 and hovered_index == get_context_slot():
+		return enter_set(context_set)
+	var submenu_entry := _get_hovered_entry() as CogitoSubmenuQuickslotEntry
+	if submenu_entry and submenu_entry.is_available():
+		return enter_set(submenu_entry.submenu)
+	return false
+
+
+# Navigating doesn't change selections: the set that is left gets its selection back.
+func _leave_current_set() -> void:
+	var shown := current_set
+	if shown and _selection_before.has(shown):
+		shown.select(_selection_before[shown])
+
+
+func _on_navigated() -> void:
+	_stick = Vector2.ZERO
+	_joy_needs_recentre = _joy.length() > deadzone
+	_show_set(current_set)
+	CogitoAudio.play_sound(sound_navigate)
+	CogitoGlobals.debug_log(true, "cogito_quickslot_wheel.gd", "Showing " + ("the root" if _path.is_empty() else "submenu '" + current_set.display_name + "'") + ", " + str(get_segment_count()) + " segments.")
+	menu_changed.emit(current_set)
+
+
+# Connects to the shown set (null while closed) and redraws without hover.
+func _show_set(new_set: CogitoQuickslotSet) -> void:
+	if _shown_set != new_set:
+		if _shown_set:
+			_shown_set.slot_changed.disconnect(_on_shown_slot_changed)
+			_shown_set.selection_changed.disconnect(_on_shown_selection_changed)
+		_shown_set = new_set
+		if _shown_set:
+			_shown_set.slot_changed.connect(_on_shown_slot_changed)
+			_shown_set.selection_changed.connect(_on_shown_selection_changed)
+	if new_set and !_selection_before.has(new_set):
+		_selection_before[new_set] = new_set.selected_index
+	hovered_index = -1
+	_hover_started_msec = Time.get_ticks_msec()
+	_rebuild()
 
 
 func _restore_time_scale() -> void:
@@ -286,10 +483,10 @@ func _is_action(event: InputEvent, action: String) -> bool:
 
 
 #region Drawing
-func _on_slot_changed(index: int) -> void:
+func _on_shown_slot_changed(index: int) -> void:
 	if !is_node_ready():
 		return
-	if !quickslot_set or quickslot_set.size() != _icons.size():
+	if get_segment_count() != _icons.size():
 		_rebuild()
 		return
 	_display_slot(index)
@@ -297,14 +494,14 @@ func _on_slot_changed(index: int) -> void:
 		_update_centre()
 
 
-func _on_selection_changed(_index: int) -> void:
+func _on_shown_selection_changed(_index: int) -> void:
 	queue_redraw()
 
 
 func _rebuild() -> void:
 	if !is_node_ready():
 		return
-	var slot_count := quickslot_set.size() if quickslot_set else 0
+	var slot_count := get_segment_count() if is_open else 0
 	while _icons.size() > slot_count:
 		_icons.pop_back().queue_free()
 		_counters.pop_back()
@@ -332,9 +529,15 @@ func _rebuild() -> void:
 func _display_slot(index: int) -> void:
 	if index < 0 or index >= _icons.size():
 		return
-	var entry := quickslot_set.get_entry(index)
 	var icon := _icons[index]
 	var counter := _counters[index]
+	if index == get_navigation_index():
+		icon.texture = back_icon if !_path.is_empty() else context_set.icon
+		icon.modulate = Color.WHITE
+		counter.visible = false
+		queue_redraw()
+		return
+	var entry := current_set.get_entry(index)
 	icon.texture = entry.get_icon() if entry else null
 	icon.modulate = Color.WHITE if !entry or entry.is_available() else Color(1, 1, 1, 0.4)
 	var count : int = entry.get_count() if entry else -1
@@ -356,9 +559,14 @@ func _layout() -> void:
 func _update_centre() -> void:
 	if !_name_label:
 		return
-	var entry := quickslot_set.get_entry(hovered_index) if quickslot_set else null
-	# Nothing hovered: show the set's name as a title (for example the equipped wieldable).
-	_name_label.text = entry.get_display_name() if entry else (quickslot_set.display_name if quickslot_set else "")
+	var entry := _get_hovered_entry()
+	if entry:
+		_name_label.text = entry.get_display_name()
+	elif hovered_index >= 0 and hovered_index == get_navigation_index():
+		_name_label.text = BACK_TEXT if !_path.is_empty() else context_set.display_name
+	else:
+		# Nothing hovered: the shown set's name as a title (for example the equipped wieldable's name).
+		_name_label.text = current_set.display_name if current_set else ""
 	var count : int = entry.get_count() if entry else -1
 	_count_label.text = "x" + str(count) if count >= 0 else ""
 	_count_label.visible = count >= 0
@@ -372,12 +580,18 @@ func _draw() -> void:
 	var inner_radius := maxf(radius - ring_width, 0.0)
 	var segment := TAU / slot_count
 	var gap := deg_to_rad(segment_gap_degrees) if slot_count > 1 else 0.0
+	var back_index := get_navigation_index() if !_path.is_empty() else -1
+	var context_slot := get_context_slot()
 	for i in slot_count:
 		var mid_angle := get_slot_direction(i, slot_count).angle()
 		var from := mid_angle - segment / 2.0 + gap / 2.0
 		var to := mid_angle + segment / 2.0 - gap / 2.0
 		var points := _ring_segment(centre, inner_radius, radius, from, to)
-		draw_colored_polygon(points, segment_color)
+		draw_colored_polygon(points, navigation_color if _is_navigation_segment(i) and i != context_slot else segment_color)
+		if i == back_index and !back_icon:
+			_draw_back_arrow(centre + get_slot_direction(i, slot_count) * (radius - ring_width / 2.0))
+		if i == context_slot:
+			_draw_submenu_marker(centre, mid_angle)
 		if i == hovered_index:
 			draw_colored_polygon(points, hovered_color)
 			points.append(points[0])
@@ -385,6 +599,26 @@ func _draw() -> void:
 	draw_circle(centre, maxf(inner_radius - 6.0, 0.0), segment_color)
 	if !_stick.is_zero_approx():
 		draw_circle(centre + _stick * maxf(inner_radius - 12.0, 0.0), 4.0, outline_color)
+
+
+func _draw_back_arrow(at: Vector2) -> void:
+	var half := icon_size * 0.3
+	var tip := at - Vector2(half, 0.0)
+	draw_line(tip, at + Vector2(half, 0.0), Color.WHITE, 3.0, true)
+	draw_polyline(PackedVector2Array([tip + Vector2(half * 0.6, -half * 0.6), tip, tip + Vector2(half * 0.6, half * 0.6)]), Color.WHITE, 3.0, true)
+
+
+# A small chevron at the outer edge of a slot, pointing outwards: this slot opens a submenu.
+func _draw_submenu_marker(centre: Vector2, angle: float) -> void:
+	var outward := Vector2.from_angle(angle)
+	var side := outward.orthogonal()
+	var half := icon_size * 0.15
+	var tip := centre + outward * (radius - half * 0.5)
+	var back := tip - outward * half
+	var points := PackedVector2Array([tip, back + side * half, back - side * half])
+	draw_colored_polygon(points, navigation_color)
+	points.append(points[0])
+	draw_polyline(points, outline_color, 1.5, true)
 
 
 func _ring_segment(centre: Vector2, inner: float, outer: float, from: float, to: float) -> PackedVector2Array:

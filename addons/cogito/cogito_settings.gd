@@ -292,7 +292,7 @@ func _on_btn_reset_input_map_pressed() -> void:
 	keyboard_key.physical_keycode = KEY_X
 	gamepad_button = InputEventJoypadButton.new()
 	gamepad_button.device = -1
-	gamepad_button.button_index = JOY_BUTTON_MISC1
+	gamepad_button.button_index = JOY_BUTTON_LEFT_SHOULDER
 	save_input_action_to_settings("quickslot_wheel",keyboard_key,gamepad_button)
 	
 	keyboard_key = InputEventKey.new()
@@ -320,8 +320,8 @@ func _on_btn_reset_input_map_pressed() -> void:
 	keyboard_key.physical_keycode = KEY_T
 	gamepad_button = InputEventJoypadButton.new()
 	gamepad_button.device = -1
-	gamepad_button.button_index = JOY_BUTTON_LEFT_SHOULDER
-	save_input_action_to_settings("INPUT_change_ammo_type",keyboard_key,gamepad_button)
+	gamepad_button.button_index = JOY_BUTTON_MISC1
+	save_input_action_to_settings("change_ammo_type",keyboard_key,gamepad_button)
 	
 
 

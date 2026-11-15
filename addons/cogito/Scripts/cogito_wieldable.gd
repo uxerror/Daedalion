@@ -148,7 +148,8 @@ func apply_current_ammo_type() -> void:
 
 
 ## Virtual: the quickslot set this wieldable offers while it is equipped (fire modes, ammo types, spells...), or null for none.
-## CogitoQuickslots shows it in views with shows_wieldable_set (the quickslot wheel), the quickslot bar keeps the inventory set.
+## CogitoQuickslots gives it to views with shows_wieldable_set as their context set: the quickslot wheel offers it as a
+## submenu next to the inventory quickslots (and opens in it, see CogitoQuickslotWheel.open_in_wieldable_set). The quickslot bar doesn't change.
 ## Entries get the same activation context as inventory entries (the player node), so they can reach
 ## player.player_interaction_component and its equipped_wieldable_node / equipped_wieldable_item.
 ## It gets asked once the wieldable is equipped, entries should call emit_changed() when their data changes.

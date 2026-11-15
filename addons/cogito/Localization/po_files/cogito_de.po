@@ -978,6 +978,11 @@ msgstr ""
 "Dieser Vorgang ist nicht rückgängig zu machen. Sind Sie sicher, dass Sie den "
 "Speicherstand löschen möchten?"
 
+#. TRANSLATORS: translation_key_dict entry
+#: addons/cogito/Localization/translation_keys_resources/loc_menus_and_options.tres
+msgid "QUICKSLOT_back"
+msgstr "Zurück"
+
 #. TRANSLATORS: item name
 #: addons/cogito/InventoryPD/Items/Cogito_LockpickItem.tres
 msgid "Lockpick"

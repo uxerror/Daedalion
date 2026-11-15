@@ -13,6 +13,8 @@ signal slot_activated(index: int, entry: CogitoQuickslotEntry)
 
 ## Name of this set, views can show it as a title (the quickslot wheel shows it while nothing is hovered).
 @export var display_name : String = ""
+## Icon of this set, for example on the quickslot wheel segment that opens it (see CogitoSubmenuQuickslotEntry).
+@export var icon : Texture2D
 ## The entries of this set, one per slot. Empty slots are null.
 @export var entries : Array[CogitoQuickslotEntry] = []:
 	set(value):

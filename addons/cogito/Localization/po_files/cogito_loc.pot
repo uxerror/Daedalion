@@ -1002,6 +1002,11 @@ msgstr ""
 msgid "REMOVE_CONFIRMATION_DIALOG_TEXT"
 msgstr ""
 
+#. TRANSLATORS: translation_key_dict entry
+#: addons/cogito/Localization/translation_keys_resources/loc_menus_and_options.tres
+msgid "QUICKSLOT_back"
+msgstr ""
+
 #. TRANSLATORS: item name
 #: addons/cogito/InventoryPD/Items/Cogito_LockpickItem.tres
 msgid "Lockpick"

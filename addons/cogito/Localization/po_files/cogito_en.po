@@ -977,6 +977,11 @@ msgid "REMOVE_CONFIRMATION_DIALOG_TEXT"
 msgstr ""
 "This operation cannot be undone, are you sure you want to remove the save?"
 
+#. TRANSLATORS: translation_key_dict entry
+#: addons/cogito/Localization/translation_keys_resources/loc_menus_and_options.tres
+msgid "QUICKSLOT_back"
+msgstr "Back"
+
 #. TRANSLATORS: item name
 #: addons/cogito/InventoryPD/Items/Cogito_LockpickItem.tres
 msgid "Lockpick"
