@@ -282,6 +282,11 @@ msgstr "Next Quickslot"
 
 #. TRANSLATORS: translation_key_dict entry
 #: addons/cogito/Localization/translation_keys_resources/loc_keys_keybindings.tres
+msgid "INPUT_quickslot_wheel"
+msgstr "Quickslot Wheel"
+
+#. TRANSLATORS: translation_key_dict entry
+#: addons/cogito/Localization/translation_keys_resources/loc_keys_keybindings.tres
 msgid "INPUT_pause"
 msgstr "Pause Menu"
 

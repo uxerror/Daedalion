@@ -45,3 +45,10 @@ func _on_selection_changed(_index: int) -> void:
 ## Virtual: a slot was activated, for example to play feedback.
 func _on_slot_activated(_index: int, _entry: CogitoQuickslotEntry) -> void:
 	pass
+
+
+## Virtual: CogitoQuickslots forwards the player's input to its views before handling quickslot actions.
+## Return true to consume the event (for example to open a radial menu). Context is what CogitoQuickslots
+## passes to CogitoQuickslotSet.activate() (usually the player).
+func handle_quickslot_input(_event: InputEvent, _context: Object) -> bool:
+	return false

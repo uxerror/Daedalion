@@ -47,7 +47,8 @@ var player_interaction_component: PlayerInteractionComponent
 ## Equips the next quickslotted wieldable.
 @export var next_wieldable_action : String = "quickslot_next_wieldable"
 @export_group("")
-## Additional views (for example a custom CogitoQuickslotView) that display the inventory quickslot set.
+## Additional views (for example a CogitoQuickslotWheel) that display a quickslot set (see get_view_set()).
+## They get the player's quickslot input first through CogitoQuickslotView.handle_quickslot_input().
 @export var views : Array[CogitoQuickslotView]
 
 ## The quickslot set of the player inventory, displayed by this node's containers.
@@ -68,8 +69,7 @@ func _ready() -> void:
 			push_warning("CogitoQuickSlots: Input action '" + quickslot.input_action + "' of " + quickslot.name + " doesn't exist in the Input Map, this quickslot can't be activated.")
 
 	inventory_set.resize(quickslot_containers.size())
-	for view in views:
-		view.quickslot_set = inventory_set
+	refresh_view_sets()
 	
 	set_quickslot_focus(false) # Setting focus mode on quickslots to NONE on ready.
 	
@@ -141,6 +141,10 @@ func on_input(event: InputEvent) -> void:
 		CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "Inventory is open, no item used.")
 		return
 	
+	for view in views:
+		if view and view.handle_quickslot_input(event, _get_activation_context()):
+			return
+	
 	for i in quickslot_containers.size():
 		var action : String = quickslot_containers[i].input_action
 		if action == "" or !InputMap.has_action(action) or !event.is_action_released(action):
@@ -166,6 +170,21 @@ func on_input(event: InputEvent) -> void:
 			_cycle_through_quickslotted_wieldables(false)
 		elif _is_action_released(event, next_wieldable_action):
 			_cycle_through_quickslotted_wieldables(true)
+
+
+## Returns the set a view displays. By default every view displays the inventory set.
+## Extend this to show another set in a view, for example a wieldable's own set in the wheel, and call refresh_view_sets().
+func get_view_set(_view: CogitoQuickslotView) -> CogitoQuickslotSet:
+	return inventory_set
+
+
+## Gives every view the set returned by get_view_set().
+func refresh_view_sets() -> void:
+	for view in views:
+		if view:
+			var view_set := get_view_set(view)
+			if view.quickslot_set != view_set:
+				view.quickslot_set = view_set
 
 
 func update_inventory_status(is_open: bool):

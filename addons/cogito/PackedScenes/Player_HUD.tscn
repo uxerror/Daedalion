@@ -30,6 +30,8 @@
 [ext_resource type="Script" uid="uid://c656a651xkd0c" path="res://addons/cogito/EasyMenus/Scripts/tab_menu.gd" id="24_3jei3"]
 [ext_resource type="Script" uid="uid://ckkoyeqge566i" path="res://addons/cogito/Components/UI/UI_HoldComponent.gd" id="29_j4em4"]
 [ext_resource type="PackedScene" uid="uid://c62m84iy6lkk5" path="res://addons/cogito/Components/UI/UI_ProgressWheel.tscn" id="30_bdq5t"]
+[ext_resource type="Script" uid="uid://34okcsphwbi6" path="res://addons/cogito/InventoryPD/Quickslots/cogito_quickslot_wheel.gd" id="31_w7h3l"]
+[ext_resource type="AudioStream" uid="uid://cr3bcp0u6w1pl" path="res://addons/cogito/Assets/Audio/Kenney/UiAudio/mouseclick1.ogg" id="32_k2c8s"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_j4em4"]
 resource_local_to_scene = true
@@ -645,7 +647,7 @@ action_name = "inventory_assign_item"
 layout_mode = 2
 text = "INTERFACE_AssignQuickslot"
 
-[node name="QuickSlots" type="Control" parent="InventoryInterface" unique_id=1337382754 node_paths=PackedStringArray("quickslot_containers")]
+[node name="QuickSlots" type="Control" parent="InventoryInterface" unique_id=1337382754 node_paths=PackedStringArray("quickslot_containers", "views")]
 layout_mode = 1
 anchors_preset = 2
 anchor_top = 1.0
@@ -657,6 +659,7 @@ offset_bottom = -55.0
 grow_vertical = 0
 script = ExtResource("20_xe82q")
 quickslot_containers = [NodePath("CogitoQuickslotContainer1"), NodePath("CogitoQuickslotContainer2"), NodePath("CogitoQuickslotContainer3"), NodePath("CogitoQuickslotContainer4")]
+views = [NodePath("../../QuickslotWheel")]
 
 [node name="CogitoQuickslotContainer1" parent="InventoryInterface/QuickSlots" unique_id=335855233 instance=ExtResource("21_q2hxa")]
 layout_mode = 0
@@ -715,6 +718,19 @@ input_action = "quickslot_4"
 
 [node name="DynamicInputIcon" parent="InventoryInterface/QuickSlots/CogitoQuickslotContainer4/MarginContainerInputIcon" parent_id_path=PackedInt32Array(436811167, 335291478) index="0" unique_id=1431358302]
 position = Vector2(32, 0)
+
+[node name="QuickslotWheel" type="Control" parent="." unique_id=1590402763]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme = ExtResource("5_j6s1a")
+script = ExtResource("31_w7h3l")
+sound_hover = ExtResource("32_k2c8s")
 
 [node name="DeathScreen" parent="." unique_id=1145877818 instance=ExtResource("23_4avie")]
 visible = false
