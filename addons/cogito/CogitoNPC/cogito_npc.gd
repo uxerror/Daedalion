@@ -350,5 +350,10 @@ func _on_hitbox_component_got_hit(object) -> void:
 	elif object is CogitoObject:
 		look_at(object.throw_point)
 		attention_target = object
+	elif object is Node3D:
+		# Any other attacker (the player casting a spell, another NPC): look where it is.
+		sight_detection.generate_attention_target(object.global_position)
+	else:
+		return # Nothing to look at, so no alert (alerted needs an attention target).
 	state_chart.send_event("alerted")
 	animation_tree.set("parameters/Transition/transition_request","hit")
