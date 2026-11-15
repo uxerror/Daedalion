@@ -1,56 +1,102 @@
-extends Node
+extends CogitoQuickslotView
 class_name CogitoQuickslots
 
+## Coordinates the player's quickslots: owns the inventory quickslot set, handles quickslot input
+## and displays the set with its quickslot containers (the default quickslot bar).
+## The number of quickslots equals the number of quickslot_containers, each container's input_action activates it.
+## The bindings are stored in CogitoInventory.assigned_quickslots, which is what gets saved.
 ### This script directly references the player inventory a lot, so make sure that reference is set correctly before using.
+
+enum SlotInputMode {
+	## Pressing a quickslot action activates the slot right away.
+	ACTIVATE_ON_PRESS,
+	## Pressing a quickslot action selects the slot, confirm_action activates the selected slot.
+	SELECT_THEN_CONFIRM,
+}
 
 ## If true, the player can assign the same item to multiple quickslots.
 @export var allow_multiple_quickslot_binds : bool = true
 ## When multiple wieldables are quickslotted, cycling will unequip the last wieldable found before cycling back to the first wieldable found
 @export var allow_unequip_when_cycling_wieldables: bool = true
+## One container per quickslot. Each container's input_action activates its quickslot.
 @export var quickslot_containers : Array[CogitoQuickslotContainer]
 var player_interaction_component: PlayerInteractionComponent
 
 @export var inventory_reference : CogitoInventory:
 	set(passed_inventory):
+		if inventory_reference and inventory_reference != passed_inventory:
+			_disconnect_inventory_signals(inventory_reference)
 		inventory_reference = passed_inventory
 		CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "Inventory reference (re)set!")
 		
 		# Connecting unbind signal from inventory
-		inventory_reference.unbind_quickslot_by_index.connect(on_unbind_quickslot_by_index)
-		inventory_reference.picked_up_new_inventory_item.connect(on_auto_quickslot_new_item)
+		if !inventory_reference.unbind_quickslot_by_index.is_connected(on_unbind_quickslot_by_index):
+			inventory_reference.unbind_quickslot_by_index.connect(on_unbind_quickslot_by_index)
+		if !inventory_reference.picked_up_new_inventory_item.is_connected(on_auto_quickslot_new_item):
+			inventory_reference.picked_up_new_inventory_item.connect(on_auto_quickslot_new_item)
 		
 		set_inventory_quickslots(inventory_reference)
 		
+@export_group("Input")
+## ACTIVATE_ON_PRESS: quickslot actions activate their slot. SELECT_THEN_CONFIRM: they select it and confirm_action activates it.
+@export var slot_input_mode : SlotInputMode = SlotInputMode.ACTIVATE_ON_PRESS
+## Activates the selected quickslot when slot_input_mode is SELECT_THEN_CONFIRM.
+@export var confirm_action : String = ""
+## Equips the previous quickslotted wieldable.
+@export var previous_wieldable_action : String = "quickslot_prev_wieldable"
+## Equips the next quickslotted wieldable.
+@export var next_wieldable_action : String = "quickslot_next_wieldable"
+@export_group("")
+## Additional views (for example a custom CogitoQuickslotView) that display the inventory quickslot set.
+@export var views : Array[CogitoQuickslotView]
+
+## The quickslot set of the player inventory, displayed by this node's containers.
+var inventory_set : CogitoQuickslotSet = CogitoQuickslotSet.new()
 var inventory_is_open : bool
+
+
+func _init() -> void:
+	inventory_set.slot_changed.connect(_store_assigned_quickslot)
+	quickslot_set = inventory_set
 
 
 func _ready() -> void:
 	# Connecting to unbind signal to enabling clearing of inventory slot reference on unbind.
 	for quickslot in quickslot_containers:
 		quickslot.quickslot_cleared.connect(unbind_quickslot)
+		if quickslot.input_action != "" and !InputMap.has_action(quickslot.input_action):
+			push_warning("CogitoQuickSlots: Input action '" + quickslot.input_action + "' of " + quickslot.name + " doesn't exist in the Input Map, this quickslot can't be activated.")
+
+	inventory_set.resize(quickslot_containers.size())
+	for view in views:
+		view.quickslot_set = inventory_set
 	
 	set_quickslot_focus(false) # Setting focus mode on quickslots to NONE on ready.
 	
 	await get_tree().process_frame
-	player_interaction_component = (CogitoSceneManager._current_player_node as CogitoPlayer).player_interaction_component
+	var player := CogitoSceneManager._current_player_node as CogitoPlayer
+	if player:
+		player_interaction_component = player.player_interaction_component
 
 
 # Using this to either set up new inventory or load quickslot of existing inventory
 func set_inventory_quickslots(passed_inventory: CogitoInventory) -> void:
 	if passed_inventory.assigned_quickslots.is_empty():
 		CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "set_inventory_quickslots: assigned_quickslots were empty.")
-		passed_inventory.assigned_quickslots.resize(quickslot_containers.size())
 	else:
 		CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "set_inventory_quickslots: assigned_quickslots were NOT empty, updating quickslot data...")
-		on_inventory_updated(passed_inventory)
+	on_inventory_updated(passed_inventory)
 
 
+## Rebuilds the inventory quickslot set from the inventory's assigned_quickslots.
 func on_inventory_updated(passed_inv: CogitoInventory) -> void:
 	CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "on_inventory_updated called.")
-	# Updating all quickslot containers using their assigned inventory slots.
+	# One assigned quickslot per container. Saves with fewer quickslots get padded with empty slots.
+	passed_inv.assigned_quickslots.resize(quickslot_containers.size())
+	inventory_set.resize(quickslot_containers.size())
 	for i in quickslot_containers.size():
-		quickslot_containers[i].update_quickslot_data(inventory_reference.assigned_quickslots[i])
-
+		var slot_data : InventorySlotPD = passed_inv.assigned_quickslots[i]
+		inventory_set.bind(i, CogitoItemQuickslotEntry.new(slot_data, passed_inv) if slot_data else null)
 
 
 func unbind_quickslot(quickslot_to_unbind: CogitoQuickslotContainer) -> void:
@@ -58,16 +104,14 @@ func unbind_quickslot(quickslot_to_unbind: CogitoQuickslotContainer) -> void:
 	var slot_index : int = quickslot_containers.find(quickslot_to_unbind, 0)
 	
 	if slot_index != -1:
-		# Nulling out the inventory slot of the same index.
-		inventory_reference.assigned_quickslots[slot_index] = null
+		inventory_set.unbind(slot_index)
 	else:
 		CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "quickslot wasn't found in the quickslot_container array.")
 
 
 func on_unbind_quickslot_by_index(passed_index: int) -> void:
 	if passed_index != -1:
-		quickslot_containers[passed_index].clear_this_quickslot()
-		unbind_quickslot(quickslot_containers[passed_index])
+		inventory_set.unbind(passed_index)
 
 
 func bind_to_quickslot(itemslot_to_bind: InventorySlotPD, quickslot_to_bind: CogitoQuickslotContainer):
@@ -76,18 +120,17 @@ func bind_to_quickslot(itemslot_to_bind: InventorySlotPD, quickslot_to_bind: Cog
 	if slot_index > -1:
 		if !allow_multiple_quickslot_binds:
 			unbind_itemslot_from_quickslots(itemslot_to_bind)
-		inventory_reference.assigned_quickslots[slot_index] = itemslot_to_bind
-		quickslot_to_bind.update_quickslot_data(itemslot_to_bind)
+		inventory_set.bind(slot_index, CogitoItemQuickslotEntry.new(itemslot_to_bind, inventory_reference))
 		CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "Assigned quickslot " + str(slot_index) + " to " + itemslot_to_bind.inventory_item.name )
 	else:
 		CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "quickslot wasn't found in the quickslot_container array.")
 
 
 func unbind_itemslot_from_quickslots(itemslot_to_unbind: InventorySlotPD):
-	for quickslot in quickslot_containers:
-		if quickslot.inventory_slot_reference == itemslot_to_unbind:
-			unbind_quickslot(quickslot)
-			quickslot.clear_this_quickslot()
+	for i in inventory_set.size():
+		var item_entry := inventory_set.get_entry(i) as CogitoItemQuickslotEntry
+		if item_entry and item_entry.slot_data == itemslot_to_unbind:
+			inventory_set.unbind(i)
 
 
 func on_input(event: InputEvent) -> void:
@@ -98,43 +141,30 @@ func on_input(event: InputEvent) -> void:
 		CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "Inventory is open, no item used.")
 		return
 	
-	if event.is_action_released("quickslot_1"):
-		if inventory_reference.assigned_quickslots[0]:
-			CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "Using quickslot 1...")
-			inventory_reference.use_slot_data(inventory_reference.assigned_quickslots[0].origin_index)
-		else:
-			CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "Nothing assigned in quickslot 1...")
+	for i in quickslot_containers.size():
+		var action : String = quickslot_containers[i].input_action
+		if action == "" or !InputMap.has_action(action) or !event.is_action_released(action):
+			continue
+		if !inventory_set.get_entry(i):
+			CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "Nothing assigned in quickslot " + str(i + 1) + "...")
 			return
+		if slot_input_mode == SlotInputMode.SELECT_THEN_CONFIRM:
+			CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "Selecting quickslot " + str(i + 1) + "...")
+			inventory_set.select(i)
+		else:
+			CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "Using quickslot " + str(i + 1) + "...")
+			inventory_set.activate(i, _get_activation_context())
+		return
 	
-	if event.is_action_released("quickslot_2"):
-		if inventory_reference.assigned_quickslots[1]:
-			CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "Using quickslot 2...")
-			inventory_reference.use_slot_data(inventory_reference.assigned_quickslots[1].origin_index)
-		else:
-			CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "Nothing assigned in quickslot 2...")
-			return
-		
-	if event.is_action_released("quickslot_3"):
-		if inventory_reference.assigned_quickslots[2]:
-			CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "Using quickslot 3...")
-			inventory_reference.use_slot_data(inventory_reference.assigned_quickslots[2].origin_index)
-		else:
-			CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "Nothing assigned in quickslot 3...")
-			return
-
-	if event.is_action_released("quickslot_4"):
-		if inventory_reference.assigned_quickslots[3]:
-			CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "Using quickslot 4...")
-			inventory_reference.use_slot_data(inventory_reference.assigned_quickslots[3].origin_index)
-		else:
-			CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "Nothing assigned in quickslot 4...")
-			return
+	if slot_input_mode == SlotInputMode.SELECT_THEN_CONFIRM and _is_action_released(event, confirm_action):
+		inventory_set.activate_selected(_get_activation_context())
+		return
 	
 	# This can get called before assigning the reference, such as when loading, so check if player_interaction_component is null first
 	if player_interaction_component and player_interaction_component.can_cycle_quickslots:
-		if event.is_action_released("quickslot_prev_wieldable"):
+		if _is_action_released(event, previous_wieldable_action):
 			_cycle_through_quickslotted_wieldables(false)
-		elif event.is_action_released("quickslot_next_wieldable"):
+		elif _is_action_released(event, next_wieldable_action):
 			_cycle_through_quickslotted_wieldables(true)
 
 
@@ -149,19 +179,19 @@ func on_auto_quickslot_new_item(slot_data: InventorySlotPD) -> void:
 	if !slot_data.inventory_item.can_auto_slot: # Checking if this item can auto slot.
 		return
 	
-	for i in range(quickslot_containers.size()):
-		if !quickslot_containers[i].item_reference:
+	for i in inventory_set.size():
+		var item_entry := inventory_set.get_entry(i) as CogitoItemQuickslotEntry
+		if !item_entry or !item_entry.get_item():
 			continue
-		if quickslot_containers[i].item_reference.name == slot_data.inventory_item.name:
+		if item_entry.get_item().name == slot_data.inventory_item.name:
 			CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", slot_data.inventory_item.name +
-			" already in quickslot " + str(quickslot_containers[i].get_index()))
+			" already in quickslot " + str(i))
 			return
 	
-	for i in range(quickslot_containers.size()):
+	for i in inventory_set.size():
 		# Ensure the quickslot is empty before binding the new item
-		if !quickslot_containers[i].inventory_slot_reference and !quickslot_containers[i].item_reference:
+		if !inventory_set.get_entry(i):
 			if slot_data.inventory_item.slot_number == -1 or slot_data.inventory_item.slot_number == i+1:
-				quickslot_containers[i].clear_this_quickslot()
 				bind_to_quickslot(slot_data, quickslot_containers[i])
 				CogitoGlobals.debug_log(true, "CogitoQuickSlots.gd", "Auto-quickslotted " + slot_data.inventory_item.name)
 				return
@@ -175,6 +205,41 @@ func set_quickslot_focus(enabled:bool) -> void:
 		for i in range(quickslot_containers.size()):
 			quickslot_containers[i].focus_mode = Control.FOCUS_NONE
 	CogitoGlobals.debug_log(true,"CogitoQuickSlots.gd", "Set quickslot containers focus_all to " + str(enabled) )
+
+
+# Displays the slot in its container (CogitoQuickslotView).
+func _on_slot_changed(index: int) -> void:
+	if index < quickslot_containers.size():
+		quickslot_containers[index].display_entry(inventory_set.get_entry(index))
+
+
+# Keeps CogitoInventory.assigned_quickslots (the saved form of the inventory set) in sync with the set.
+func _store_assigned_quickslot(index: int) -> void:
+	if !inventory_reference:
+		return
+	if inventory_reference.assigned_quickslots.size() < inventory_set.size():
+		inventory_reference.assigned_quickslots.resize(inventory_set.size())
+	var item_entry := inventory_set.get_entry(index) as CogitoItemQuickslotEntry
+	inventory_reference.assigned_quickslots[index] = item_entry.slot_data if item_entry else null
+
+
+func _disconnect_inventory_signals(inventory: CogitoInventory) -> void:
+	if inventory.unbind_quickslot_by_index.is_connected(on_unbind_quickslot_by_index):
+		inventory.unbind_quickslot_by_index.disconnect(on_unbind_quickslot_by_index)
+	if inventory.picked_up_new_inventory_item.is_connected(on_auto_quickslot_new_item):
+		inventory.picked_up_new_inventory_item.disconnect(on_auto_quickslot_new_item)
+
+
+func _get_activation_context() -> Object:
+	return inventory_reference.owner if inventory_reference else null
+
+
+func _is_action_released(event: InputEvent, action: String) -> bool:
+	return action != "" and InputMap.has_action(action) and event.is_action_released(action)
+
+
+func _is_wieldable_entry(entry: CogitoQuickslotEntry) -> bool:
+	return entry is CogitoItemQuickslotEntry and (entry as CogitoItemQuickslotEntry).get_item() is WieldableItemPD
 
 
 func _cycle_through_quickslotted_wieldables(cycle_up: bool) -> void:
@@ -192,59 +257,35 @@ func _cycle_through_quickslotted_wieldables(cycle_up: bool) -> void:
 				" uses this input action eventdon't attempt to cycle wieldables")
 				return
 
-	var quickslotted_wieldable_indexes: Array[int] = []
-	var current_wieldable_quickslot_index: int = -1
-	var current_equipped_wieldable: WieldableItemPD = player_interaction_component.equipped_wieldable_item
-	for i in range(quickslot_containers.size()):
-		if !quickslot_containers[i].item_reference:
-			continue
-		# Find all quickslotted wieldable quickslot indexes, possibly for the current wieldable too, if quickslotted
-		if quickslot_containers[i].item_reference == current_equipped_wieldable:
-			current_wieldable_quickslot_index = i
-			quickslotted_wieldable_indexes.append(i)
-		elif quickslot_containers[i].item_reference is WieldableItemPD:
-			quickslotted_wieldable_indexes.append(i)
+	_cycle_wieldables(cycle_up, player_interaction_component.equipped_wieldable_item)
 
-	var quickslotted_wieldable_count: int = quickslotted_wieldable_indexes.size()
-	if quickslotted_wieldable_count == 0: # No quickslotted wieldables, do nothing
+
+func _cycle_wieldables(cycle_up: bool, current_equipped_wieldable: WieldableItemPD) -> void:
+	var quickslotted_wieldable_indexes : Array[int] = inventory_set.find_indexes(_is_wieldable_entry)
+	if quickslotted_wieldable_indexes.is_empty(): # No quickslotted wieldables, do nothing
 		return
 	
-	if current_wieldable_quickslot_index == -1: # Not wielding
-		if cycle_up:
-			inventory_reference.use_slot_data(inventory_reference.assigned_quickslots[quickslotted_wieldable_indexes[0]].origin_index)
-		else:
-			inventory_reference.use_slot_data(inventory_reference.assigned_quickslots[quickslotted_wieldable_indexes[-1]].origin_index)
+	# Select the quickslot of the currently equipped wieldable (the last one if it's quickslotted multiple times).
+	var current_wieldable_quickslot_index : int = -1
+	for i in quickslotted_wieldable_indexes:
+		if (inventory_set.get_entry(i) as CogitoItemQuickslotEntry).get_item() == current_equipped_wieldable:
+			current_wieldable_quickslot_index = i
+	inventory_set.select(current_wieldable_quickslot_index)
+
+	if current_wieldable_quickslot_index == -1: # Not wielding, equip the first/last quickslotted wieldable
+		var first_index : int = inventory_set.select_next(_is_wieldable_entry) if cycle_up else inventory_set.select_previous(_is_wieldable_entry)
+		inventory_set.activate(first_index, _get_activation_context())
 		return
 
 	if quickslotted_wieldable_indexes.size() == 1: # Wielding the only quickslotted wieldable, unequip it
+		inventory_set.select(-1)
 		current_equipped_wieldable.put_away()
 		return
 
-	# Cycle to the prev/next available quickslotted wieldable
-	var cycle_to_index: int = -1
-	if cycle_up:
-		for i in range(quickslotted_wieldable_count):
-			if quickslotted_wieldable_indexes[i] == current_wieldable_quickslot_index:
-				if i == quickslotted_wieldable_count-1:
-					if allow_unequip_when_cycling_wieldables:
-						current_equipped_wieldable.put_away()
-					else:
-						cycle_to_index = 0
-				else:
-					cycle_to_index = quickslotted_wieldable_indexes[i+1]
-				break
+	# Cycle to the prev/next quickslotted wieldable. Past the last/first one, either unequip or wrap around.
+	var wrap : bool = !allow_unequip_when_cycling_wieldables
+	var cycle_to_index : int = inventory_set.select_next(_is_wieldable_entry, wrap) if cycle_up else inventory_set.select_previous(_is_wieldable_entry, wrap)
+	if cycle_to_index == -1:
+		current_equipped_wieldable.put_away()
 	else:
-		for i in range(quickslotted_wieldable_count-1, -1, -1):
-			if quickslotted_wieldable_indexes[i] == current_wieldable_quickslot_index:
-				if i == 0:
-					if allow_unequip_when_cycling_wieldables:
-						current_equipped_wieldable.put_away()
-					else:
-						cycle_to_index = quickslotted_wieldable_count-1
-				else:
-					cycle_to_index = quickslotted_wieldable_indexes[i-1]
-				break
-
-	# Equip the cycled to wieldable
-	if cycle_to_index != -1:
-		inventory_reference.use_slot_data(inventory_reference.assigned_quickslots[cycle_to_index].origin_index)
+		inventory_set.activate(cycle_to_index, _get_activation_context())
