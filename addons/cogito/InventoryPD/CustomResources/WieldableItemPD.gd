@@ -32,6 +32,15 @@ signal charge_changed()
 ## Hint that gets displayed when attempting to change ammo types but none are available.
 @export var hint_no_other_ammo_types : String = "HINT_no_other_ammo_type"
 
+@export_group("Quickslots")
+## If true and this item has more than one ammo type, get_quickslot_set() returns one CogitoAmmoQuickslotEntry per ammo type:
+## the quickslot wheel offers them as the submenu of this item's quickslot (equipped or not) and while it is equipped.
+@export var ammo_quickslot_set : bool = true
+
+var _ammo_quickslot_set : CogitoQuickslotSet
+# The inventory whose changes refresh the ammo counts of _ammo_quickslot_set, null while not watching one.
+var _ammo_quickslot_inventory : CogitoInventory
+
 #var wieldable_data_text : String
 
 func use(target) -> bool:
@@ -180,8 +189,55 @@ func switch_to_ammo_type(index: int) -> bool:
 	# Unload the Wieldable if it is currently loaded, change ammo type
 	unload_wieldable()
 	current_ammo_type = index
+	if _ammo_quickslot_set:
+		_ammo_quickslot_set.select(current_ammo_type)
 	player_interaction_component.send_hint(next_ammo.square_icon, tr(hint_changed_ammo_type) + " " + tr(next_ammo.name) )
 	return true
+
+
+## One CogitoAmmoQuickslotEntry per ammo type if there is more than one (see ammo_quickslot_set), otherwise null.
+## The set is built once per item and its counts follow the inventory of passed_player_interaction_component
+## (stored as player_interaction_component, like use() does).
+func get_quickslot_set(passed_player_interaction_component: PlayerInteractionComponent = null) -> CogitoQuickslotSet:
+	if passed_player_interaction_component:
+		player_interaction_component = passed_player_interaction_component
+	if !ammo_quickslot_set or ammo_types.size() <= 1:
+		return null
+	if !_ammo_quickslot_set:
+		_ammo_quickslot_set = CogitoAmmoQuickslotEntry.create_set(self)
+	_watch_ammo_quickslot_inventory()
+	return _ammo_quickslot_set
+
+
+# Connects to the player inventory so the ammo counts refresh. Item resources outlive the player and their wieldable nodes,
+# so the connection is dropped again once this item isn't in that inventory any more (see _on_ammo_quickslot_inventory_updated()).
+func _watch_ammo_quickslot_inventory() -> void:
+	var inventory : CogitoInventory = player_interaction_component.get_inventory() if is_instance_valid(player_interaction_component) else null
+	if inventory == _ammo_quickslot_inventory:
+		return
+	_stop_watching_ammo_quickslot_inventory()
+	_ammo_quickslot_inventory = inventory
+	if inventory:
+		inventory.inventory_updated.connect(_on_ammo_quickslot_inventory_updated)
+
+
+func _stop_watching_ammo_quickslot_inventory() -> void:
+	if _ammo_quickslot_inventory and _ammo_quickslot_inventory.inventory_updated.is_connected(_on_ammo_quickslot_inventory_updated):
+		_ammo_quickslot_inventory.inventory_updated.disconnect(_on_ammo_quickslot_inventory_updated)
+	_ammo_quickslot_inventory = null
+
+
+# Refreshes the ammo entries (counts, availability). Doesn't touch the selection, the wheel may be hovering a slot.
+func _on_ammo_quickslot_inventory_updated(inventory: CogitoInventory) -> void:
+	if !inventory.inventory_slots.any(func(slot: InventorySlotPD) -> bool: return slot != null and slot.inventory_item == self):
+		CogitoGlobals.debug_log(true, "WieldableItemPD.gd", name + " left the inventory, its ammo quickslot set stops following it.")
+		_stop_watching_ammo_quickslot_inventory()
+	if !_ammo_quickslot_set:
+		return
+	for i in _ammo_quickslot_set.size():
+		var entry := _ammo_quickslot_set.get_entry(i)
+		if entry:
+			entry.emit_changed()
 
 func save():
 	var saved_item_data = {

@@ -84,3 +84,12 @@ func get_region(x, y) -> Image:
 	var y_chunk = image.get_height() / item_size.y
 	var region = Rect2i(Vector2i(x * x_chunk, y * y_chunk), Vector2i(x_chunk, y_chunk))
 	return image.get_region(region)
+
+
+## Virtual: the quickslot set this item offers (fire modes, ammo types, spells...), or null for none.
+## The quickslot wheel opens it as the submenu of every quickslot holding this item (CogitoItemQuickslotEntry.get_submenu()),
+## equipped or not, and wieldables offer it while equipped (CogitoWieldable.get_quickslot_set()).
+## passed_player_interaction_component is the interaction component of the player whose inventory holds this item.
+## Return the same set object every time (build it once), entries should call emit_changed() when their data changes.
+func get_quickslot_set(_passed_player_interaction_component: PlayerInteractionComponent = null) -> CogitoQuickslotSet:
+	return null

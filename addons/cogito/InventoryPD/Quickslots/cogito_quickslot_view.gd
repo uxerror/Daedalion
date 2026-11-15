@@ -17,10 +17,6 @@ var quickslot_set : CogitoQuickslotSet:
 ## Views decide how to offer it, the quickslot wheel shows it as a submenu. Views that don't support it ignore it.
 var context_set : CogitoQuickslotSet:
 	set = set_context_set
-## Slot of quickslot_set that owns context_set (for example the quickslotted wieldable that offers it), -1 if none.
-## The quickslot wheel enters context_set through that slot. Set by CogitoQuickslots (see get_view_context_slot()).
-var context_slot_index : int = -1:
-	set = set_context_slot_index
 
 
 func set_quickslot_set(new_set: CogitoQuickslotSet) -> void:
@@ -39,11 +35,6 @@ func set_quickslot_set(new_set: CogitoQuickslotSet) -> void:
 ## Virtual: override to react to a new context_set (call super).
 func set_context_set(new_set: CogitoQuickslotSet) -> void:
 	context_set = new_set
-
-
-## Virtual: override to react to a new context_slot_index (call super).
-func set_context_slot_index(new_index: int) -> void:
-	context_slot_index = new_index
 
 
 ## Redraws every slot and the selection.

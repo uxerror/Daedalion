@@ -3,7 +3,8 @@ class_name CogitoItemQuickslotEntry
 
 ## Quickslot entry for an inventory item stack (InventorySlotPD).
 ## Activating it uses the item from the inventory, it shows the stack amount
-## and it expires once the stack runs out.
+## and it expires once the stack runs out. Its submenu is the item's own set (InventoryItemPD.get_quickslot_set()),
+## for example the ammo types of a toy pistol, whether the item is equipped or not.
 
 ## The inventory slot this entry points to.
 var slot_data : InventorySlotPD:
@@ -53,8 +54,23 @@ func is_expired() -> bool:
 	return !slot_data or slot_data.quantity < 1
 
 
+## The item's quickslot set (InventoryItemPD.get_quickslot_set()), or null.
+func get_submenu() -> CogitoQuickslotSet:
+	var item := get_item()
+	if !item:
+		return null
+	return item.get_quickslot_set(_get_player_interaction_component())
+
+
 func activate(_context: Object) -> bool:
 	if !slot_data or !inventory:
 		return false
 	inventory.use_slot_data(slot_data.origin_index)
 	return true
+
+
+# The inventory belongs to the player (CogitoInventory.owner), items need its interaction component for their sets.
+func _get_player_interaction_component() -> PlayerInteractionComponent:
+	if !inventory or !is_instance_valid(inventory.owner):
+		return null
+	return inventory.owner.get("player_interaction_component") as PlayerInteractionComponent

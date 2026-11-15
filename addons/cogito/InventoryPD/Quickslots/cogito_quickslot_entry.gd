@@ -36,3 +36,10 @@ func is_expired() -> bool:
 ## Returns true if the entry did something.
 func activate(_context: Object) -> bool:
 	return false
+
+
+## Set that the quickslot wheel opens as a submenu of this entry (for example the ammo types of a quickslotted gun), or null.
+## The wheel marks entries with a non-empty submenu, confirm (or hovering, see CogitoQuickslotWheel.submenu_hover_time)
+## enters it, releasing the wheel over the entry still activates the entry itself. Return the same set object every time.
+func get_submenu() -> CogitoQuickslotSet:
+	return null

@@ -10,17 +10,17 @@ class_name CogitoQuickslotWheel
 ## Add the wheel to CogitoQuickslots.views, CogitoQuickslots then gives it its set and forwards the open_action to it.
 ## Without CogitoQuickslots, set quickslot_set (and context_set) and call open()/close() yourself.
 ##
-## Submenus: quickslot_set is the root menu. Entries of type CogitoSubmenuQuickslotEntry open their set as a submenu,
-## submenus can contain submenus again. Inside a submenu the wheel adds a Back segment.
-## The context_set (the equipped wieldable's set, for example its ammo types) is entered through the root slot that holds
-## the wieldable (context_slot_index), that slot gets a small marker. If the wieldable isn't in a root slot (for example
-## equipped from the inventory), the root gets an extra context segment instead, drawn with the context set's icon.
+## Submenus: quickslot_set is the root menu. Every entry with a non-empty CogitoQuickslotEntry.get_submenu() opens that set
+## as a submenu, at any level: a CogitoSubmenuQuickslotEntry, or a quickslotted item that offers a set (for example the ammo
+## types of a toy pistol, equipped or not). Such segments get a small marker. Inside a submenu the wheel adds a Back segment.
+## Press confirm_action on a segment with a submenu or on Back to navigate (or hover it for submenu_hover_time).
+## Releasing open_action always activates the hovered entry like its quickslot key does (for an item: use / equip it,
+## for a CogitoSubmenuQuickslotEntry: nothing), over Back or the context segment it closes without activating anything.
+## The context_set (the equipped wieldable's set) is usually the submenu of the wieldable's quickslot. If no root slot leads
+## to it (for example the wieldable was equipped from the inventory), the root gets an extra context segment instead,
+## drawn with the context set's icon.
 ## Back and the context segment are drawn by the wheel, they are not entries of any set, so slot indices and other views
 ## (the quickslot bar) don't change. They are always the last segment, just counter-clockwise of slot 0.
-## Press confirm_action on a submenu, the context slot / segment or Back to navigate (or hover it for submenu_hover_time).
-## Releasing open_action over a submenu, the context segment or Back closes the wheel without activating anything.
-## Releasing it over the context slot activates that slot's entry like its quickslot key does (the equipped wieldable
-## gets put away), so release always uses the hovered slot.
 
 ## Emitted when the wheel opens.
 signal opened
@@ -43,7 +43,7 @@ const BACK_TEXT : String = "QUICKSLOT_back"
 ## If true and there is a context_set (the equipped wieldable's set), the wheel opens inside it, Back leads to quickslot_set.
 ## If false, the wheel opens at quickslot_set and the context set is one segment of it.
 @export var open_in_wieldable_set : bool = true
-## Hovering a submenu, the context set segment or Back for this many seconds (real time) navigates without confirm_action. 0 = off.
+## Hovering a segment with a submenu, the context set segment or Back for this many seconds (real time) navigates without confirm_action. 0 = off.
 @export var submenu_hover_time : float = 0.0
 ## These actions close the wheel and are then passed on, so for example the pause menu or the inventory still open.
 @export var passthrough_actions : Array[String] = ["menu", "inventory"]
@@ -71,7 +71,7 @@ const BACK_TEXT : String = "QUICKSLOT_back"
 @export var segment_color : Color = Color(0.101961, 0.101961, 0.101961, 0.784314)
 @export var hovered_color : Color = Color(0.974511, 0.772854, 0.0, 0.35)
 @export var outline_color : Color = Color(0.974511, 0.772854, 0.0, 1.0)
-## Fill of segments that navigate (submenus, the context set segment, Back), and the marker of the context slot.
+## Fill of the segments drawn by the wheel (Back, the context set segment) and of the submenu marker.
 @export var navigation_color : Color = Color(0.2, 0.2, 0.2, 0.85)
 ## Icon of the Back segment. If empty, an arrow is drawn.
 @export var back_icon : Texture2D
@@ -174,16 +174,6 @@ func set_context_set(new_set: CogitoQuickslotSet) -> void:
 	super.set_context_set(new_set)
 
 
-## Changing the context slot while the wheel is open redraws it (the context segment can appear or disappear).
-func set_context_slot_index(new_index: int) -> void:
-	if new_index == context_slot_index:
-		return
-	super.set_context_slot_index(new_index)
-	if is_open and is_at_root():
-		_rebuild()
-		_update_hover()
-
-
 ## Called by CogitoQuickslots with input it receives while the player has input focus.
 ## Opens the wheel when open_action gets pressed. Returns true if the event was consumed.
 func handle_quickslot_input(event: InputEvent, context: Object) -> bool:
@@ -267,7 +257,7 @@ func get_stick() -> Vector2:
 
 
 ## Number of segments: the slots of current_set, plus the Back / context set segment if there is one.
-## At the root there is no context set segment if a slot enters the context set (see get_context_slot()).
+## At the root there is no context set segment if a slot's submenu is the context set.
 func get_segment_count() -> int:
 	var slot_count := current_set.size() if current_set else 0
 	return slot_count + (1 if _has_navigation_segment() else 0)
@@ -281,12 +271,15 @@ func get_navigation_index() -> int:
 	return current_set.size() if current_set else 0
 
 
-## The slot of the shown set that enters the context set (drawn with a marker), -1 if none.
-## Only at the root, and only if context_slot_index points to a filled slot of quickslot_set.
-func get_context_slot() -> int:
-	if !is_at_root() or !_has_context_set() or !quickslot_set or !quickslot_set.get_entry(context_slot_index):
-		return -1
-	return context_slot_index
+## The set that the segment at index of the shown set enters (it gets a marker), or null:
+## the entry's submenu (CogitoQuickslotEntry.get_submenu(), only if it has slots and the entry is available),
+## or context_set for the context set segment. Back returns null, it goes back instead (see go_back()).
+func get_segment_submenu(index: int) -> CogitoQuickslotSet:
+	if index < 0:
+		return null
+	if index == get_navigation_index():
+		return context_set if _path.is_empty() else null
+	return _get_entry_submenu(current_set.get_entry(index) if current_set else null)
 
 
 ## True if the wheel shows quickslot_set (not a submenu).
@@ -318,8 +311,8 @@ func _on_router_input(event: InputEvent) -> void:
 	if !is_open:
 		return
 	if _is_action(event, open_action):
-		# Over a submenu or Back this closes without activation: submenus can't be activated, Back is no entry.
-		# Over the context slot its entry gets activated like any slot.
+		# Over a segment with a submenu its entry gets activated like any slot (a pure submenu entry does nothing).
+		# Over Back or the context segment this closes without activation, they are no entries.
 		if event.is_released():
 			close(activate_on_release)
 		return
@@ -398,33 +391,42 @@ func _has_context_set() -> bool:
 	return context_set != null and context_set.size() > 0 and context_set != quickslot_set
 
 
+# Back inside a submenu. At the root the context set segment, unless a root slot already leads to the context set.
 func _has_navigation_segment() -> bool:
-	return !_path.is_empty() or (_has_context_set() and get_context_slot() == -1)
-
-
-# True if the segment navigates: a submenu entry, Back, the context set segment or the context slot.
-func _is_navigation_segment(index: int) -> bool:
-	if index < 0:
-		return false
-	if index == get_navigation_index() or index == get_context_slot():
+	if !_path.is_empty():
 		return true
-	return current_set != null and current_set.get_entry(index) is CogitoSubmenuQuickslotEntry
+	if !_has_context_set() or !quickslot_set:
+		return false
+	for i in quickslot_set.size():
+		if _get_entry_submenu(quickslot_set.get_entry(i)) == context_set:
+			return false
+	return true
 
 
+func _get_entry_submenu(entry: CogitoQuickslotEntry) -> CogitoQuickslotSet:
+	if !entry or !entry.is_available():
+		return null
+	var submenu := entry.get_submenu()
+	return submenu if submenu and submenu.size() > 0 else null
+
+
+# True if the hovered segment navigates: Back or a segment with a submenu.
 func _is_hovering_navigation() -> bool:
-	return _is_navigation_segment(hovered_index)
+	if hovered_index < 0:
+		return false
+	if !_path.is_empty() and hovered_index == get_navigation_index():
+		return true
+	return get_segment_submenu(hovered_index) != null
 
 
-# Enters the hovered submenu / the context set, or goes back. Returns false if the hovered segment doesn't navigate.
+# Enters the hovered segment's submenu, or goes back. Returns false if the hovered segment doesn't navigate.
 func _navigate_hovered() -> bool:
-	if hovered_index >= 0 and hovered_index == get_navigation_index():
-		return go_back() if !_path.is_empty() else enter_set(context_set)
-	if hovered_index >= 0 and hovered_index == get_context_slot():
-		return enter_set(context_set)
-	var submenu_entry := _get_hovered_entry() as CogitoSubmenuQuickslotEntry
-	if submenu_entry and submenu_entry.is_available():
-		return enter_set(submenu_entry.submenu)
-	return false
+	if hovered_index < 0:
+		return false
+	if !_path.is_empty() and hovered_index == get_navigation_index():
+		return go_back()
+	var submenu := get_segment_submenu(hovered_index)
+	return submenu != null and enter_set(submenu)
 
 
 # Navigating doesn't change selections: the set that is left gets its selection back.
@@ -580,17 +582,17 @@ func _draw() -> void:
 	var inner_radius := maxf(radius - ring_width, 0.0)
 	var segment := TAU / slot_count
 	var gap := deg_to_rad(segment_gap_degrees) if slot_count > 1 else 0.0
-	var back_index := get_navigation_index() if !_path.is_empty() else -1
-	var context_slot := get_context_slot()
+	var navigation_index := get_navigation_index()
+	var back_index := navigation_index if !_path.is_empty() else -1
 	for i in slot_count:
 		var mid_angle := get_slot_direction(i, slot_count).angle()
 		var from := mid_angle - segment / 2.0 + gap / 2.0
 		var to := mid_angle + segment / 2.0 - gap / 2.0
 		var points := _ring_segment(centre, inner_radius, radius, from, to)
-		draw_colored_polygon(points, navigation_color if _is_navigation_segment(i) and i != context_slot else segment_color)
+		draw_colored_polygon(points, navigation_color if i == navigation_index else segment_color)
 		if i == back_index and !back_icon:
 			_draw_back_arrow(centre + get_slot_direction(i, slot_count) * (radius - ring_width / 2.0))
-		if i == context_slot:
+		if get_segment_submenu(i):
 			_draw_submenu_marker(centre, mid_angle)
 		if i == hovered_index:
 			draw_colored_polygon(points, hovered_color)
