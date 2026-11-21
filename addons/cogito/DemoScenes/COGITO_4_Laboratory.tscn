@@ -2573,6 +2573,10 @@ horizontal_alignment = 2
 [node name="CogitoSpinner" parent="NavigationRegion3D/ROOM_SYSTEMIC_PROPERTIES/KSI_console_spinner" unique_id=1340053332 instance=ExtResource("21_p1ri8")]
 transform = Transform3D(0.8660253, 0.5, 0, -0.49999997, 0.8660254, 0, 0, 0, 0.99999994, 0.6591711, 0.8787442, -1.1093512)
 
+[node name="SpinnerInteraction" parent="NavigationRegion3D/ROOM_SYSTEMIC_PROPERTIES/KSI_console_spinner/CogitoSpinner" index="2" unique_id=609842808]
+overrotate = false
+spinner_goal_value = 100.0
+
 [node name="CircleArrowDecal" type="MeshInstance3D" parent="NavigationRegion3D/ROOM_SYSTEMIC_PROPERTIES/KSI_console_spinner" unique_id=1465692334]
 transform = Transform3D(-1.3113417e-08, -0.25980765, 0.14999999, 0, 0.14999999, 0.25980765, -0.3, 1.1356552e-08, -6.556708e-09, 0.6401716, 0.85171634, -1.112958)
 visible = false

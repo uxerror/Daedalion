@@ -5,7 +5,7 @@ extends InteractionComponent
 @export var rotating_object : Node3D
 ## Sets the spinning axis for the rotating object.
 @export var spinning_axis : Vector3
-## In radian
+## Object rotation per spin step, in radians. One step takes this angle of input after applying the mouse rotation multiplier.
 @export var rotation_speed : float = .05
 ## Move object as you rotate it
 @export var rise_when_rotate : float = 0
@@ -15,11 +15,23 @@ extends InteractionComponent
 @export var interacting_gizmo : Node
 
 @export_group("Spinner Input Settings")
-## The amount of values needed to be collected before spin gets registered. This has the biggest impact to responsiveness. The lower, the more responsive, but also the easier to overtrigger.
-@export var array_threshold : int = 10
-@export var angle_threshold : float = 200.00
-## The threshold for mouse movement change to register for spinning.
-@export var mouse_effort : float = 1.0
+## Require holding the left mouse button to rotate. Disable to rotate just by moving the cursor.
+@export var mouse_requires_hold : bool = true
+## Mouse rotation scale: 1.0 follows the cursor, 0.5 requires twice the movement, 0 disables mouse rotation. Does not affect the gamepad.
+@export_range(0.0, 4.0, 0.05, "or_greater") var mouse_rotation_multiplier : float = 1.0
+## Mouse movement drives a virtual stick: its offset from the center, in pixels, is limited to this radius,
+## so circling the mouse at any size and anywhere on the desk turns the spinner.
+@export var mouse_stick_radius : float = 120.0
+## Virtual stick offset, in pixels, below which mouse movement is ignored. Close to the center small movements turn into large angles.
+@export var mouse_dead_zone : float = 20.0
+## Right stick deflection below which gamepad input is ignored.
+@export var stick_dead_zone : float = 0.3
+## Show where the mouse or right stick points while interacting: a dot inside a ring at the screen centre.
+## The cursor itself stays hidden, so this is the only feedback for fine adjustments.
+@export var show_input_indicator : bool = true
+## Radius of the indicator ring on screen, in pixels.
+@export var indicator_radius : float = 48.0
+@export var indicator_color : Color = Color(0.974511, 0.772854, 0.0, 1.0)
 
 @export_group("Spinner Signal Setting")
 ## The value the spinner starts at. Does not get saved.
@@ -39,12 +51,14 @@ signal object_state_updated(interaction_text : String)
 #endregion
 
 #region Spin detection variables
-var current_angle : float = 0.0
-var previous_angle : float = 0.0
-var angle_array : Array = [0.0]
-var spinning_clockwise : bool = false
-var spinning_anticlockwise : bool = false
-var array_size : int = 1
+## Input angle from the previous frame, in radians. NAN while the input is inside its dead zone.
+var previous_angle : float = NAN
+## Input rotation collected since the last whole step, in radians. Positive is clockwise.
+var spin_accumulator : float = 0.0
+## Virtual stick offset collected from relative mouse motion, in pixels.
+var mouse_stick : Vector2 = Vector2.ZERO
+## Screen overlay showing the current input direction, created on enter, freed on exit.
+var input_indicator : CanvasLayer
 ## Spinner value is used as a goal for signals. Eg. Spin from 0 to 100 to meet the goal.
 var spinner_value : float = 0.0 :
 	set(value):
@@ -52,13 +66,13 @@ var spinner_value : float = 0.0 :
 			spinner_value = clampf(value, spinner_min_value, spinner_goal_value)
 		elif spinner_min_value > spinner_goal_value : # Goal is going counter-clockwise
 			spinner_value = clampf(value, spinner_goal_value, spinner_min_value)
+		else: # No goal, nothing to clamp to.
+			spinner_value = value
 
 
 signal spin_clockwise
 signal spin_counterclockwise
 signal spinner_goal_met
-
-var screen_center : Vector2
 #endregion
 
 
@@ -74,6 +88,13 @@ func _notification(what: int) -> void:
 
 ## Input event for input routing
 func on_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		# Relative motion works with a captured or hidden cursor and doesn't depend on where the cursor is.
+		mouse_stick = (mouse_stick + event.relative).limit_length(maxf(mouse_stick_radius, mouse_dead_zone))
+	if InputHelper.device_index == -1 and mouse_requires_hold and event.is_action("action_primary"):
+		# Rebase even if release and re-press both happen between process frames.
+		previous_angle = NAN
+		spin_accumulator = 0.0
 	if event.is_action_pressed("interact") or event.is_action_pressed("ui_cancel"):
 		exit(player_interaction_component)
 
@@ -90,17 +111,19 @@ func enter(_pic: PlayerInteractionComponent) -> void:
 	InputRouter.push(on_input)
 	player_interaction_component.open_interface()
 
-	screen_center = Vector2(get_window().size.x / 2, get_window().size.y / 2 )
-	
+	previous_angle = NAN
+	spin_accumulator = 0.0
 	is_being_controlled = true
 	if interacting_gizmo: interacting_gizmo.set_visible(true)
 
-	if InputHelper.device_index == -1:
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	mouse_stick = Vector2.ZERO
+	if show_input_indicator:
+		_show_input_indicator()
 
 
 func exit(_player: PlayerInteractionComponent) -> void:
 	if interacting_gizmo: interacting_gizmo.set_visible(false)
+	_hide_input_indicator()
 	_player.close_interface()
 	InputRouter.pop()
 	CogitoSceneManager.restore_gameplay_mouse_mode()
@@ -112,123 +135,138 @@ func force_exit() -> void:
 		exit(player_interaction_component)
 
 
-func _physics_process(delta: float) -> void:
-	if is_being_controlled:
-		# Switch between mouse spin detection or gamepad spin detection based on input device
-		if InputHelper.device_index == -1:
-			mouse_spin_detection()
-		else:
-			gamepad_spin_detection()
-		signal_bools()
-		
-		if ( spinner_goal_value < 0 and spinner_value <= spinner_goal_value ) or ( spinner_goal_value > 0 and spinner_value >= spinner_goal_value ) :
-			spinner_goal_met.emit()
-			if sound_on_goal_met :
-				CogitoAudio.play_sound_3d(sound_on_goal_met, global_position)
-			if destroy_on_goal_met:
-				get_parent().queue_free()
+func _process(_delta: float) -> void:
+	if !is_being_controlled:
+		return
+	if input_indicator:
+		input_indicator.get_child(0).queue_redraw()
 
-
-func mouse_spin_detection():
-	var mouse_position := get_viewport().get_mouse_position()
-	var mouse_pos_relative_to_center = mouse_position - screen_center
-	
-	current_angle = mouse_pos_relative_to_center.angle() * -1
-	current_angle = rad_to_deg(current_angle)
-	
-	if abs(current_angle - previous_angle) > mouse_effort:
-		spin_detection(current_angle)
+	# Switch between mouse spin detection or gamepad spin detection based on input device
+	var angle : float
+	var rotation_multiplier : float = 1.0
+	if InputHelper.device_index == -1:
+		if mouse_requires_hold and !Input.is_action_pressed("action_primary"):
+			previous_angle = NAN
+			spin_accumulator = 0.0
+			return
+		angle = get_mouse_angle()
+		rotation_multiplier = maxf(mouse_rotation_multiplier, 0.0)
 	else:
-		# if stick input doesn't pass dead zone, variables are reset.
-		array_size = 1
-		angle_array.resize(array_size)
-		reset_bools()
-		
-	previous_angle = current_angle
+		angle = get_stick_angle()
+
+	if !is_nan(angle) and !is_nan(previous_angle):
+		# angle_difference wraps across the -PI/PI seam.
+		spin_accumulator += angle_difference(angle, previous_angle) * rotation_multiplier
+		apply_spin()
+	previous_angle = angle
 
 
-# Detecting spinning the right thumb stick on gamepad
-func gamepad_spin_detection():
-	# get joystick vector
-	var stick_rotation: Vector2 = Vector2(Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y), Input.get_joy_axis(0, JOY_AXIS_RIGHT_X))
-	# reverse stick value (so it’s pointing the right way)
-	#stick_rotation *= -1.0
-	if stick_rotation.length() > 0.3:
-		# convert to angle
-		current_angle = stick_rotation.angle()
-		current_angle = rad_to_deg(current_angle)
-
-		spin_detection(current_angle)
-	else:
-		# if stick input doesn't pass dead zone, variables are reset.
-		array_size = 1
-		angle_array.resize(array_size)
-		reset_bools()
-	# finally, set previous frame's angle to current angle
-	previous_angle = current_angle
+## Virtual mouse stick angle, in radians, or NAN inside the dead zone. Decreases when the mouse moves clockwise.
+func get_mouse_angle() -> float:
+	if mouse_stick.length() < mouse_dead_zone:
+		return NAN
+	return -mouse_stick.angle()
 
 
-func spin_detection(angle:float) -> void:
-	# compare current angle to previous angle
-	var angle_diff = previous_angle - angle
-	# throw away angle differences if they’re too big a difference
-	# this discounts the change that can happen between 179 to -179 or vice versa
-	if (angle_diff >= angle_threshold) or (angle_diff <= -angle_threshold):
-		pass
-	else:
-		angle_array.resize(array_size)
-		angle_array.push_front(angle_diff)
-		array_size += 1
-	# check when list is long enough / enough time has passed
-	if angle_array.size() > array_threshold:
-		var mean = calculate_mean(angle_array)
-		# depending on if the average is positive or negative, plus past a certain threshold
-		# slow spinning will mean the threshold will not get met
-		if mean < -10:
-			spinning_anticlockwise = true
-			spinning_clockwise = false
-		elif mean > 10:
-			spinning_clockwise = true
-			spinning_anticlockwise = false
-		elif mean < 10 or mean > -10:
-			reset_bools()
-		# once the array reaches the threshold size and the logic has been applied the array is cleared
-		# this allows spinning to be detected in either direction without having to reset to deadzone to reset the array
-		array_size = 1
-		angle_array.resize(array_size)
+## Current input direction for the indicator, length 0-1 (1 = edge of the stick range).
+func get_input_offset() -> Vector2:
+	if InputHelper.device_index == -1:
+		return mouse_stick / maxf(maxf(mouse_stick_radius, mouse_dead_zone), 1.0)
+	return Vector2(Input.get_joy_axis(0, JOY_AXIS_RIGHT_X), Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)).limit_length(1.0)
 
 
-func calculate_mean(arr):
-	var sum = 0.0
-	var count = arr.size()
-	for i in arr:
-		sum += i
-	var mean : float = sum / count
-	return mean
+## Input offset (0-1) below which the input is ignored.
+func get_input_dead_zone() -> float:
+	if InputHelper.device_index == -1:
+		return mouse_dead_zone / maxf(maxf(mouse_stick_radius, mouse_dead_zone), 1.0)
+	return stick_dead_zone
 
 
-func signal_bools():
-	if spinning_clockwise:
+## True while rotating is possible: the mouse hold is pressed or not required, or a gamepad is used.
+func is_input_active() -> bool:
+	return InputHelper.device_index != -1 or !mouse_requires_hold or Input.is_action_pressed("action_primary")
+
+
+func _show_input_indicator() -> void:
+	_hide_input_indicator()
+	input_indicator = CanvasLayer.new()
+	input_indicator.name = "SpinnerInputIndicator"
+	var canvas := Control.new()
+	canvas.set_anchors_preset(Control.PRESET_FULL_RECT)
+	canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	canvas.draw.connect(_draw_input_indicator.bind(canvas))
+	input_indicator.add_child(canvas)
+	add_child(input_indicator)
+
+
+func _hide_input_indicator() -> void:
+	if is_instance_valid(input_indicator):
+		input_indicator.queue_free()
+		input_indicator = null
+
+
+func _draw_input_indicator(canvas: Control) -> void:
+	var centre := canvas.size / 2.0
+	var faded := Color(indicator_color, indicator_color.a * 0.35)
+	var color := indicator_color if is_input_active() else faded
+	canvas.draw_arc(centre, indicator_radius, 0.0, TAU, 48, faded, 2.0, true)
+	var dead_zone := get_input_dead_zone() * indicator_radius
+	if dead_zone > 1.0:
+		canvas.draw_arc(centre, dead_zone, 0.0, TAU, 24, faded, 1.0, true)
+	var dot := centre + get_input_offset() * indicator_radius
+	canvas.draw_line(centre, dot, faded, 1.0, true)
+	canvas.draw_circle(dot, 4.0, color)
+
+
+## Right stick angle, in radians, or NAN inside the dead zone. Decreases when the stick moves clockwise.
+func get_stick_angle() -> float:
+	var stick := Vector2(Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y), Input.get_joy_axis(0, JOY_AXIS_RIGHT_X))
+	if stick.length() < stick_dead_zone:
+		return NAN
+	return stick.angle()
+
+
+## Turns every whole rotation_speed of collected input into one spin step.
+func apply_spin() -> void:
+	if rotation_speed <= 0:
+		return
+	while spin_accumulator >= rotation_speed and is_being_controlled:
+		spin_accumulator -= rotation_speed
+		spin_step(1)
+	while spin_accumulator <= -rotation_speed and is_being_controlled:
+		spin_accumulator += rotation_speed
+		spin_step(-1)
+
+
+func spin_step(direction: int) -> void:
+	var previous_value := spinner_value
+	var was_goal_met := is_goal_met()
+	spinner_value += direction
+	# At the min or goal value the spinner stops unless it may overrotate.
+	if !overrotate and spinner_value == previous_value:
+		return
+
+	if direction > 0:
 		spin_clockwise.emit()
-		spinner_value += 1
-		apply_rotation(1)
-		
-	elif spinning_anticlockwise:
+	else:
 		spin_counterclockwise.emit()
-		spinner_value -= 1
-		apply_rotation(-1)
+	apply_rotation(direction)
+
+	if !was_goal_met and is_goal_met():
+		spinner_goal_met.emit()
+		if sound_on_goal_met :
+			CogitoAudio.play_sound_3d(sound_on_goal_met, global_position)
+		if destroy_on_goal_met:
+			force_exit()
+			get_parent().queue_free()
 
 
-func reset_bools():
-	spinning_clockwise = false
-	spinning_anticlockwise = false
+func is_goal_met() -> bool:
+	return ( spinner_goal_value < 0 and spinner_value <= spinner_goal_value ) or ( spinner_goal_value > 0 and spinner_value >= spinner_goal_value )
 
 
 func apply_rotation(direction:int) -> void:
 	if !rotating_object:
-		return
-		
-	if !overrotate and ( spinner_value == spinner_goal_value or spinner_value == spinner_min_value):
 		return
 	
 	rotating_object.rotate_object_local(spinning_axis,rotation_speed * direction)
