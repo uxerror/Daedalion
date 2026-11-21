@@ -1,5 +1,103 @@
+# Daedalion
+
+> [!WARNING]
+> **The git history of this repository has been rewritten. It is NOT the same history as Cogito on Codeberg.**
+>
+> Daedalion was created from [Cogito](https://codeberg.org/Phazorknight/Cogito) with
+> `git filter-repo --invert-paths --path .tmp.driveupload --path .godot`, which removed
+> about 1.5 GiB of accidentally committed upload and import-cache files (2023-2024) from
+> **every** commit. The repository shrank from ~1.6 GiB to ~54 MiB.
+>
+> What this means for you:
+>
+> - **Every commit hash differs** from the matching Cogito commit, from the very first commit on.
+>   The file contents of each upstream commit are unchanged apart from the removed paths.
+> - You **cannot** merge or rebase between a Cogito clone and a Daedalion clone, and branches
+>   cannot be pushed from one to the other. Clone this repository fresh instead of adding it as
+>   a remote to an existing Cogito clone. Changes move between the two as patches
+>   (see [Sending changes back to Cogito](#sending-changes-back-to-cogito)).
+> - Tags (`v1.0` ... `1.2.0`) were rewritten too and point to the filtered commits.
+> - Upstream changes are brought in with [`tools/sync_upstream.sh`](tools/sync_upstream.sh),
+>   which runs the same filter on Cogito; the filter is deterministic, so the `upstream`
+>   branch stays a linear continuation of the filtered Cogito history.
+
+Daedalion is a fork of **COGITO**, the first person immersive sim template for Godot 4 by
+[Philip Drobar](https://www.philipdrobar.com) and contributors. It is current Cogito plus
+changes that were proposed upstream but are not merged there yet, so they can be used and
+developed further without waiting. Everything here is meant to go back to Cogito.
+
+[![Based on COGITO](https://img.shields.io/badge/based_on-COGITO_1.2-35A1D7?labelColor=0E887A)](https://codeberg.org/Phazorknight/Cogito)
+
+## What is different from Cogito
+
+- **1.3 refactor stack** (proposed in [issue #615](https://codeberg.org/Phazorknight/Cogito/issues/615),
+  first part in [PR #634](https://codeberg.org/Phazorknight/Cogito/pulls/634)):
+  PlayerInteractionComponent split into child nodes with an interaction contract and a public
+  interaction API, `CogitoPlayer` base contract (`is CogitoPlayer` instead of the `Player` group),
+  `CogitoHud` contract, saves by persistent id with in-place restoring, player node paths and setup,
+  component actions, `CogitoPlayer.drop_item()`.
+- **Quickslot sets** ([PR #631](https://codeberg.org/Phazorknight/Cogito/pulls/631)): generic slot sets,
+  data-driven input and custom views (bar, radial wheel). In `main` it is adapted to the 1.3
+  interaction split.
+- **Spinner input** ([PR #632](https://codeberg.org/Phazorknight/Cogito/pulls/632)): the spinner follows
+  the input instead of thresholded spin detection, with an on-screen input indicator.
+- **Fixes** ([PR #633](https://codeberg.org/Phazorknight/Cogito/pulls/633)): elemental property states
+  and an NPC alerted-state crash.
+
+## Branches
+
+| Branch | Content |
+| --- | --- |
+| `main` | `upstream` + all branches below, merged |
+| `upstream` | filtered mirror of Cogito `main`; never commit here |
+| `1.3.0-dev` | the 1.3 refactor stack on top of `upstream` |
+| `pr/quickslot-sets` | PR #631 as sent (on `upstream`, without the 1.3 split) |
+| `pr/spinner-input` | PR #632 as sent |
+| `pr/fixes-batch` | PR #633 as sent |
+
+`pr/*` and `1.3.0-dev` branch off `upstream`, so each one is exactly the change set proposed to Cogito.
+New features also go into their own branch off `upstream` first and are merged into `main` after that.
+
+## Sending changes back to Cogito
+
+Because the hashes differ, branches are not pushed to Codeberg directly; the commits are carried
+over as patches, which keeps authorship, dates and messages:
+
+```sh
+# in Daedalion
+git format-patch upstream..pr/my-feature -o /tmp/my-feature
+# in a regular Cogito clone, on top of Cogito main
+git switch -c pr/my-feature origin/main
+git am /tmp/my-feature/*.patch
+```
+
+Then open the pull request on Codeberg as usual.
+
+## Keeping up with Cogito
+
+```sh
+tools/sync_upstream.sh          # updates the `upstream` branch from Codeberg
+git switch main && git merge upstream
+```
+
+Requires `git` and `uv` (`uvx git-filter-repo`) or `git-filter-repo`. The first run mirrors
+the full unfiltered Cogito history (~1.5 GiB) into `.git/cogito-upstream.git`; later runs only
+fetch new commits. The script refuses to
+update `upstream` if the filtered result does not continue the existing branch (for example
+after a history rewrite on the Cogito side).
+
+## License and credits
+
+MIT, same as Cogito; see [LICENSE](LICENSE). Cogito is © 2023 Phazorknight; see the
+[Cogito credits, contributors and license](https://codeberg.org/Phazorknight/Cogito/wiki/Credits%2C-Contributors%2C-License).
+Please report problems with changes that exist only in Daedalion here, not on the Cogito tracker.
+
+---
+
+## Original Cogito README
+
 ![COGITO_banner](addons/cogito/COGITO_banner.jpg)
-# COGITO
+### COGITO
 [![GodotEngine](https://img.shields.io/badge/Godot_4.6.3_stable-blue?logo=godotengine&logoColor=white)](https://godotengine.org/) [![COGITO](https://img.shields.io/badge/version_1.2.0-35A1D7?label=COGITO&labelColor=0E887A)](https://codeberg.org/Phazorknight/Cogito)
 
 ## What is it?
