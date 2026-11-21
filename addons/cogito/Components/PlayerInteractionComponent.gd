@@ -7,6 +7,8 @@ class_name PlayerInteractionComponent
 signal interaction_prompt(interaction_text: String)
 signal hint_prompt(hint_icon: Texture2D, hint_text: String)
 signal updated_wieldable_data(wielded_item: WieldableItemPD, ammo_in_inventory: int, ammo_item: AmmoItemPD)
+## Emitted when equipped_wieldable_node changes (equipped, unequipped, swapped, re-equipped after loading). Null if nothing is equipped.
+signal equipped_wieldable_node_changed(wieldable_node: CogitoWieldable)
 # Signals for Interaction raycast system
 signal interactive_object_detected(interaction_nodes: Array[Node])
 signal nothing_detected()

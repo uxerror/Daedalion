@@ -58,6 +58,7 @@ const settings_filename := "CogitoSettings"
 	"quickslot_4": "INPUT_quickslot_4",
 	"quickslot_prev_wieldable": "INPUT_quickslot_prev",
 	"quickslot_next_wieldable": "INPUT_quickslot_next",
+	"quickslot_wheel": "INPUT_quickslot_wheel",
 	"separator_inventory": "SEPARATOR_MENUES",
 	"menu": "INPUT_pause",
 	"inventory": "INPUT_inventory",
@@ -286,6 +287,13 @@ func _on_btn_reset_input_map_pressed() -> void:
 	gamepad_button.device = -1
 	gamepad_button.button_index = JOY_BUTTON_DPAD_DOWN
 	save_input_action_to_settings("quickslot_4",keyboard_key,gamepad_button)
+
+	keyboard_key = InputEventKey.new()
+	keyboard_key.physical_keycode = KEY_X
+	gamepad_button = InputEventJoypadButton.new()
+	gamepad_button.device = -1
+	gamepad_button.button_index = JOY_BUTTON_LEFT_SHOULDER
+	save_input_action_to_settings("quickslot_wheel",keyboard_key,gamepad_button)
 	
 	keyboard_key = InputEventKey.new()
 	keyboard_key.physical_keycode = KEY_CAPSLOCK
@@ -312,8 +320,8 @@ func _on_btn_reset_input_map_pressed() -> void:
 	keyboard_key.physical_keycode = KEY_T
 	gamepad_button = InputEventJoypadButton.new()
 	gamepad_button.device = -1
-	gamepad_button.button_index = JOY_BUTTON_LEFT_SHOULDER
-	save_input_action_to_settings("INPUT_change_ammo_type",keyboard_key,gamepad_button)
+	gamepad_button.button_index = JOY_BUTTON_MISC1
+	save_input_action_to_settings("change_ammo_type",keyboard_key,gamepad_button)
 	
 
 

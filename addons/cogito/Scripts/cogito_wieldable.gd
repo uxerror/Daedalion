@@ -116,6 +116,40 @@ func change_ammo():
 	
 func set_ammo_type(index: int) -> void:
 	pass
+
+
+## Switches to exactly the ammo type at index of item_reference.ammo_types (used by CogitoAmmoQuickslotEntry).
+## Blocked while an animation plays. Returns true if the ammo type changed.
+## Override this if your wieldable changes ammo differently.
+func change_ammo_to(index: int) -> bool:
+	if animation_player and animation_player.is_playing():
+		player_interaction_component.send_hint(null, tr("HINT_ammo_change_blocked"))
+		return false
+	if !item_reference.switch_to_ammo_type(index):
+		return false
+	apply_current_ammo_type()
+	return true
+
+
+## Applies item_reference.current_ammo_type to this node after the item switched ammo types, then reloads.
+func apply_current_ammo_type() -> void:
+	set_ammo_type(item_reference.current_ammo_type)
+	item_reference.update_wieldable_data(player_interaction_component)
+	reload()
+
+
+## Virtual: the quickslot set this wieldable offers while it is equipped, or null for none.
+## CogitoQuickslots gives it to views with shows_wieldable_set as their context set: the quickslot wheel opens in it
+## (see CogitoQuickslotWheel.open_in_wieldable_set) and offers it as a submenu next to the inventory quickslots.
+## By default this is the item's set (WieldableItemPD.get_quickslot_set(), for example its ammo types), which is also the
+## submenu of the item's quickslot, so the wheel enters the same set through that slot.
+## Override this for sets that depend on this node's state. Entries get the same activation context as inventory entries
+## (the player node), so they can reach player.player_interaction_component and its equipped_wieldable_node / equipped_wieldable_item.
+## It gets asked once the wieldable is equipped, entries should call emit_changed() when their data changes.
+func get_quickslot_set() -> CogitoQuickslotSet:
+	if !item_reference:
+		return null
+	return item_reference.get_quickslot_set(player_interaction_component)
 	
 # Override this with your debug stats
 func debug(id, data):

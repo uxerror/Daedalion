@@ -8,7 +8,12 @@ class_name WieldableHandler
 var is_changing_wieldables: bool = false # Used to avoid any input acitons while wieldables are being swapped
 # Various variables used for wieldable handling
 var equipped_wieldable_item: WieldableItemPD = null
-var equipped_wieldable_node: CogitoWieldable = null
+var equipped_wieldable_node: CogitoWieldable = null:
+	set(value):
+		if equipped_wieldable_node == value:
+			return
+		equipped_wieldable_node = value
+		pic.equipped_wieldable_node_changed.emit(equipped_wieldable_node)
 var wieldable_was_on: bool = false
 var is_wielding: bool:
 	get: return equipped_wieldable_item != null

@@ -282,6 +282,11 @@ msgstr "Nächster Schnellslot"
 
 #. TRANSLATORS: translation_key_dict entry
 #: addons/cogito/Localization/translation_keys_resources/loc_keys_keybindings.tres
+msgid "INPUT_quickslot_wheel"
+msgstr "Schnellslot-Rad"
+
+#. TRANSLATORS: translation_key_dict entry
+#: addons/cogito/Localization/translation_keys_resources/loc_keys_keybindings.tres
 msgid "INPUT_pause"
 msgstr "Pausenmenü"
 
@@ -972,6 +977,11 @@ msgid "REMOVE_CONFIRMATION_DIALOG_TEXT"
 msgstr ""
 "Dieser Vorgang ist nicht rückgängig zu machen. Sind Sie sicher, dass Sie den "
 "Speicherstand löschen möchten?"
+
+#. TRANSLATORS: translation_key_dict entry
+#: addons/cogito/Localization/translation_keys_resources/loc_menus_and_options.tres
+msgid "QUICKSLOT_back"
+msgstr "Zurück"
 
 #. TRANSLATORS: item name
 #: addons/cogito/InventoryPD/Items/Cogito_LockpickItem.tres

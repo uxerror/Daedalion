@@ -4,9 +4,13 @@ class_name CogitoQuickslotContainer
 signal quickslot_pressed(quickslot_container: CogitoQuickslotContainer)
 signal quickslot_cleared(quickslot_container: CogitoQuickslotContainer)
 
+## The entry this container currently displays (null if empty).
+var entry : CogitoQuickslotEntry
+## Set when the displayed entry is an inventory item (CogitoItemQuickslotEntry), null otherwise.
 var item_reference : InventoryItemPD
 var inventory_slot_reference : InventorySlotPD
 
+## Input action that activates this quickslot. Also used for the input icon.
 @export var input_action : String = "quickslot_1"
 
 ## AudioStream that plays when slot gets highlighted.
@@ -21,6 +25,8 @@ func _ready() -> void:
 	label_stack_amount.hide()
 	dynamic_input_icon.action_name = input_action
 	dynamic_input_icon.update_input_icon()
+	if entry:
+		display_entry(entry)
 
 
 func _on_gui_input(event):
@@ -46,48 +52,47 @@ func _on_gui_input(event):
 
 
 func clear_this_quickslot():
-	inventory_slot_reference = null
-	item_reference = null
-	item_texture.hide()
-	label_stack_amount.hide()
+	display_entry(null)
 	quickslot_cleared.emit(self)
 
 
-func update_quickslot_stack():
-	if !inventory_slot_reference:
+## Displays an entry (icon, counter, availability). Passing null shows an empty slot.
+func display_entry(new_entry: CogitoQuickslotEntry) -> void:
+	entry = new_entry
+	var item_entry := entry as CogitoItemQuickslotEntry
+	inventory_slot_reference = item_entry.slot_data if item_entry else null
+	item_reference = item_entry.get_item() if item_entry else null
+	
+	if !is_node_ready():
 		return
 	
-	if inventory_slot_reference.quantity > 1:
-		label_stack_amount.show()
-		label_stack_amount.text = str(inventory_slot_reference.quantity)
-	elif inventory_slot_reference.quantity == 1:
-		label_stack_amount.hide()
-	else:
-		CogitoGlobals.debug_log(true,"COgitoQuickslotContainer", "quickslot stack cleared." )
-		clear_this_quickslot()
-	
-
-func update_quickslot_data(slot_data: InventorySlotPD) -> void:
-	if slot_data == null:
-		CogitoGlobals.debug_log(true,"COgitoQuickslotContainer", "update_quickslot_data(): passed slot_data was null!" )
-		inventory_slot_reference = null
-		item_reference = null
+	if !entry:
 		item_texture.hide()
 		label_stack_amount.hide()
+		return
+	
+	item_texture.texture = entry.get_icon()
+	item_texture.modulate = Color.WHITE if entry.is_available() else Color(1, 1, 1, 0.4)
+	item_texture.show()
+	
+	var count : int = entry.get_count()
+	if count >= 0:
+		label_stack_amount.text = str(count)
+		label_stack_amount.show()
 	else:
-		CogitoGlobals.debug_log(true,"COgitoQuickslotContainer", "update_quickslot_data(): passed slot_data was " + str(slot_data) )
-		inventory_slot_reference = slot_data
-		item_reference = inventory_slot_reference.inventory_item
+		label_stack_amount.hide()
+	
+
+## Legacy: redraws the displayed entry. Quickslot sets now refresh their views automatically.
+func update_quickslot_stack():
+	display_entry(entry)
+
+
+## Legacy: displays an inventory slot. Prefer binding entries to the CogitoQuickslotSet of CogitoQuickslots.
+func update_quickslot_data(slot_data: InventorySlotPD) -> void:
+	CogitoGlobals.debug_log(true,"COgitoQuickslotContainer", "update_quickslot_data(): passed slot_data was " + str(slot_data) )
+	display_entry(CogitoItemQuickslotEntry.new(slot_data) if slot_data else null)
 		
-		item_texture.show()
-		item_texture.texture = item_reference.square_icon
-		
-		#Setting stack once here.
-		if inventory_slot_reference.quantity > 1:
-			label_stack_amount.show()
-			label_stack_amount.text = str(inventory_slot_reference.quantity)
-		if !inventory_slot_reference.stack_has_changed.is_connected(update_quickslot_stack):
-			inventory_slot_reference.stack_has_changed.connect(update_quickslot_stack)
 
 func get_item() -> InventoryItemPD:
 	return item_reference
