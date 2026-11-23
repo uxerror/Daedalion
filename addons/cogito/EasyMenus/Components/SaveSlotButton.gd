@@ -9,7 +9,7 @@ class_name CogitoSaveSlotButton
 @export var manual_save_slot_name : String
 @export var empty_slot_screenshot : Texture2D
 
-var player_state : CogitoPlayerState
+var slot_status := CogitoSceneManager.SlotStatus.EMPTY
 
 func _ready() -> void:
 	pressed.connect(_on_save_slot_button_pressed)
@@ -36,50 +36,33 @@ func _ready() -> void:
 	add_theme_stylebox_override('pressed', tween_stylebox)
 
 
-func set_data_from_state(_player_state:CogitoPlayerState):
-	if _player_state == null:
-		slot_name_label.text = tr("TXT_EMPTY_SLOT")
-		save_time_label.text = ""
-		screenshot_spot.texture = empty_slot_screenshot
-		player_state = null
-		return
-	else:
-		player_state = _player_state
-	
-	if player_state.player_state_slot_name:
-		slot_name_label.text = tr("TXT_SLOT") + " " + player_state.player_state_slot_name
-	else:
-		slot_name_label.text = tr("TXT_EMPTY_SLOT")
-
-	var savetime : int
-	if player_state:
-		savetime = player_state.player_state_savetime
-	if savetime == null or typeof(savetime) != TYPE_INT:
-		save_time_label.text = ""
-	else:
-		var timeoffset = Time.get_time_zone_from_system().bias*60
-		save_time_label.text = Time.get_datetime_string_from_unix_time(savetime+timeoffset,true)
-
-	# Set screenshot
-	var image_path : String = player_state.player_state_screenshot_file
-	if image_path != "":
-		var image : Image = Image.load_from_file(image_path)
-		var texture = ImageTexture.create_from_image(image)
-		screenshot_spot.texture = texture
-	else:
-		CogitoGlobals.debug_log(true,"SaveSlotButton.gd","No screenshot for slot " + CogitoSceneManager._active_slot + " found.")
+func refresh() -> void:
+	var slot := CogitoSceneManager.prepare_slot(manual_save_slot_name)
+	slot_status = slot.status
+	screenshot_spot.texture = CogitoSceneManager.slot_screenshot(slot.player, empty_slot_screenshot)
+	save_time_label.text = ""
+	match slot_status:
+		CogitoSceneManager.SlotStatus.EMPTY:
+			slot_name_label.text = tr("TXT_EMPTY_SLOT")
+		CogitoSceneManager.SlotStatus.BROKEN:
+			slot_name_label.text = tr("TXT_SLOT") + " " + manual_save_slot_name
+			save_time_label.text = slot.reason
+		CogitoSceneManager.SlotStatus.OK:
+			slot_name_label.text = tr("TXT_SLOT") + " " + manual_save_slot_name
+			var offset: int = Time.get_time_zone_from_system().bias * 60
+			save_time_label.text = Time.get_datetime_string_from_unix_time(slot.player.player_state_savetime + offset, true)
 
 
 func _on_save_slot_button_pressed() -> void:
 	if CogitoSceneManager.previous_menu == "pause_menu":
 		if CogitoSceneManager.previous_menu_button_pressed == "save":
-			if CogitoSceneManager.is_saved_slot_exist(manual_save_slot_name):
+			if slot_status != CogitoSceneManager.SlotStatus.EMPTY:
 				show_save_confirmation_dialog()
 			else:
 				save_in_slot()
 			return
 		elif CogitoSceneManager.previous_menu_button_pressed == "load":
-			if CogitoSceneManager.is_saved_slot_exist(manual_save_slot_name):
+			if slot_status != CogitoSceneManager.SlotStatus.EMPTY:
 				var last_saved_slot = CogitoSceneManager.get_last_saved_slot()
 				if CogitoSceneManager._active_slot == last_saved_slot and manual_save_slot_name != last_saved_slot:
 					show_load_confirmation_dialog()
@@ -87,14 +70,8 @@ func _on_save_slot_button_pressed() -> void:
 					load_from_slot()
 			return
 	
-	if player_state:
-		CogitoGlobals.debug_log(true,"SaveSlotButton.gd","Attempting to load player_state " + player_state.player_state_slot_name)
-		CogitoSceneManager._player_state = player_state
-		CogitoSceneManager.switch_active_slot_to(player_state.player_state_slot_name)
-		CogitoSceneManager._current_scene_name = get_tree().get_current_scene().get_name()
-		CogitoSceneManager._current_scene_path = get_tree().current_scene.scene_file_path
-		CogitoSceneManager.delete_temp_saves()
-		CogitoSceneManager.copy_slot_saves_to_temp(CogitoSceneManager._active_slot)
+	if slot_status != CogitoSceneManager.SlotStatus.EMPTY:
+		load_from_slot()
 
 
 func show_save_confirmation_dialog():
@@ -139,41 +116,34 @@ func dialog_load_canceled():
 	pass
 
 
-func save_in_slot():
-	CogitoSceneManager.is_loaded_from_start_new_game = false
-	CogitoSceneManager._current_scene_name = get_tree().get_current_scene().get_name()
-	CogitoSceneManager._current_scene_path = get_tree().current_scene.scene_file_path
-	CogitoSceneManager.save_player_state(CogitoSceneManager.get_player(), manual_save_slot_name)
-	CogitoSceneManager.save_scene_state(CogitoSceneManager._current_scene_name,"temp")
-	CogitoSceneManager.copy_temp_saves_to_slot(manual_save_slot_name)
-	set_data_from_state(save_slot_manager_node.load_slot_data(manual_save_slot_name))
+func save_in_slot() -> Error:
+	var error := CogitoSceneManager.save_game(manual_save_slot_name)
+	if error != OK:
+		save_time_label.text = CogitoSceneManager.last_slot_message
+		return error
+	refresh()
 	CogitoSceneManager.previous_menu = ""
 	CogitoSceneManager.previous_menu_button_pressed = ""
 	CogitoSceneManager.game_menu.show()
 	CogitoSceneManager.save_load_menu.hide()
-	CogitoSceneManager._active_slot = manual_save_slot_name
-	CogitoSceneManager.save_last_saved_slot(manual_save_slot_name)
 	CogitoSceneManager.pause_menu.load_slot_data()
+	return OK
 
 
-func load_from_slot():
-	CogitoSceneManager.is_loaded_from_start_new_game = false
-	CogitoSceneManager._player_state = player_state
-	CogitoSceneManager.switch_active_slot_to(player_state.player_state_slot_name)
-	CogitoSceneManager._current_scene_name = get_tree().get_current_scene().get_name()
-	CogitoSceneManager._current_scene_path = get_tree().current_scene.scene_file_path
-	CogitoSceneManager.delete_temp_saves()
-	CogitoSceneManager.copy_slot_saves_to_temp(manual_save_slot_name)
+func load_from_slot() -> Error:
+	var error := CogitoSceneManager.loading_saved_game(manual_save_slot_name)
+	if error != OK:
+		save_time_label.text = CogitoSceneManager.last_slot_message
+		return error
+	if CogitoSceneManager.previous_menu == "pause_menu":
+		CogitoSceneManager.pause_menu.close_pause_menu()
 	CogitoSceneManager.previous_menu = ""
 	CogitoSceneManager.previous_menu_button_pressed = ""
-	CogitoSceneManager.game_menu.show()
-	CogitoSceneManager.save_load_menu.hide()
-	CogitoSceneManager._active_slot = manual_save_slot_name
-	CogitoSceneManager.pause_menu.close_pause_menu()
+	return OK
 
 
 func _on_delete_slot_pressed():
-	if CogitoSceneManager.is_saved_slot_exist(manual_save_slot_name):
+	if slot_status != CogitoSceneManager.SlotStatus.EMPTY:
 		show_remove_confirmation_dialog()
 
 
@@ -191,15 +161,13 @@ func show_remove_confirmation_dialog():
 
 
 func dialog_remove_confirmed():
-	var last_active_slot = CogitoSceneManager._active_slot
-	CogitoSceneManager.switch_active_slot_to(manual_save_slot_name)
-	if CogitoSceneManager._player_state != null:
-		CogitoSceneManager.delete_save(manual_save_slot_name)
-		CogitoSceneManager.delete_from_saved_slots(manual_save_slot_name)
-		save_slot_manager_node.load_all_save_slots(false)
-		CogitoSceneManager.switch_active_slot_to(last_active_slot)
-	else:
-		CogitoGlobals.debug_log(true,"SaveSlotButton.gd","Slot is already empty!")
+	if CogitoSceneManager.delete_save(manual_save_slot_name) != OK:
+		save_time_label.text = "Cannot delete slot."
+		return
+	if CogitoSceneManager.delete_from_saved_slots(manual_save_slot_name) != OK:
+		save_time_label.text = "Cannot update save list."
+		return
+	save_slot_manager_node.load_all_save_slots(false)
 
 
 func dialog_remove_canceled():

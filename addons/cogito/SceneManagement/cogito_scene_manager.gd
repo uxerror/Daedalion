@@ -38,6 +38,19 @@ signal seat_move_requested(Node)
 
 enum CogitoSceneLoadMode {TEMP, LOAD_SAVE, RESET}
 
+enum SlotStatus { EMPTY, OK, BROKEN }
+
+class PreparedSlot:
+	var status := SlotStatus.BROKEN
+	var reason := ""
+	var player: CogitoPlayerState
+	var level: PackedScene
+	var scene: CogitoSceneState
+
+const SlotStorage := preload("res://addons/cogito/SceneManagement/cogito_slot_storage.gd")
+@onready var storage := SlotStorage.new(cogito_state_dir)
+var last_slot_message := ""
+
 # Keys the scene state adds to saved entries to find their nodes again. They are not node properties.
 const SAVE_ID_KEYS : Array[String] = ["cogito_id", "cogito_parent_id"]
 @export var scene_load_mode: CogitoSceneLoadMode
@@ -69,13 +82,8 @@ var _destroyed_nodes_level_id : int = 0
 
 
 func _ready() -> void:
-	_player_state = get_existing_player_state(_active_slot) # Setting active slot (per default it's A)
-	_scene_state = get_existing_scene_state(_active_slot)
-	
-	if not DirAccess.dir_exists_absolute(cogito_state_dir):
-		DirAccess.make_dir_absolute(cogito_state_dir)
-	
-	reset_scene_states()
+	storage.recover_all() # Individual failures are logged and retried before use.
+	_player_state = get_existing_player_state(_active_slot)
 	instantiate_fade_panel()
 
 
@@ -98,7 +106,11 @@ func register_player(player: CogitoPlayer) -> void:
 
 
 func grab_screenshot(scale: float = 1.0) -> Image:
+	if DisplayServer.get_name() == "headless":
+		return null
 	var image: Image = get_viewport().get_texture().get_image()
+	if not image or image.is_empty():
+		return null
 	image.resize(int(image.get_width() * scale), int(image.get_height() * scale), Image.INTERPOLATE_LANCZOS)
 	return image
 
@@ -107,145 +119,184 @@ func send_player_hint(hint_icon: Texture2D, hint_text: String):
 	get_player().player_interaction_component.send_hint(hint_icon, hint_text)
 
 
-func switch_active_slot_to(slot_name:String) -> void:
-	_player_state = null
-	_player_state = get_existing_player_state(slot_name)
-	if !_player_state:
-		CogitoGlobals.debug_log(true,"CSM","Existing player state for slot " + slot_name + " not found.")
-	_active_slot = slot_name
-	CogitoGlobals.debug_log(true,"CSM","Active slot switched to " + _active_slot)
+func player_file(slot: String) -> String:
+	return cogito_state_dir.path_join(slot).path_join(cogito_player_state_prefix + ".res")
 
 
-func get_existing_player_state(passed_slot) -> CogitoPlayerState:
-	var player_state_file : String = cogito_state_dir + passed_slot + "/" + cogito_player_state_prefix + ".res"
-	CogitoGlobals.debug_log(true,"CSM","Looking for file: "+ player_state_file)
-	if ResourceLoader.exists(player_state_file):
-		CogitoGlobals.debug_log(true,"CSM","CSM: Get existing player state: found for slot "+ passed_slot)
-		return ResourceLoader.load(player_state_file, "", ResourceLoader.CACHE_MODE_IGNORE)
-	else:
-		CogitoGlobals.debug_log(true,"CSM","Get existing player state: No player state found for slot "+ passed_slot)
-		return null
+func scene_file(slot: String, level_name: String) -> String:
+	return cogito_state_dir.path_join(slot).path_join(cogito_scene_state_prefix + level_name + ".res")
 
 
-func get_existing_scene_state(passed_slot) -> CogitoSceneState:
-	var current_scene : String = ""
-	if _player_state:
-		current_scene = _player_state.player_current_scene
-	var scene_state_file : String = cogito_state_dir + passed_slot + "/" + CogitoGlobals.scene_state_prefix + current_scene + ".res"
-	CogitoGlobals.debug_log(true,"CSM","Looking for file: "+ scene_state_file)
-	if ResourceLoader.exists(scene_state_file):
-		CogitoGlobals.debug_log(true,"CSM","Get existing scene state: found for slot "+ passed_slot)
-		return ResourceLoader.load(scene_state_file, "", ResourceLoader.CACHE_MODE_IGNORE)
-	else:
-		CogitoGlobals.debug_log(true,"CSM","Get existing scene state: No scene state found for slot "+ passed_slot)
-		return null
+func get_existing_player_state(slot: String) -> CogitoPlayerState:
+	if storage.valid_slot(slot) and FileAccess.file_exists(player_file(slot)):
+		return ResourceLoader.load(player_file(slot), "", ResourceLoader.CACHE_MODE_IGNORE) as CogitoPlayerState
+	return null
 
 
-func loading_saved_game(passed_slot: String, current_scene_name: String = "") -> void:
-	CogitoGlobals.debug_log(true,"CSM","CSM: Loading saved game from slot "+ passed_slot)
-	if !_player_state or !_player_state.state_exists(passed_slot):
-		CogitoGlobals.debug_log(true,"CSM","CSM: Player state of passed slot doesn't exist.")
-		return
-		
-	_player_state = _player_state.load_state(_active_slot) as CogitoPlayerState
-	
-	if current_scene_name == "":
-		current_scene_name = get_tree().get_current_scene().get_name()
-	
-	CogitoGlobals.debug_log(true,"CSM","Current scene detected as "+ current_scene_name)
-	# The level is loaded again from its scene file even when the save is from the current scene,
-	# so the save gets applied to a clean level instead of one that is in the middle of being played.
-	CogitoGlobals.debug_log(true,"CSM","Loading scene " + _player_state.player_current_scene + " for slot " + passed_slot + "...")
-	load_next_scene(_player_state.player_current_scene_path, "", passed_slot, CogitoSceneLoadMode.LOAD_SAVE)
+func prepare_slot(slot: String) -> PreparedSlot:
+	if storage.recover(slot) != OK:
+		var result := PreparedSlot.new()
+		result.reason = "Cannot access save slot."
+		return result
+	return _prepare_files(slot)
 
 
-## Applies the scene and player state of a save to the level that was just loaded for it by loading_saved_game().
-func apply_saved_game(passed_slot: String) -> void:
-	load_scene_state(_player_state.player_current_scene, passed_slot)
-	load_player_state(get_player(), passed_slot)
+func _prepare_files(slot: String) -> PreparedSlot:
+	var result := PreparedSlot.new()
+	var path := player_file(slot)
+	var dir_path := path.get_base_dir()
+	var directory := DirAccess.open(dir_path)
+	if not directory:
+		var parent := DirAccess.open(cogito_state_dir)
+		if not parent or parent.get_directories().has(slot) or parent.file_exists(slot):
+			result.reason = "Cannot access save slot."
+			return result
+	var files := directory.get_files() if directory else PackedStringArray()
+	if not files.has(path.get_file()):
+		result.status = SlotStatus.EMPTY
+		result.reason = "Empty slot."
+		return result
+	result.player = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as CogitoPlayerState
+	if not result.player:
+		result.reason = "Cannot read player state."
+		return result
+	var level_path := result.player.player_current_scene_path
+	if ResourceLoader.exists(level_path, "PackedScene"):
+		result.level = ResourceLoader.load(level_path, "PackedScene") as PackedScene
+	if not result.level or not result.level.can_instantiate():
+		result.reason = "Saved level is unavailable."
+		return result
+	var level_name := result.player.player_current_scene
+	if not level_name.is_valid_filename():
+		result.reason = "Invalid saved level name."
+		return result
+	path = scene_file(slot, level_name)
+	if files.has(path.get_file()):
+		result.scene = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as CogitoSceneState
+		if not result.scene:
+			result.reason = "Cannot read level state."
+			return result
+	result.status = SlotStatus.OK
+	return result
+
+
+func slot_error(message: String, detail: String, error := FAILED) -> Error:
+	last_slot_message = message
+	push_warning("%s %s (%s)" % [message, detail, error_string(error)])
+	CogitoGlobals.debug_log(true, "CSM", detail)
+	return error
+
+
+func loading_saved_game(slot: String, _current_scene_name_unused: String = "") -> Error:
+	var prepared := prepare_slot(slot)
+	if prepared.status != SlotStatus.OK:
+		return slot_error(prepared.reason, slot, ERR_FILE_CANT_READ)
+	var screen = _new_loading_screen()
+	if not screen:
+		return slot_error("Cannot open loading screen.", slot)
+	var level := prepared.level.instantiate()
+	if not level:
+		screen.free()
+		return slot_error("Cannot open saved level.", prepared.player.player_current_scene_path)
+	if slot != "temp":
+		var error := storage.replace("temp", slot)
+		if error != OK:
+			level.free()
+			screen.free()
+			return slot_error("Cannot prepare saved files.", slot, error)
+	if not prepared.scene:
+		push_warning("No level state in slot %s. Loading the original level." % slot)
+	_active_slot = slot
+	is_loaded_from_start_new_game = false
+	scene_load_mode = CogitoSceneLoadMode.LOAD_SAVE
+	screen.load_mode = scene_load_mode
+	screen.prepared_level = level
+	screen.prepared_slot = prepared
+	get_tree().root.add_child(screen)
+	return OK
+
+
+func apply_saved_game(prepared: PreparedSlot) -> void:
+	_scene_state = prepared.scene
+	if _scene_state:
+		_apply_scene_state()
+	_apply_player_state(get_player(), prepared.player)
 
 
 #region PLAYER SAVE HANDLING
-func load_player_state(player, passed_slot:String) -> void:
-	CogitoGlobals.debug_log(true,"CSM","Loading player state...")
-	if !_player_state:
-		_player_state = player.create_new_state()
-	
-	if _player_state and _player_state.state_exists(passed_slot):
-		CogitoGlobals.debug_log(true,"CSM","Player State in slot " + passed_slot + " exists. Loading " + str(_player_state))
-		_player_state = _player_state.load_state(passed_slot) as CogitoPlayerState
-		
-		# Applying the save state to player node.
-		_player_state.populate_player_data(player)
-		player.player_state_loaded.emit()
-		
-		fade_in()
-	else:
-		CogitoGlobals.debug_log(true,"CSM","Player state of slot " + passed_slot + " doesn't exist.")
+func load_player_state(player: CogitoPlayer, slot: String) -> void:
+	var state := get_existing_player_state(slot)
+	if state:
+		_apply_player_state(player, state)
 
 
-func save_player_state(player, slot:String) -> void:
-	if !_player_state:
-		CogitoGlobals.debug_log(true,"CSM","State doesn't exist. Creating for slot " + slot + "...")
-		_player_state = player.create_new_state()
-	
-	# Writing the save state from current player node.
-	_player_state.populate_save_data(player, slot)
+func _apply_player_state(player: CogitoPlayer, state: CogitoPlayerState) -> void:
+	if not player:
+		push_warning("No player registered in the loaded level.")
+		return
+	_player_state = state
+	state.populate_player_data(player)
+	player.player_state_loaded.emit()
+	fade_in()
 
-	# Write to temp directory first
-	_player_state.write_state("temp")
+
+func write_state_resource(state: Resource, path: String) -> Error:
+	var error := DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	if error == OK:
+		error = ResourceSaver.save(state, path, ResourceSaver.FLAG_CHANGE_PATH)
+	return storage.check(error, path)
 #endregion
 
 
-func get_active_slot_player_state_screenshot_path() -> String:
-	if _player_state and _player_state.state_exists(_active_slot):
-		_player_state = _player_state.load_state(_active_slot) as CogitoPlayerState
-		return _player_state.player_state_screenshot_file
-	else:
-		return ""
+func slot_screenshot(state: CogitoPlayerState, placeholder: Texture2D) -> Texture2D:
+	if state and not state.player_state_screenshot_file.is_empty() and FileAccess.file_exists(state.player_state_screenshot_file):
+		var image := Image.load_from_file(state.player_state_screenshot_file)
+		if image and not image.is_empty():
+			return ImageTexture.create_from_image(image)
+	return placeholder
 
 
-func load_scene_state(_scene_name_to_load:String, slot:String) -> void:
-	CogitoGlobals.debug_log(true,"CSM","Load scene state for:"+ _scene_name_to_load+ ". Slot: "+ slot)
-	if !_scene_state:
-		_scene_state = CogitoSceneState.new()
-	
-	if _scene_state and _scene_state.state_exists(slot, _scene_name_to_load):
-		CogitoGlobals.debug_log(true,"CSM","Scene state exists. Loading " + str(_scene_state))
-		_scene_state = _scene_state.load_state(slot,_scene_name_to_load) as CogitoSceneState
-		
-		if _scene_state.saved_nodes.all(func(node_data): return node_data.has("cogito_id")):
-			_load_persist_nodes_in_place(_scene_state.saved_nodes)
+func load_scene_state(level_name: String, slot: String) -> void:
+	var path := scene_file(slot, level_name)
+	if FileAccess.file_exists(path):
+		_scene_state = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as CogitoSceneState
+		if _scene_state:
+			_apply_scene_state()
 		else:
-			_load_persist_nodes_legacy(_scene_state.saved_nodes)
+			push_warning("Cannot read level state: " + path)
 
-		# Loading states of objects in save_object_state
-		var array_of_state_data = _scene_state.saved_states
-		for state_data in array_of_state_data:
-			var node_to_set : Node = _find_saved_node(state_data, "cogito_id", "node_path")
-			if !node_to_set:
-				CogitoGlobals.debug_log(true,"CSM","Saved object " + str(state_data.get("cogito_id", state_data.get("node_path"))) + " not found in the scene, skipped.")
-				continue
-			# Set variables here
-			node_to_set.position = Vector3(state_data["pos_x"],state_data["pos_y"],state_data["pos_z"])
-			node_to_set.rotation = Vector3(state_data["rot_x"],state_data["rot_y"],state_data["rot_z"])
-			for data in state_data.keys():
-				if data == "filename" or data == "parent" or data == "pos_x" or data == "pos_y" or data == "pos_z" or data == "rot_x" or data == "rot_y" or data == "rot_z" or data in SAVE_ID_KEYS:
-					continue
-				node_to_set.set(data, state_data[data])
-			# Call set_state only if the method exists
-			if node_to_set.has_method("set_state"):
-				node_to_set.set_state()
-		
-		_load_destroyed_nodes(_scene_state.saved_destroyed_nodes)
-		# Element states go last, after the deferred set_state() calls of the Persist nodes
-		# and the on-ready states of the freshly loaded level.
-		_apply_element_states.call_deferred(_scene_state.saved_element_states.duplicate(true))
-		
-		CogitoGlobals.debug_log(true,"CSM","CSM: Loading scene state finished.")
-			
+
+func _apply_scene_state() -> void:
+	if _scene_state.saved_nodes.all(func(node_data): return node_data.has("cogito_id")):
+		_load_persist_nodes_in_place(_scene_state.saved_nodes)
 	else:
-		CogitoGlobals.debug_log(true,"CSM","CSM: Scene state doesn't exist.")
+		_load_persist_nodes_legacy(_scene_state.saved_nodes)
+
+	# Loading states of objects in save_object_state
+	var array_of_state_data = _scene_state.saved_states
+	for state_data in array_of_state_data:
+		var node_to_set : Node = _find_saved_node(state_data, "cogito_id", "node_path")
+		if !node_to_set:
+			CogitoGlobals.debug_log(true,"CSM","Saved object " + str(state_data.get("cogito_id", state_data.get("node_path"))) + " not found in the scene, skipped.")
+			continue
+		# Set variables here
+		node_to_set.position = Vector3(state_data["pos_x"],state_data["pos_y"],state_data["pos_z"])
+		node_to_set.rotation = Vector3(state_data["rot_x"],state_data["rot_y"],state_data["rot_z"])
+		for data in state_data.keys():
+			if data == "filename" or data == "parent" or data == "pos_x" or data == "pos_y" or data == "pos_z" or data == "rot_x" or data == "rot_y" or data == "rot_z" or data in SAVE_ID_KEYS:
+				continue
+			node_to_set.set(data, state_data[data])
+		# Call set_state only if the method exists
+		if node_to_set.has_method("set_state"):
+			node_to_set.set_state()
+	
+	_load_destroyed_nodes(_scene_state.saved_destroyed_nodes)
+	# Element states go last, after the deferred set_state() calls of the Persist nodes
+	# and the on-ready states of the freshly loaded level.
+	_apply_element_states.call_deferred(_scene_state.saved_element_states.duplicate(true))
+	
+	CogitoGlobals.debug_log(true,"CSM","CSM: Loading scene state finished.")
+
 
 
 # Restores Persist nodes on a freshly loaded level: nodes that are in the save are updated where they are,
@@ -298,7 +349,13 @@ func _spawn_saved_node(node_data: Dictionary) -> Node:
 	if !parent_node:
 		CogitoGlobals.debug_log(true,"CSM","Parent of saved node " + str(node_data["filename"]) + " not found, skipped.")
 		return null
-	var new_object = load(node_data["filename"]).instantiate()
+	var prefab := load(node_data["filename"]) as PackedScene
+	if not prefab or not prefab.can_instantiate():
+		push_warning("Cannot instantiate saved object: " + str(node_data["filename"]))
+		return null
+	var new_object := prefab.instantiate()
+	if not new_object:
+		return null
 	CogitoPersistentId.restore(new_object, node_data.get("cogito_id", ""))
 	parent_node.add_child(new_object)
 	CogitoGlobals.debug_log(true,"CSM","Adding to scene: "+ new_object.get_name())
@@ -338,13 +395,16 @@ func _find_saved_node(data: Dictionary, id_key: String, legacy_path_key: String)
 	return null
 
 
-func save_scene_state(_scene_name_to_save, slot: String) -> void:
-	if !_scene_state:
-		CogitoGlobals.debug_log(true,"CSM","CSM: Save doesn't exist. Creating...")
-		_scene_state = CogitoSceneState.new()
-		
-	_scene_state.clear_saved_nodes() # Clearing out old saved nodes
-	
+func save_scene_state(level_name: String, slot: String) -> Error:
+	var state := _capture_scene_state()
+	var error := state.write_state(slot, level_name)
+	if error == OK:
+		_scene_state = state
+	return error
+
+
+func _capture_scene_state() -> CogitoSceneState:
+	var state := CogitoSceneState.new()
 	var save_nodes = get_tree().get_nodes_in_group("Persist")
 	if !save_nodes:
 		CogitoGlobals.debug_log(true,"CSM","No nodes in Persist group!")
@@ -370,10 +430,9 @@ func save_scene_state(_scene_name_to_save, slot: String) -> void:
 				node_data["angular_velocity_x"] = node.angular_velocity.x
 				node_data["angular_velocity_y"] = node.angular_velocity.y
 				node_data["angular_velocity_z"] = node.angular_velocity.z
-			_scene_state.add_node_data_to_array(node_data)
-		
-	_scene_state.clear_saved_states()
+			state.add_node_data_to_array(node_data)
 	
+
 	# Saving states of objects
 	var state_nodes = get_tree().get_nodes_in_group("save_object_state")
 	if !state_nodes:
@@ -386,12 +445,12 @@ func save_scene_state(_scene_name_to_save, slot: String) -> void:
 				
 			var state_data = node.save()
 			state_data["cogito_id"] = CogitoPersistentId.of(node)
-			_scene_state.add_state_data_to_array(state_data)
+			state.add_state_data_to_array(state_data)
 	
-	_scene_state.saved_element_states = _collect_element_states()
-	_scene_state.saved_destroyed_nodes = _get_destroyed_nodes().duplicate(true)
+	state.saved_element_states = _collect_element_states()
+	state.saved_destroyed_nodes = _get_destroyed_nodes().duplicate(true)
 			
-	_scene_state.write_state(slot, _scene_name_to_save)
+	return state
 
 
 #region ELEMENT STATES
@@ -487,110 +546,68 @@ func _is_part_of_player(node: Node) -> bool:
 
 
 # Function to transition to another scene via the loading screen.
-func load_next_scene(target : String, connector_name: String, passed_slot: String, load_mode: CogitoSceneLoadMode) -> void:
-	CogitoSceneManager.scene_load_mode = load_mode
-	# fade_out()
-	var loading_screen = load(CogitoGlobals.cogito_settings.loading_screen_scene_path).instantiate()
-	loading_screen.next_scene_path = target
-	loading_screen.connector_name = connector_name
-	loading_screen.passed_slot = passed_slot
-	# loading_screen.attempt_to_load_save = loading_a_save
-	loading_screen.load_mode = load_mode
-	CogitoGlobals.debug_log(true, "CSM", "Loading screen initiated with: next_scene_path=" + target + " | connector = " + connector_name + " | passed_slot = " + passed_slot + " | load_mode = " + str(load_mode) )
-	get_tree().get_root().add_child(loading_screen)
+func _new_loading_screen() -> CanvasLayer:
+	var packed := load(CogitoGlobals.cogito_settings.loading_screen_scene_path) as PackedScene
+	if not packed or not packed.can_instantiate():
+		return null
+	var screen := packed.instantiate()
+	if screen is CanvasLayer and screen.has_method("request_scene"):
+		return screen
+	if screen:
+		screen.free()
+	return null
 
 
-func delete_save(passed_slot: String) -> void:
-	# var file_to_remove = cogito_state_dir + cogito_player_state_prefix + passed_slot + ".res"
-	var dir_to_remove = cogito_state_dir + passed_slot
-	OS.move_to_trash(ProjectSettings.globalize_path(dir_to_remove))
-	var screenshot_to_remove = cogito_state_dir + CogitoGlobals.cogito_settings.player_state_prefix + passed_slot + ".png"
-	OS.move_to_trash(ProjectSettings.globalize_path(screenshot_to_remove))
-	CogitoGlobals.debug_log(true,"CSM","Save file removed: "+ dir_to_remove)
-	
-	# var scene_to_remove = cogito_state_dir + cogito_scene_state_prefix + passed_slot + ".res"
+func load_next_scene(target: String, connector_name: String, passed_slot: String, load_mode: CogitoSceneLoadMode) -> Error:
+	if load_mode == CogitoSceneLoadMode.LOAD_SAVE:
+		return loading_saved_game(passed_slot)
+	var screen = _new_loading_screen()
+	if not screen:
+		scene_load_failed(target, ERR_CANT_CREATE)
+		return ERR_CANT_CREATE
+	screen.next_scene_path = target
+	screen.connector_name = connector_name
+	screen.load_mode = load_mode
+	var error: Error = screen.request_scene()
+	if error != OK:
+		screen.free()
+		scene_load_failed(target, error)
+		return error
+	scene_load_mode = load_mode
+	get_tree().root.add_child(screen)
+	return OK
 
 
-func copy_slot_saves_to_temp(passed_slot:String) -> bool:
-	CogitoGlobals.debug_log(true,"CSM","Attempting to copy files from slot " + passed_slot + " to temp.")
-	var slot_dir = DirAccess.open(cogito_state_dir + passed_slot)
-	
-	var cogito_dir = DirAccess.open(CogitoSceneManager.cogito_state_dir)
-	if not cogito_dir.dir_exists("temp"):
-		cogito_dir.make_dir("temp")
-
-	if slot_dir:
-		slot_dir.list_dir_begin()
-		var file_name = slot_dir.get_next()
-		
-		while file_name != "":
-			CogitoGlobals.debug_log(true,"CSM","Copying file to temp: "+ file_name)
-			if slot_dir.copy(str(CogitoSceneManager.cogito_state_dir + passed_slot + "/" + file_name), str(CogitoSceneManager.cogito_state_dir + "temp/" + file_name), -1) != OK:
-				CogitoGlobals.debug_log(true,"CSM","Copying file "+ file_name + " failed.")
-				return false
-			# iterate to next file
-			file_name = slot_dir.get_next()
-	
-	CogitoGlobals.debug_log(true,"CSM", "Copying files to temp finished.")
-	
-	loading_saved_game("temp") # This loads the temp save states after moving them from the slot.
-	return true
+func scene_load_failed(target: String, error: Error) -> void:
+	is_currently_loading = false
+	slot_error("Cannot open level.", target, error)
+	fade_in()
+	var player := get_player()
+	if player:
+		player.resume()
+		send_player_hint(null, last_slot_message)
 
 
-func copy_temp_saves_to_slot(passed_slot:String) -> bool:
-	CogitoGlobals.debug_log(true,"CSM","Attempting to copy files from temp to slot " + passed_slot)
-	var temp_dir = DirAccess.open(cogito_state_dir + "temp")
-	
-	var cogito_dir = DirAccess.open(CogitoSceneManager.cogito_state_dir)
-	if not cogito_dir.dir_exists(passed_slot):
-		cogito_dir.make_dir(passed_slot)
-
-	if temp_dir:
-		temp_dir.list_dir_begin()
-		var file_name = temp_dir.get_next()
-		
-		while file_name != "":
-			CogitoGlobals.debug_log(true,"CSM","Copying file to temp: "+ file_name)
-			if temp_dir.copy(str(CogitoSceneManager.cogito_state_dir + "temp/" + file_name), str(CogitoSceneManager.cogito_state_dir + passed_slot + "/" + file_name), -1) != OK:
-				CogitoGlobals.debug_log(true,"CSM","Copying file " + file_name + " failed.")
-				return false
-			# iterate to next file
-			file_name = temp_dir.get_next()
-	
-	CogitoGlobals.debug_log(true,"CSM","Copying temp files to slot " + passed_slot + " finished.")
-	return true
+func delete_save(slot: String) -> Error:
+	var error := storage.recover(slot)
+	if error != OK:
+		return error
+	var directory := cogito_state_dir.path_join(slot)
+	if DirAccess.dir_exists_absolute(directory):
+		error = OS.move_to_trash(ProjectSettings.globalize_path(directory))
+		if error != OK:
+			return storage.check(error, directory)
+	var external_png := cogito_state_dir.path_join(cogito_player_state_prefix + slot + ".png")
+	if FileAccess.file_exists(external_png):
+		error = OS.move_to_trash(ProjectSettings.globalize_path(external_png))
+	return storage.check(error, external_png)
 
 
-func delete_temp_saves() -> void:
-	CogitoGlobals.debug_log(true,"CSM","Attempting to delete temp saves...")
-	
-	var dir = DirAccess.open(cogito_state_dir + "temp/")
-	
-	if dir:
-		dir.list_dir_begin()
-		var file_name = dir.get_next()
-		
-		while file_name != "":
-			CogitoGlobals.debug_log(true,"CSM","Deleting file: " + file_name)
-			if dir.remove(file_name) != OK:
-				CogitoGlobals.debug_log(true,"CSM","Deleting file " + file_name + " failed.")
-			# iterate to next file
-			file_name = dir.get_next()
-	
-	var dir2 = DirAccess.open(cogito_state_dir)
-	if dir2:
-		dir2.list_dir_begin()
-		var file_name = dir2.get_next()
-		while file_name != "":
-			if dir2.current_is_dir():
-				CogitoGlobals.debug_log(true,"CSM","Deleting temp saves: Detected dir = " + file_name)
-				if file_name == "temp":
-					CogitoGlobals.debug_log(true,"CSM","Deleting temp directory: " + file_name)
-					if dir2.remove(file_name) != OK:
-						CogitoGlobals.debug_log(true,"CSM","Deleting temp dir failed.")
-			file_name = dir2.get_next()
-			
-	CogitoGlobals.debug_log(true,"CSM","Delete temp saves complete!")
+func delete_temp_saves() -> Error:
+	var error := storage.recover("temp")
+	if error == OK:
+		error = storage.remove_directory(cogito_state_dir.path_join("temp"))
+	return error
 
 
 ## @deprecated: Use [code]CogitoPersistentId.find()[/code] instead.
@@ -599,33 +616,6 @@ func find_object_from_uid(uid: int) -> Node3D:
 		if node.get("uid") == uid:
 			return node
 	return null
-
-
-func reset_scene_states() -> void:
-	# TODO: CREATE FUNCTION THAT DELETES SCENE STATE FILES.
-	var scene_state_files : Dictionary
-	
-	var dir = DirAccess.open(cogito_state_dir)
-	if dir:
-		dir.list_dir_begin()
-		var file_name = dir.get_next()
-		
-		while file_name != "":
-			if dir.current_is_dir():
-				CogitoGlobals.debug_log(true,"CSM","Found directory: " + file_name + ". skipping ahead.")
-
-			# Look for _temp_ files
-			if file_name.find(cogito_scene_state_prefix,0) != -1:
-				CogitoGlobals.debug_log(true,"CSM","Found scene state file: " + file_name)
-				if file_name.find("temp",0) != -1:
-					CogitoGlobals.debug_log(true,"CSM","This file is a temp scene state.")
-					# DELETE HERE
-			
-			# iterate to next file
-			file_name = dir.get_next()
-			
-	else:
-		CogitoGlobals.debug_log(true,"CSM","An error occurred when trying to access the path.")
 
 
 func starting_a_new_game() -> void:
@@ -644,16 +634,78 @@ func _exit_tree() -> void:
 	delete_temp_saves()
 
 
-func _save_autosave_state() -> void:
-	_current_scene_name = get_tree().get_current_scene().get_name()
-	_current_scene_path = get_tree().current_scene.scene_file_path
-	# Use the class variable instead of creating a new local variable
+## Capture temp, manual and automatic saves with the same directory transaction.
+## Only a manual save promotes its slot in the existing Continue menu history.
+func save_game(slot: String, update_history := true) -> Error:
+	var player := get_player()
+	var level := get_tree().current_scene
+	if not player or not level or not storage.valid_slot(slot):
+		return slot_error("Cannot save game.", slot, ERR_INVALID_PARAMETER)
+	_current_scene_name = level.name
+	_current_scene_path = level.scene_file_path
+	var state := player.create_new_state()
+	state.populate_save_data(player, slot)
+	var scene := _capture_scene_state()
+	var shot: Image = _screenshot_to_save if slot != "temp" else null
+	if shot:
+		state.player_state_screenshot_file = cogito_state_dir.path_join(slot).path_join("screenshot.png")
+	var writer := _write_generation.bind(state, scene, shot)
+	var skip := PackedStringArray([
+		player_file(slot).get_file(), scene_file(slot, level.name).get_file(), "screenshot.png"
+	])
+	var promote := save_last_saved_slot.bind(slot) if update_history else Callable()
+	var error := storage.recover("temp")
+	if error == OK:
+		var source := "temp" if DirAccess.dir_exists_absolute(cogito_state_dir.path_join("temp")) else ""
+		error = storage.replace(slot, source, writer, skip, promote)
+	if error != OK:
+		return slot_error("Save failed.", slot, error)
+	if update_history:
+		_active_slot = slot
+		is_loaded_from_start_new_game = false
+	_player_state = state
+	_scene_state = scene
+	return OK
+
+
+func _write_generation(directory: String, player: CogitoPlayerState, scene: CogitoSceneState, shot: Image) -> Error:
+	var staging := directory.get_file()
+	var error := storage.before("write player")
+	if error == OK:
+		error = player.write_state(staging)
+	if error == OK:
+		error = storage.before("write current scene")
+	if error == OK:
+		error = scene.write_state(staging, player.player_current_scene)
+	if error == OK and shot:
+		error = storage.before("write screenshot")
+		if error == OK:
+			var path := directory.path_join("screenshot.png")
+			error = storage.check(shot.save_png(path), path)
+	if error != OK:
+		return error
+	# Verify the freshly serialized resources before sealing staging. Ignore the
+	# root resource cache as in normal v1 reads (external assets remain shared).
+	var verified := _prepare_files(staging)
+	if verified.status != SlotStatus.OK or not verified.scene:
+		return storage.check(ERR_FILE_CORRUPT, directory + " " + verified.reason)
+	return OK
+
+
+func save_temp_game() -> Error:
+	var error := save_game("temp", false)
+	if error != OK and get_player():
+		send_player_hint(null, last_slot_message)
+	return error
+
+
+func _save_autosave_state() -> Error:
 	if not _screenshot_to_save:
 		_screenshot_to_save = grab_screenshot(CogitoGlobals.screenshot_scale)
-	
-	save_player_state(get_player(), CogitoGlobals.cogito_settings.auto_save_name)
-	save_scene_state(_current_scene_name, CogitoGlobals.cogito_settings.auto_save_name)
-	copy_temp_saves_to_slot(CogitoGlobals.cogito_settings.auto_save_name) # Use this to include scene states from other scenes in the save.
+	var error := save_game(CogitoGlobals.cogito_settings.auto_save_name, false)
+	if error != OK and get_player():
+		send_player_hint(null, last_slot_message)
+	return error
 
 
 ### FUNCTIONS TO HANDLE SCREEN FADING
@@ -690,94 +742,86 @@ func fade_out(fade_duration:float = default_fade_duration) -> void:
 	fade_finished.emit()
 
 
-func save_last_saved_slot(slot: String) -> void:
-	var saved_slots = []
-	var config = ConfigFile.new()
-	if FileAccess.file_exists(saves_data_file_path):
-		config.load(saves_data_file_path)
-		saved_slots = config.get_value("save", "slots")
-		saved_slots.erase(slot)
-		saved_slots.append(slot)
-		config.set_value("save", "slots", saved_slots)
-		config.save(saves_data_file_path)
-	else:
-		saved_slots.append(slot)
-		config.set_value("save", "slots", saved_slots)
-		config.save(saves_data_file_path)
- 
+func _load_index(config: ConfigFile) -> Error:
+	var error := config.load(saves_data_file_path)
+	if error == ERR_FILE_NOT_FOUND:
+		return OK
+	if error != OK:
+		return storage.check(error, saves_data_file_path)
+	var slots: Variant = config.get_value("save", "slots", false)
+	if not slots is Array:
+		return storage.check(ERR_INVALID_DATA, saves_data_file_path)
+	for slot: Variant in slots:
+		if not slot is String or not storage.valid_slot(slot):
+			return storage.check(ERR_INVALID_DATA, saves_data_file_path)
+	return OK
+
+
+func _update_index(slot: String, promote: bool) -> Error:
+	var config := ConfigFile.new()
+	var error := _load_index(config)
+	if error != OK:
+		return error
+	var slots: Array = config.get_value("save", "slots", [])
+	slots.erase(slot)
+	if promote:
+		slots.append(slot)
+	config.set_value("save", "slots", slots)
+	var pending := saves_data_file_path.get_base_dir().path_join(".saves-index.next")
+	error = storage.before("write index")
+	if error == OK:
+		error = storage.check(config.save(pending), pending)
+	if error == OK:
+		var verified := ConfigFile.new()
+		error = storage.check(verified.load(pending), pending)
+		if error == OK and verified.encode_to_text() != config.encode_to_text():
+			error = storage.check(ERR_FILE_CORRUPT, pending)
+	if error == OK:
+		error = storage.before("publish index")
+	if error == OK:
+		error = storage.check(DirAccess.rename_absolute(pending, saves_data_file_path), saves_data_file_path)
+	if error != OK and FileAccess.file_exists(pending):
+		storage.check(DirAccess.remove_absolute(pending), pending)
+	return error
+
+
+func save_last_saved_slot(slot: String) -> Error:
+	return _update_index(slot, true)
+
+
+func delete_from_saved_slots(slot: String) -> Error:
+	return _update_index(slot, false)
+
+
+func _saved_slots() -> Array:
+	var config := ConfigFile.new()
+	if _load_index(config) != OK:
+		return []
+	return config.get_value("save", "slots", [])
+
 
 func get_last_saved_slot() -> String:
-	if FileAccess.file_exists(saves_data_file_path):
-		var config = ConfigFile.new()
-		config.load(saves_data_file_path)
-		var saved_slots = []
-		saved_slots = config.get_value("save", "slots", [])
-		if saved_slots:
-			var slot = saved_slots.back()
-			if slot:
-				return slot
-
-	return ""  # Return an empty string if no saved slot exists
+	var slots := _saved_slots()
+	return "" if slots.is_empty() else slots.back()
 
 
-func delete_from_saved_slots(slot: String):
-	if FileAccess.file_exists(saves_data_file_path):
-		var config = ConfigFile.new()
-		config.load(saves_data_file_path)
-		var saved_slots = []
-		saved_slots = config.get_value("save", "slots")
-		saved_slots.erase(slot)
-		config.save(saves_data_file_path)
-
-
-func is_saved_slots_empty():
-	if FileAccess.file_exists(saves_data_file_path):
-		var config = ConfigFile.new()
-		config.load(saves_data_file_path)
-		var saved_slots = []
-		saved_slots = config.get_value("save", "slots")
-		if saved_slots:
-			return false
-	
-	return true
+func is_saved_slots_empty() -> bool:
+	# Quick Load starts a new game for an empty history. A read error must
+	# keep that action from clearing the current playthrough.
+	var config := ConfigFile.new()
+	return _load_index(config) == OK and config.get_value("save", "slots", []).is_empty()
 
 
 func saved_slots_count() -> int:
-	if FileAccess.file_exists(saves_data_file_path):
-		var config = ConfigFile.new()
-		config.load(saves_data_file_path)
-		var saved_slots = []
-		saved_slots = config.get_value("save", "slots", [])
-		if saved_slots:
-			return saved_slots.size()
-	
-	return 0
+	return _saved_slots().size()
 
 
 func max_saved_slot_nubmer() -> int:
-	if FileAccess.file_exists(saves_data_file_path):
-		var config = ConfigFile.new()
-		config.load(saves_data_file_path)
-		var saved_slots = []
-		saved_slots = config.get_value("save", "slots", [])
-		if saved_slots:
-			var max_value = 0
-			for slot in saved_slots:
-				if int(slot) > max_value:
-					max_value = int(slot)
-			
-			return max_value
-	
-	return 0
+	var highest := 0
+	for slot: String in _saved_slots():
+		highest = maxi(highest, int(slot))
+	return highest
 
 
-func is_saved_slot_exist(slot: String):
-	if FileAccess.file_exists(saves_data_file_path):
-		var config = ConfigFile.new()
-		config.load(saves_data_file_path)
-		var saved_slots = []
-		saved_slots = config.get_value("save", "slots")
-		if saved_slots and slot in saved_slots:
-			return true
-	
-	return false
+func is_saved_slot_exist(slot: String) -> bool:
+	return slot in _saved_slots()

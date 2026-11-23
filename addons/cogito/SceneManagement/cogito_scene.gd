@@ -42,7 +42,4 @@ func _notification(what: int) -> void:
 
 
 func save_temp() -> void:
-	var current_scene_statename = get_tree().get_current_scene().get_name()
-	CogitoSceneManager.save_scene_state(current_scene_statename,"temp")
-	CogitoSceneManager.save_player_state(CogitoSceneManager.get_player(), "temp")
-
+	CogitoSceneManager.save_temp_game()

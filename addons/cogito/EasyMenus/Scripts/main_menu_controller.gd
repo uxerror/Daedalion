@@ -177,9 +177,5 @@ func open_save_load_menu() -> void:
 func _on_main_menu_continue_pressed() -> void:
 	var last_saved_slot: String = CogitoSceneManager.get_last_saved_slot()
 	
-	CogitoSceneManager.switch_active_slot_to(last_saved_slot)
-	CogitoSceneManager._current_scene_name = get_tree().get_current_scene().get_name()
-	CogitoSceneManager._current_scene_path = get_tree().current_scene.scene_file_path
-	CogitoSceneManager.delete_temp_saves()
-	CogitoSceneManager.copy_slot_saves_to_temp(last_saved_slot)
-	CogitoSceneManager._active_slot = last_saved_slot
+	if CogitoSceneManager.loading_saved_game(last_saved_slot) != OK:
+		%Continue.text = CogitoSceneManager.last_slot_message

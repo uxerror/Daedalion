@@ -8,68 +8,70 @@ extends CanvasLayer
 
 var next_scene_path : String
 var connector_name : String
-var next_scene_state_filename : String
-var passed_slot : String
-var load_mode
-var progress_array : Array[float]
-
-func _ready():
-	progress_array.clear()
-	ResourceLoader.load_threaded_request(next_scene_path, "", false, ResourceLoader.CACHE_MODE_IGNORE) # Start loading the next scene
+var load_mode: CogitoSceneManager.CogitoSceneLoadMode
+var progress_array: Array
+var prepared_slot: CogitoSceneManager.PreparedSlot
+var prepared_level: Node
 
 
-func _process(_delta):
-	if ResourceLoader.load_threaded_get_status(next_scene_path) == ResourceLoader.THREAD_LOAD_LOADED:
-		CogitoGlobals.debug_log(true, "loading_screen.gd", "Attempting to load " + next_scene_path)
-		set_process(false)
-		await get_tree().create_timer(forced_delay).timeout
-		var current_scene = get_tree().current_scene # Stores currently active scene so it can be set later
-		var current_scene_name = current_scene.get_name()
-		current_scene.free() # Removing previous scene.
-		var new_scene_packed: PackedScene = ResourceLoader.load_threaded_get(next_scene_path)
-		var new_scene_node = new_scene_packed.instantiate()
-		get_tree().get_root().add_child(new_scene_node) # Adds the instatiated new scene as a node.
-		
-		CogitoGlobals.debug_log(true, "loading_screen.gd", "Load_mode is " + str(load_mode) )
-		
-		#If load_mode asks for it, scene state will be loaded.
-		if load_mode != 2: #Checking that load_mode is not set to 2 which would ignore scene states.
-			next_scene_state_filename = new_scene_node.get_name()
-			
-			# This flag is used if the scene transition was called from loading a save
-			if load_mode == 1: #Load_Mode one is attempting to load a save
-				CogitoGlobals.debug_log(true, "loading_screen.gd", "Attempting to load a save for passsed_slot " + passed_slot)
-				CogitoSceneManager._current_scene_name = new_scene_node.name #Manually setting new scene name
-				CogitoSceneManager.apply_saved_game(passed_slot)
-			else:
-				CogitoGlobals.debug_log(true, "loading_screen.gd", "Attempting to load scene state: " + next_scene_state_filename)
-				CogitoSceneManager.load_scene_state(next_scene_state_filename,"temp") # Loading temp scene state
-				CogitoSceneManager.load_player_state(CogitoSceneManager.get_player(),"temp") # Loading temp player state.
-			
-			CogitoSceneManager.get_player().resume()
-		else:
-			CogitoGlobals.debug_log(true, "loading_screen.gd", "Load mode 2 (RESET), ignoring scene and player states.")
+func request_scene() -> Error:
+	if next_scene_path.is_empty():
+		return ERR_FILE_BAD_PATH
+	return ResourceLoader.load_threaded_request(next_scene_path, "PackedScene", false, ResourceLoader.CACHE_MODE_IGNORE)
+
+
+func _process(_delta: float) -> void:
+	if not prepared_level:
+		var status := ResourceLoader.load_threaded_get_status(next_scene_path, progress_array)
+		match status:
+			ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+				if not progress_array.is_empty():
+					label_progress.text = "%d%%" % int(99 * float(progress_array[0]))
+				return
+			ResourceLoader.THREAD_LOAD_LOADED:
+				var packed := ResourceLoader.load_threaded_get(next_scene_path) as PackedScene
+				if packed and packed.can_instantiate():
+					prepared_level = packed.instantiate()
+		if not prepared_level:
+			set_process(false)
+			CogitoSceneManager.scene_load_failed(next_scene_path, ERR_CANT_OPEN)
+			queue_free()
+			return
+
+	set_process(false)
+	await get_tree().create_timer(forced_delay).timeout
+	var level := prepared_level
+	prepared_level = null
+	var current := get_tree().current_scene
+	if current:
+		current.free()
+	get_tree().root.add_child(level)
+	get_tree().current_scene = level
+	CogitoSceneManager._current_scene_name = level.name
+	CogitoSceneManager._current_scene_path = level.scene_file_path
+	match load_mode:
+		CogitoSceneManager.CogitoSceneLoadMode.LOAD_SAVE:
+			CogitoSceneManager.apply_saved_game(prepared_slot)
+		CogitoSceneManager.CogitoSceneLoadMode.TEMP:
+			CogitoSceneManager.load_scene_state(level.name, "temp")
+			CogitoSceneManager.load_player_state(CogitoSceneManager.get_player(), "temp")
+		CogitoSceneManager.CogitoSceneLoadMode.RESET:
 			if CogitoSceneManager.is_starting_new_game:
 				CogitoSceneManager.starting_a_new_game.call_deferred()
-		
-		shader_precompilation()
-		
-		get_tree().current_scene = new_scene_node # Assigns new scene as current scene
-		
-		if connector_name != "": #If a connector name has been passed, move the player to it. This requires the target scene to have a cogito scene script attached to it's root scene node.
-			new_scene_node.move_player_to_connector(connector_name)
-		
-		CogitoSceneManager.is_currently_loading = false
-		queue_free()
-	else:
-		# Getting progress value and displaying it
-		ResourceLoader.load_threaded_get_status(next_scene_path, progress_array) 
-		var progress_value = progress_array[0] if typeof(progress_array[0]) == TYPE_FLOAT else 0.0
-		var progress_percentage := remap(progress_value, 0.4, 1.0, 0, 99)
-		progress_percentage = snapped(progress_percentage, 0.1)
-		label_progress.text = str(progress_percentage) + "%"
-		
-		
+	if load_mode != CogitoSceneManager.CogitoSceneLoadMode.RESET and CogitoSceneManager.get_player():
+		CogitoSceneManager.get_player().resume()
+	shader_precompilation()
+	if not connector_name.is_empty():
+		level.move_player_to_connector(connector_name)
+	CogitoSceneManager.is_currently_loading = false
+	queue_free()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE and is_instance_valid(prepared_level):
+		prepared_level.free()
+
+
 func shader_precompilation() -> void:
 	# Iterrating through shaders
 	for shader in CogitoGlobals.cogito_settings.shaders_to_preload:

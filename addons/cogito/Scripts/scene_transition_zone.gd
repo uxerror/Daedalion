@@ -7,8 +7,6 @@ extends Area3D
 ## Name of connector node the player should transition to in target scene. This node needs to exist in the target scene and has to be added to the connector array of the target scene cogito_scene script.
 @export var target_connector : String
 
-var current_scene_statename : String
-var current_scene_filepath : String
 
 func _ready():
 	body_entered.connect(_on_body_entered)
@@ -28,10 +26,9 @@ func _on_body_exited(body: Node3D):
 
 
 func transition_to_next_scene():
-	current_scene_statename = get_tree().get_current_scene().get_name()
-	CogitoSceneManager.save_scene_state(current_scene_statename,"temp")
-	CogitoSceneManager.save_player_state(CogitoSceneManager.get_player(), "temp")
-	
+	if CogitoSceneManager.save_temp_game() != OK:
+		return
+
 	CogitoSceneManager.is_currently_loading = true
 	
 	CogitoSceneManager.fade_out()

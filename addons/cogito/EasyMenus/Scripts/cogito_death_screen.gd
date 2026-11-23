@@ -96,22 +96,10 @@ func show_saved_slot_display():
 
 
 func load_current_slot_data() -> bool:
-	# Load screenshot
-	var image_path : String = CogitoSceneManager.get_active_slot_player_state_screenshot_path()
-	if image_path != "":
-		var image : Image = Image.load_from_file(image_path)
-		var texture = ImageTexture.create_from_image(image)
-		%Screenshot_Spot.texture = texture
-	else:
-		%Screenshot_Spot.texture = empty_slot_texture
-		CogitoGlobals.debug_log(true,"cogito_death_screen.gd", "No screenshot for slot " + CogitoSceneManager._active_slot + " found.")
-		return false
-		
-	# Load save state time
-	var savetime : int
-	if CogitoSceneManager._player_state:
-		savetime = CogitoSceneManager._player_state.player_state_savetime
-	if savetime == null or typeof(savetime) != TYPE_INT or savetime == 0:
+	var state := CogitoSceneManager.get_existing_player_state(CogitoSceneManager._active_slot)
+	%Screenshot_Spot.texture = CogitoSceneManager.slot_screenshot(state, empty_slot_texture)
+	var savetime := state.player_state_savetime if state else 0
+	if savetime == 0:
 		%Label_SaveTime.text = ""
 		return false
 	else:
@@ -167,14 +155,11 @@ func _on_back_to_main_menu_pressed() -> void:
 
 
 func _on_reload_button_pressed() -> void:
+	if CogitoSceneManager.loading_saved_game(CogitoSceneManager._active_slot) != OK:
+		load_button.text = CogitoSceneManager.last_slot_message
+		return
 	get_tree().paused = false
 	hide()
-	CogitoGlobals.debug_log(true,"DeathScreen","LOAD button pressed.")
-	CogitoSceneManager._current_scene_name = get_tree().get_current_scene().get_name()
-	CogitoSceneManager._current_scene_path = get_tree().current_scene.scene_file_path
-	CogitoSceneManager.delete_temp_saves()
-	CogitoSceneManager.copy_slot_saves_to_temp(CogitoSceneManager._active_slot)
-	
 	InputRouter.pop()
 	# Ensure the game resumes properly when loading after death
 	var player = CogitoSceneManager.get_player()

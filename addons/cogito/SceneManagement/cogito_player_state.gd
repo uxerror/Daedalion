@@ -19,8 +19,6 @@ extends Resource
 @export var player_completed_quests : Array[CogitoQuest]
 @export var player_failed_quests : Array[CogitoQuest]
 
-var player_state_dir : String = CogitoSceneManager.cogito_state_dir + CogitoSceneManager.cogito_player_state_prefix
-
 @export var player_current_scene : String
 @export var player_current_scene_path : String
 
@@ -30,29 +28,8 @@ var player_state_dir : String = CogitoSceneManager.cogito_state_dir + CogitoScen
 @export var player_state_slot_name : String
 
 
-func write_state(state_slot : String) -> void:
-	var dir = DirAccess.open("user://")
-	dir.make_dir(CogitoSceneManager.cogito_state_dir)
-	dir = DirAccess.open(CogitoSceneManager.cogito_state_dir)
-	dir.make_dir(str(state_slot))
-	var player_state_file = str(CogitoSceneManager.cogito_state_dir + state_slot + "/" + CogitoSceneManager.cogito_player_state_prefix + ".res")
-	#var player_state_file = str(player_state_dir + state_slot + ".res")
-	ResourceSaver.save(self, player_state_file, ResourceSaver.FLAG_CHANGE_PATH)
-	CogitoGlobals.debug_log(true, "CogitoPlayerState", "Player state saved as " + str(player_state_file) )
-
-
-func state_exists(state_slot : String) -> bool:
-	#var player_state_file = str(player_state_dir + state_slot + ".res")
-	var player_state_file = str(CogitoSceneManager.cogito_state_dir + state_slot + "/" + CogitoSceneManager.cogito_player_state_prefix + ".res")
-	#return ResourceLoader.exists(player_state_file)
-	return FileAccess.file_exists(player_state_file)
- 
-
-func load_state(state_slot : String) -> Resource:
-	#var player_state_file = str(player_state_dir + state_slot + ".res")
-	var player_state_file = str(CogitoSceneManager.cogito_state_dir + state_slot + "/" + CogitoSceneManager.cogito_player_state_prefix + ".res")
-	return ResourceLoader.load(player_state_file, "", ResourceLoader.CACHE_MODE_IGNORE)
-	
+func write_state(slot: String) -> Error:
+	return CogitoSceneManager.write_state_resource(self, CogitoSceneManager.player_file(slot))
 
 
 ## Saves what every player has: inventory, quick slots, quests, wieldable charges, attributes, currencies,
@@ -118,16 +95,6 @@ func save_common_data(player, slot) -> void:
 		CogitoGlobals.debug_log(true,"CSM", "World Dict: attemtping to save key: " + str(entry) )
 		self.add_to_world_dictionary(entry, local_dict_copy[entry])
 
-	## Adding a screenshot
-	var screenshot_path : String = str(self.player_state_dir + slot + ".png")
-	
-	if CogitoSceneManager._screenshot_to_save:
-		if slot != "temp":
-			CogitoSceneManager._screenshot_to_save.save_png(screenshot_path)
-			self.player_state_screenshot_file = screenshot_path
-	else:
-		CogitoGlobals.debug_log(true,"CSM","No screenshot to save was passed.")
-	
 	## Getting time of saving
 	self.player_state_savetime = int(Time.get_unix_time_from_system())
 	self.player_state_slot_name = slot
