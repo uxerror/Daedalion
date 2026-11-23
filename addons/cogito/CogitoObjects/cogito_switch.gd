@@ -190,7 +190,10 @@ func check_for_item() -> bool:
 	return false
 
 
-func _on_damage_received(_damage,_bullet_direction,_bullet_position):
+# Accepts every form of damage_received: (amount), (amount, source) and (amount, source, hit direction, hit position).
+func _on_damage_received(_damage, source = null, _hit_direction := Vector3.ZERO, _hit_position := Vector3.ZERO):
+	if source == self:
+		return # Damage ticks of its own burning don't press it.
 	interact(CogitoSceneManager._current_player_node.player_interaction_component)
 
 func set_state():
