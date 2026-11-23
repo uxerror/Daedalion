@@ -141,6 +141,11 @@ func use_slot_data(index: int):
 	
 	if !slot_data.inventory_item.has_method("use"):
 		return
+	
+	# The owner can't use items right now (e.g. a player stunned or frozen by an element state).
+	if is_instance_valid(owner) and owner.has_method("can_act") and !owner.can_act():
+		CogitoGlobals.debug_log(true, "cogito_inventory.gd", "Owner can't act right now, no item used.")
+		return
 
 	var use_successful : bool = slot_data.inventory_item.use(owner)
 	if slot_data.inventory_item.has_method("is_consumable") and use_successful:

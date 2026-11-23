@@ -1,0 +1,64 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/cogito/Components/UI/UI_ElementStatus.gd" id="1_script"]
+[ext_resource type="Shader" path="res://addons/cogito/Components/UI/element_vignette.gdshader" id="2_shader"]
+[ext_resource type="Texture2D" path="res://addons/cogito/Assets/Graphics/ElementIcons/fire.svg" id="icon_fire"]
+[ext_resource type="Texture2D" path="res://addons/cogito/Assets/Graphics/ElementIcons/wet.svg" id="icon_wet"]
+[ext_resource type="Texture2D" path="res://addons/cogito/Assets/Graphics/ElementIcons/shock.svg" id="icon_shock"]
+[ext_resource type="Texture2D" path="res://addons/cogito/Assets/Graphics/ElementIcons/chilled.svg" id="icon_chilled"]
+[ext_resource type="Texture2D" path="res://addons/cogito/Assets/Graphics/ElementIcons/frozen.svg" id="icon_frozen"]
+[ext_resource type="Texture2D" path="res://addons/cogito/Assets/Graphics/ElementIcons/poison.svg" id="icon_poison"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_vignette"]
+resource_local_to_scene = true
+shader = ExtResource("2_shader")
+shader_parameter/tint = Color(1, 0.5, 0.1, 1)
+shader_parameter/intensity = 0.0
+shader_parameter/flicker = 0.0
+shader_parameter/pulse = 0.0
+shader_parameter/inner_radius = 0.42
+shader_parameter/outer_radius = 0.85
+
+[node name="ElementStatus" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_script")
+icon_fire = ExtResource("icon_fire")
+icon_wet = ExtResource("icon_wet")
+icon_shock = ExtResource("icon_shock")
+icon_chilled = ExtResource("icon_chilled")
+icon_frozen = ExtResource("icon_frozen")
+icon_poison = ExtResource("icon_poison")
+
+[node name="Overlay" type="ColorRect" parent="."]
+visible = false
+material = SubResource("ShaderMaterial_vignette")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Row" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -120.0
+offset_top = -216.0
+offset_right = 120.0
+offset_bottom = -180.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+theme_override_constants/separation = 6
+alignment = 1

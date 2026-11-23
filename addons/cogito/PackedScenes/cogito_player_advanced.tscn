@@ -44,6 +44,11 @@
 [ext_resource type="PackedScene" uid="uid://txkg0abvpsj7" path="res://addons/cogito/Components/AutoConsumes/StaminaAutoConsume.tscn" id="33_0xklh"]
 [ext_resource type="Script" uid="uid://b4dwolbvt8our" path="res://addons/godot_state_charts/history_state.gd" id="38_3s35w"]
 [ext_resource type="Script" uid="uid://ckekd46ob0ikj" path="res://addons/cogito/Scripts/player_animation_tree.gd" id="39_tgxid"]
+[ext_resource type="PackedScene" uid="uid://cj0yaeh3yg7tu" path="res://addons/cogito/Components/Properties/CogitoProperties.tscn" id="e4a_props"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Properties/cogito_actor_elements.gd" id="e4a_actor"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Assets/VFX/vfx_chilled.tscn" id="e4a_chilled"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Assets/VFX/vfx_frozen.tscn" id="e4a_frozen"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Assets/VFX/vfx_poisoned.tscn" id="e4a_poisoned"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_4e8y1"]
 size = Vector3(0.6, 1.7, 0.6)
@@ -17941,6 +17946,23 @@ _player_interaction_component = NodePath("../PlayerInteractionComponent")
 [node name="HealthAutoConsume" parent="." unique_id=2010614876 instance=ExtResource("32_4hf35")]
 
 [node name="StaminaAutoConsume" parent="." unique_id=745583959 instance=ExtResource("33_0xklh")]
+
+[node name="CogitoProperties" parent="." unique_id=1736201451 instance=ExtResource("e4a_props")]
+elemental_properties = 2
+fire_damage_per_second = 5.0
+fuel = 4.0
+burn_out_result = 0
+cold_damage_per_second = 1.0
+poison_damage_per_second = 2.0
+spawn_on_chilled = ExtResource("e4a_chilled")
+spawn_on_frozen = ExtResource("e4a_frozen")
+spawn_on_poisoned = ExtResource("e4a_poisoned")
+is_logging = false
+
+[node name="CogitoActorElements" type="Node" parent="." unique_id=1736201452 node_paths=PackedStringArray("properties")]
+script = ExtResource("e4a_actor")
+properties = NodePath("../CogitoProperties")
+
 
 [node name="LedgeClimbingShapeCast" type="ShapeCast3D" parent="." unique_id=1504771267]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, 0)

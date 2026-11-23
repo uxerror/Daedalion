@@ -1,0 +1,64 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://dmeh01c5ccjqc" path="res://addons/cogito/CogitoObjects/cogito_object.gd" id="obj"]
+[ext_resource type="PackedScene" uid="uid://cj0yaeh3yg7tu" path="res://addons/cogito/Components/Properties/CogitoProperties.tscn" id="props"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Properties/cogito_element_debug_label.gd" id="dbg"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
+albedo_color = Color(0.78, 0.66, 0.32, 1)
+roughness = 1.0
+
+[sub_resource type="BoxMesh" id="BoxMesh_2"]
+material = SubResource("StandardMaterial3D_1")
+size = Vector3(0.6, 0.12, 0.6)
+
+[sub_resource type="PrismMesh" id="PrismMesh_3"]
+material = SubResource("StandardMaterial3D_1")
+size = Vector3(0.18, 0.28, 0.12)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_4"]
+size = Vector3(0.6, 0.2, 0.6)
+
+[node name="GrassPatch" type="StaticBody3D"]
+collision_layer = 3
+script = ExtResource("obj")
+cogito_name = "Dry Grass"
+display_name = "Dry Grass"
+
+[node name="Base" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.06, 0)
+mesh = SubResource("BoxMesh_2")
+
+[node name="Tuft1" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.939693, 0, 0.34202, 0, 1, 0, -0.34202, 0, 0.939693, -0.15, 0.25, -0.12)
+mesh = SubResource("PrismMesh_3")
+
+[node name="Tuft2" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.819152, 0, -0.573576, 0, 1, 0, 0.573576, 0, 0.819152, 0.14, 0.25, 0.05)
+mesh = SubResource("PrismMesh_3")
+
+[node name="Tuft3" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.34202, 0, 0.939693, 0, 1, 0, -0.939693, 0, 0.34202, -0.05, 0.25, 0.17)
+mesh = SubResource("PrismMesh_3")
+
+[node name="Tuft4" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.984808, 0, 0.173648, 0, 1, 0, -0.173648, 0, 0.984808, 0.17, 0.25, -0.18)
+mesh = SubResource("PrismMesh_3")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+shape = SubResource("BoxShape3D_4")
+
+[node name="CogitoProperties" parent="." instance=ExtResource("props")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0)
+elemental_properties = 2
+reaction_threshold_time = 1.0
+heat_radius = 1.2
+heat_per_second = 1.5
+fuel = 6.0
+burn_out_result = 2
+is_logging = false
+
+[node name="ElementDebugLabel" type="Label3D" parent="."]
+script = ExtResource("dbg")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)

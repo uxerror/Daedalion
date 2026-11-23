@@ -63,6 +63,10 @@ var pause_menu
 var game_menu
 var save_load_menu
 
+# Nodes destroyed in the current level that the Persist loader can't remove on load, see register_destroyed_node().
+var _destroyed_nodes : Array = []
+var _destroyed_nodes_level_id : int = 0
+
 
 func _ready() -> void:
 	_player_state = get_existing_player_state(_active_slot) # Setting active slot (per default it's A)
@@ -233,6 +237,11 @@ func load_scene_state(_scene_name_to_load:String, slot:String) -> void:
 			if node_to_set.has_method("set_state"):
 				node_to_set.set_state()
 		
+		_load_destroyed_nodes(_scene_state.saved_destroyed_nodes)
+		# Element states go last, after the deferred set_state() calls of the Persist nodes
+		# and the on-ready states of the freshly loaded level.
+		_apply_element_states.call_deferred(_scene_state.saved_element_states.duplicate(true))
+		
 		CogitoGlobals.debug_log(true,"CSM","CSM: Loading scene state finished.")
 			
 	else:
@@ -378,8 +387,103 @@ func save_scene_state(_scene_name_to_save, slot: String) -> void:
 			var state_data = node.save()
 			state_data["cogito_id"] = CogitoPersistentId.of(node)
 			_scene_state.add_state_data_to_array(state_data)
+	
+	_scene_state.saved_element_states = _collect_element_states()
+	_scene_state.saved_destroyed_nodes = _get_destroyed_nodes().duplicate(true)
 			
 	_scene_state.write_state(slot, _scene_name_to_save)
+
+
+#region ELEMENT STATES
+## Returns a key that finds a node with element states again after a load: the persistent id of the nearest
+## Persist node (with save()) above it or itself, and the path from there. Nodes outside of Persist nodes use their own id.
+func get_element_state_key(node: Node) -> Dictionary:
+	var persist_node := node
+	while persist_node and !(persist_node.is_in_group("Persist") and persist_node.has_method("save")):
+		persist_node = persist_node.get_parent()
+	if persist_node:
+		return {"cogito_id": CogitoPersistentId.of(persist_node), "path": str(persist_node.get_path_to(node))}
+	return {"cogito_id": CogitoPersistentId.of(node), "path": "."}
+
+
+## Returns the node of a key made by get_element_state_key(), or null.
+func find_element_state_node(key: Dictionary) -> Node:
+	var persist_node := CogitoPersistentId.find(get_tree(), str(key.get("cogito_id", "")))
+	if !persist_node:
+		return null
+	var node := persist_node.get_node_or_null(NodePath(str(key.get("path", "."))))
+	if node and node.is_queued_for_deletion():
+		return null
+	return node
+
+
+## Remembers that a node of the current level was destroyed (e.g. burned out with BurnOutResult.DESTROY),
+## so it is freed again when the scene state loads. Persist nodes with save() don't need this, the save leaves them out.
+func register_destroyed_node(node: Node) -> void:
+	if !is_instance_valid(node) or !node.is_inside_tree():
+		return
+	if node.is_in_group("Persist") and node.has_method("save"):
+		return
+	_get_destroyed_nodes().append(get_element_state_key(node))
+
+
+# The destroyed nodes of the current level. The list starts empty in every newly loaded level.
+func _get_destroyed_nodes() -> Array:
+	var level_root := CogitoPersistentId.get_level_root(get_tree())
+	var level_id := level_root.get_instance_id() if level_root else 0
+	if level_id != _destroyed_nodes_level_id:
+		_destroyed_nodes = []
+		_destroyed_nodes_level_id = level_id
+	return _destroyed_nodes
+
+
+func _load_destroyed_nodes(saved_destroyed_nodes: Array) -> void:
+	var destroyed := _get_destroyed_nodes()
+	destroyed.clear()
+	for key in saved_destroyed_nodes:
+		destroyed.append(key)
+		var node := find_element_state_node(key)
+		if node:
+			CogitoGlobals.debug_log(true,"CSM","Removing node that was destroyed: " + node.name)
+			node.queue_free()
+
+
+func _collect_element_states() -> Array:
+	var entries : Array = []
+	for node in get_tree().get_nodes_in_group(CogitoProperties.ELEMENT_STATE_GROUP):
+		if node.is_queued_for_deletion() or !node.has_method("get_element_save_data"):
+			continue
+		if _is_part_of_player(node):
+			continue # Saved with the player state.
+		var entry := get_element_state_key(node)
+		entry["data"] = node.get_element_save_data()
+		entries.append(entry)
+	return entries
+
+
+func _apply_element_states(entries: Array) -> void:
+	var actor_entries : Array = []
+	for entry in entries:
+		var node := find_element_state_node(entry)
+		if !node or !node.has_method("apply_element_save_data"):
+			CogitoGlobals.debug_log(true,"CSM","Element state of " + str(entry.get("cogito_id")) + "/" + str(entry.get("path")) + " has no node in the scene, skipped.")
+			continue
+		if node is CogitoActorElements:
+			actor_entries.append([node, entry.get("data", {})]) # After the CogitoProperties they read.
+			continue
+		node.apply_element_save_data(entry.get("data", {}))
+	for actor_entry in actor_entries:
+		actor_entry[0].apply_element_save_data(actor_entry[1])
+
+
+func _is_part_of_player(node: Node) -> bool:
+	var parent := node
+	while parent:
+		if parent is CogitoPlayer:
+			return true
+		parent = parent.get_parent()
+	return false
+#endregion
 
 
 # Function to transition to another scene via the loading screen.

@@ -41,6 +41,12 @@
 [ext_resource type="Texture2D" uid="uid://b0k4xgt8gfii0" path="res://addons/cogito/Assets/Graphics/eye.svg" id="31_smfhm"]
 [ext_resource type="Texture2D" uid="uid://5qohttahud56" path="res://addons/cogito/Assets/Graphics/Editor/Icon_HearingSystem.svg" id="31_yiopj"]
 [ext_resource type="PackedScene" uid="uid://essuiwcp63ni" path="res://addons/cogito/CogitoNPC/detection/basic_hearing_indicator.tscn" id="34_n3xdm"]
+[ext_resource type="PackedScene" uid="uid://cj0yaeh3yg7tu" path="res://addons/cogito/Components/Properties/CogitoProperties.tscn" id="e4a_props"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Properties/cogito_actor_elements.gd" id="e4a_actor"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Assets/VFX/vfx_chilled.tscn" id="e4a_chilled"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Assets/VFX/vfx_frozen.tscn" id="e4a_frozen"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Assets/VFX/vfx_poisoned.tscn" id="e4a_poisoned"]
+[ext_resource type="Script" path="res://addons/cogito/CogitoNPC/npc_states/npc_state_panic.gd" id="e4a_panic"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ew6gg"]
 resource_name = "M_Main"
@@ -17837,6 +17843,32 @@ event = &"investigate"
 delay_in_seconds = "0.0"
 metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
 
+[node name="Panic" type="Node" parent="StateChart/Root/BehaviourState" unique_id=1736201471]
+script = ExtResource("5_tg15e")
+metadata/_custom_type_script = "uid://cytafq8i1y8qm"
+
+[node name="PanicState" type="Node" parent="StateChart/Root/BehaviourState/Panic" unique_id=1736201472 node_paths=PackedStringArray("npc", "state_chart", "barker")]
+script = ExtResource("e4a_panic")
+npc = NodePath("../../../../..")
+state_chart = NodePath("../../../..")
+barker = NodePath("../../../../../Barker")
+behaviour_state = 8
+metadata/_custom_type_script = "uid://suwl5ilbe1cj"
+
+[node name="Calm Down" type="Node" parent="StateChart/Root/BehaviourState/Panic" unique_id=1736201473]
+script = ExtResource("7_sflq1")
+to = NodePath("../../Idle")
+event = &"calm_down"
+delay_in_seconds = "0.0"
+metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
+
+[node name="Start Panicking" type="Node" parent="StateChart/Root/BehaviourState" unique_id=1736201474]
+script = ExtResource("7_sflq1")
+to = NodePath("../Panic")
+event = &"panic"
+delay_in_seconds = "0.0"
+metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
+
 [node name="BodyPosture" type="Node" parent="StateChart/Root" unique_id=190289418]
 script = ExtResource("3_w6rik")
 
@@ -18424,6 +18456,24 @@ value_max = 10.0
 value_start = 10.0
 attribute_visibility = 2
 metadata/_custom_type_script = "uid://bi4ed4s15np0s"
+
+[node name="CogitoProperties" parent="." unique_id=1736201461 instance=ExtResource("e4a_props")]
+elemental_properties = 2
+fire_damage_per_second = 1.0
+fuel = 4.0
+burn_out_result = 0
+cold_damage_per_second = 0.25
+poison_damage_per_second = 0.5
+spawn_on_chilled = ExtResource("e4a_chilled")
+spawn_on_frozen = ExtResource("e4a_frozen")
+spawn_on_poisoned = ExtResource("e4a_poisoned")
+is_logging = false
+
+[node name="CogitoActorElements" type="Node" parent="." unique_id=1736201462 node_paths=PackedStringArray("properties")]
+script = ExtResource("e4a_actor")
+properties = NodePath("../CogitoProperties")
+auto_struggle = true
+
 
 [node name="VelocityDebugShape" type="MeshInstance3D" parent="." unique_id=981380212]
 visible = false

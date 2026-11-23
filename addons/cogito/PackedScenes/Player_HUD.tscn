@@ -32,6 +32,7 @@
 [ext_resource type="PackedScene" uid="uid://c62m84iy6lkk5" path="res://addons/cogito/Components/UI/UI_ProgressWheel.tscn" id="30_bdq5t"]
 [ext_resource type="Script" uid="uid://34okcsphwbi6" path="res://addons/cogito/InventoryPD/Quickslots/cogito_quickslot_wheel.gd" id="31_w7h3l"]
 [ext_resource type="AudioStream" uid="uid://cr3bcp0u6w1pl" path="res://addons/cogito/Assets/Audio/Kenney/UiAudio/mouseclick1.ogg" id="32_k2c8s"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Components/UI/UI_ElementStatus.tscn" id="e4a_status"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_j4em4"]
 resource_local_to_scene = true
@@ -71,7 +72,7 @@ content_margin_right = 0.0
 content_margin_bottom = 0.0
 bg_color = Color(0.101961, 0.101961, 0.101961, 0.784314)
 
-[node name="Player_HUD" type="Control" unique_id=1667585056 node_paths=PackedStringArray("fixed_stamina_bar", "fixed_oxygen_bar", "ui_currency_area", "attribute_display_node")]
+[node name="Player_HUD" type="Control" unique_id=1667585056 node_paths=PackedStringArray("fixed_stamina_bar", "fixed_oxygen_bar", "ui_currency_area", "attribute_display_node", "element_status_hud")]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -91,6 +92,7 @@ interaction_crosshair = ExtResource("8_vmpwe")
 ui_currency_area = NodePath("InventoryInterface/CogitoTabMenu/TAB_player_inventory/PlayerCurrencies/MarginContainer/VBoxContainer")
 attribute_display_node = NodePath("InventoryInterface/CogitoTabMenu/TAB_stats/StatsDisplay/VBoxContainer/TabContainer/Attributes")
 ui_attribute_display_prefab = ExtResource("20_3jei3")
+element_status_hud = NodePath("ElementStatus")
 
 [node name="FixedStaminaBar" parent="." unique_id=1474131867 instance=ExtResource("20_lscav")]
 layout_mode = 1
@@ -156,6 +158,9 @@ grow_horizontal = 2
 grow_vertical = 2
 texture = ExtResource("3_lb6l4")
 expand_mode = 5
+
+[node name="ElementStatus" parent="." unique_id=1736201481 instance=ExtResource("e4a_status")]
+layout_mode = 1
 
 [node name="Crosshair" type="Control" parent="." unique_id=259165241]
 layout_mode = 1

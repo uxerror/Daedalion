@@ -1,0 +1,68 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://dmeh01c5ccjqc" path="res://addons/cogito/CogitoObjects/cogito_object.gd" id="obj"]
+[ext_resource type="PackedScene" uid="uid://cio4x05ipvslu" path="res://addons/cogito/Components/Interactions/CarryableComponent.tscn" id="carry"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Assets/VFX/vfx_chilled.tscn" id="chilled"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Assets/VFX/vfx_frozen.tscn" id="frozen"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Assets/VFX/vfx_poisoned.tscn" id="poisoned"]
+[ext_resource type="PackedScene" uid="uid://cj0yaeh3yg7tu" path="res://addons/cogito/Components/Properties/CogitoProperties.tscn" id="props"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Properties/cogito_element_debug_label.gd" id="dbg"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
+albedo_color = Color(0.6, 0.42, 0.26, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_2"]
+albedo_color = Color(0.34, 0.2, 0.08, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_3"]
+material = SubResource("StandardMaterial3D_1")
+size = Vector3(0.5, 0.5, 0.5)
+
+[sub_resource type="BoxMesh" id="BoxMesh_4"]
+material = SubResource("StandardMaterial3D_2")
+size = Vector3(0.52, 0.07, 0.52)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_5"]
+size = Vector3(0.5, 0.5, 0.5)
+
+[node name="ElementCrate" type="RigidBody3D"]
+collision_layer = 3
+mass = 2.0
+contact_monitor = true
+max_contacts_reported = 4
+script = ExtResource("obj")
+cogito_name = "Small Crate"
+display_name = "Small Crate"
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_3")
+
+[node name="BandTop" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.17, 0)
+mesh = SubResource("BoxMesh_4")
+
+[node name="BandBottom" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.17, 0)
+mesh = SubResource("BoxMesh_4")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_5")
+
+[node name="CarryableComponent" parent="." instance=ExtResource("carry")]
+
+[node name="CogitoProperties" parent="." instance=ExtResource("props")]
+reaction_threshold_time = 1.0
+dry_time = 15.0
+chill_time = 4.0
+freeze_time = 8.0
+spawn_on_chilled = ExtResource("chilled")
+spawn_on_frozen = ExtResource("frozen")
+spawn_on_poisoned = ExtResource("poisoned")
+is_logging = false
+
+[node name="ElementDebugLabel" type="Label3D" parent="."]
+script = ExtResource("dbg")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65, 0)
+
+[connection signal="body_entered" from="." to="." method="_on_body_entered"]
+[connection signal="body_exited" from="." to="." method="_on_body_exited"]

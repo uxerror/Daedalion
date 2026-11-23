@@ -82,6 +82,13 @@
 [ext_resource type="PackedScene" uid="uid://b2cccsfb5tikx" path="res://addons/cogito/CogitoNPC/cogito_npc.tscn" id="68_wxy0x"]
 [ext_resource type="Resource" path="res://addons/cogito/DemoScenes/DemoMusic/combat_music.tres" id="99_combat"]
 [ext_resource type="Resource" uid="uid://c2goscdbbyawd" path="res://addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_TargetPractice.tres" id="78_gg4s8"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Properties/cogito_element_debug_label.gd" id="e5_dbg"]
+[ext_resource type="PackedScene" path="res://addons/cogito/DemoScenes/DemoPrefabs/ElementStands/stand_fire.tscn" id="e5_fire"]
+[ext_resource type="PackedScene" path="res://addons/cogito/DemoScenes/DemoPrefabs/ElementStands/stand_water_shock.tscn" id="e5_water"]
+[ext_resource type="PackedScene" path="res://addons/cogito/DemoScenes/DemoPrefabs/ElementStands/stand_cold.tscn" id="e5_cold"]
+[ext_resource type="PackedScene" path="res://addons/cogito/DemoScenes/DemoPrefabs/ElementStands/stand_poison.tscn" id="e5_poison"]
+[ext_resource type="PackedScene" path="res://addons/cogito/PackedScenes/Pickups/pickup_dart_cold.tscn" id="e5_dart_cold"]
+[ext_resource type="PackedScene" path="res://addons/cogito/PackedScenes/Pickups/pickup_dart_poison.tscn" id="e5_dart_poison"]
 
 [sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_wjbty"]
 panorama = ExtResource("2_akrjl")
@@ -3428,8 +3435,7 @@ horizontal_alignment = 2
 
 [node name="Label_SYSTEMICPROPS" type="Label3D" parent="NavigationRegion3D/SHOOTING_RANGE" unique_id=1861530206]
 transform = Transform3D(1, 0, 1.06581e-14, 0, 1, 0, -1.06581e-14, 0, 1, -14.9099, 1.29132, -14.6248)
-text = "WIP AREA
-(unfinished systems)"
+text = "ELEMENTS"
 font = ExtResource("24_u2ls4")
 font_size = 64
 outline_size = 10
@@ -4919,7 +4925,7 @@ horizontal_alignment = 0
 [node name="WaterPool" type="Area3D" parent="SwimmingTest" unique_id=1501829865]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -37, 0, 19.0067)
 collision_layer = 4
-collision_mask = 15
+collision_mask = 31
 script = ExtResource("67_kt1ow")
 density = 100.0
 
@@ -5147,6 +5153,91 @@ skeleton = NodePath("../..")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="LedgeClimbingTests/MeshInstance3D2/StaticBody3D" unique_id=102480684]
 shape = SubResource("ConcavePolygonShape3D_r8380")
+
+[node name="StandFire" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" unique_id=470974215 instance=ExtResource("e5_fire")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -24, 0, -23.9)
+
+[node name="StandCold" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" unique_id=416187244 instance=ExtResource("e5_cold")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -24, 0, -28.15)
+
+[node name="StandWaterShock" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" unique_id=128312650 instance=ExtResource("e5_water")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -17.6, 0, -22.6)
+
+[node name="StandPoison" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" unique_id=473242743 instance=ExtResource("e5_poison")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -17.6, 0, -27.6)
+
+[node name="KSI_counter_ColdDarts" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" unique_id=969485064 instance=ExtResource("22_p1ri8")]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, -15.8741, 0, -30.8699)
+
+[node name="KSI_counter_PoisonDarts" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" unique_id=1052164118 instance=ExtResource("22_p1ri8")]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, -17.8741, 0, -30.8699)
+
+[node name="Pickup_Dart_Cold" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" unique_id=738061438 instance=ExtResource("e5_dart_cold")]
+transform = Transform3D(0.670944, 0, -0.741508, 7.90309e-15, 1, 7.15102e-15, 0.741508, -1.06581e-14, 0.670944, -14.7269, 0.750406, -30.2153)
+
+[node name="Pickup_Dart_Cold2" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" unique_id=594907829 instance=ExtResource("e5_dart_cold")]
+transform = Transform3D(0.237499, 0, -0.971388, 1.03532e-14, 1, 2.5313e-15, 0.971388, -1.06581e-14, 0.237499, -14.9278, 0.750406, -30.2086)
+
+[node name="Pickup_Dart_Cold3" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" unique_id=406460911 instance=ExtResource("e5_dart_cold")]
+transform = Transform3D(-0.404535, 0, -0.914522, 9.74711e-15, 1, -4.31159e-15, 0.914522, -1.06581e-14, -0.404535, -15.1656, 0.750406, -30.2269)
+
+[node name="Pickup_Dart_Cold4" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" unique_id=199742472 instance=ExtResource("e5_dart_cold")]
+transform = Transform3D(-0.118803, -3.12308e-15, -0.992918, 9.74711e-15, 1, -4.31159e-15, 0.992918, -1.01903e-14, -0.118803, -15.3797, 0.750406, -30.2269)
+
+[node name="Pickup_Dart_Cold5" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" unique_id=394568128 instance=ExtResource("e5_dart_cold")]
+transform = Transform3D(-0.888953, 1.06394e-14, 0.457998, 9.74711e-15, 1, -4.31159e-15, -0.457998, 6.31354e-16, -0.888953, -15.6313, 0.750406, -30.2269)
+
+[node name="Pickup_Dart_Poison" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" unique_id=156857213 instance=ExtResource("e5_dart_poison")]
+transform = Transform3D(0.670944, 0, -0.741508, 7.90309e-15, 1, 7.15102e-15, 0.741508, -1.06581e-14, 0.670944, -16.7269, 0.750406, -30.2153)
+
+[node name="Pickup_Dart_Poison2" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" unique_id=1555599937 instance=ExtResource("e5_dart_poison")]
+transform = Transform3D(0.237499, 0, -0.971388, 1.03532e-14, 1, 2.5313e-15, 0.971388, -1.06581e-14, 0.237499, -16.9278, 0.750406, -30.2086)
+
+[node name="Pickup_Dart_Poison3" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" unique_id=1572215972 instance=ExtResource("e5_dart_poison")]
+transform = Transform3D(-0.404535, 0, -0.914522, 9.74711e-15, 1, -4.31159e-15, 0.914522, -1.06581e-14, -0.404535, -17.1656, 0.750406, -30.2269)
+
+[node name="Pickup_Dart_Poison4" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" unique_id=170663574 instance=ExtResource("e5_dart_poison")]
+transform = Transform3D(-0.118803, -3.12308e-15, -0.992918, 9.74711e-15, 1, -4.31159e-15, 0.992918, -1.01903e-14, -0.118803, -17.3797, 0.750406, -30.2269)
+
+[node name="Pickup_Dart_Poison5" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" unique_id=1551066174 instance=ExtResource("e5_dart_poison")]
+transform = Transform3D(-0.888953, 1.06394e-14, 0.457998, 9.74711e-15, 1, -4.31159e-15, -0.457998, 6.31354e-16, -0.888953, -17.6313, 0.750406, -30.2269)
+
+[node name="Label_ColdDarts" type="Label3D" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" unique_id=1304377087]
+transform = Transform3D(1, 0, -2.98023e-08, 0, 1, 0, 2.98023e-08, 0, 1, -15.8239, 1.5, -30.8235)
+text = "COLD DARTS
+(chills, freezes wet things)"
+font = ExtResource("7_y2art")
+outline_size = 10
+horizontal_alignment = 0
+line_spacing = -10.0
+
+[node name="Label_PoisonDarts" type="Label3D" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" unique_id=1722645851]
+transform = Transform3D(1, 0, -2.98023e-08, 0, 1, 0, 2.98023e-08, 0, 1, -17.8239, 1.5, -30.8235)
+text = "POISON DARTS
+(poisons over time)"
+font = ExtResource("7_y2art")
+outline_size = 10
+horizontal_alignment = 0
+line_spacing = -10.0
+
+[node name="ElementDebugLabel" type="Label3D" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES/Metalbar" unique_id=1743047344]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, 0)
+script = ExtResource("e5_dbg")
+
+[node name="ElementDebugLabel_Cathode_A" type="Label3D" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" node_paths=PackedStringArray("target") unique_id=369652998]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11.071, 1.05, -26.1893)
+script = ExtResource("e5_dbg")
+target = NodePath("../Cathode_A")
+
+[node name="ElementDebugLabel_Cathode_B" type="Label3D" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" node_paths=PackedStringArray("target") unique_id=1261796841]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11.071, 1.05, -24.1893)
+script = ExtResource("e5_dbg")
+target = NodePath("../Cathode_B")
+
+[node name="ElementDebugLabel_Cathode_C" type="Label3D" parent="NavigationRegion3D/SYSTEMIC_PROPERTIES" node_paths=PackedStringArray("target") unique_id=95486630]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.95, 1.7, -21)
+script = ExtResource("e5_dbg")
+target = NodePath("../Cathode_C")
 
 [connection signal="spin_clockwise" from="NavigationRegion3D/ROOM_SYSTEMIC_PROPERTIES/KSI_console_spinner/CogitoSpinner/SpinnerInteraction" to="NavigationRegion3D/ROOM_SYSTEMIC_PROPERTIES/KSI_console_spinner/MeterDisplay" method="increase_value"]
 [connection signal="spin_counterclockwise" from="NavigationRegion3D/ROOM_SYSTEMIC_PROPERTIES/KSI_console_spinner/CogitoSpinner/SpinnerInteraction" to="NavigationRegion3D/ROOM_SYSTEMIC_PROPERTIES/KSI_console_spinner/MeterDisplay" method="decrease_value"]

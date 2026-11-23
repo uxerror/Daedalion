@@ -25,7 +25,7 @@ func _on_attacking_state_entered() -> void:
 		state_chart.send_event(state_after_attack)
 	else:
 		count_down = attack_duration
-		if attack_while_moving():
+		if attack_while_moving() and npc.can_act():
 			attempt_attack()
 
 
@@ -43,7 +43,8 @@ func _on_attacking_state_physics_processing(delta: float) -> void:
 	npc.move_and_slide()
 	
 	if count_down <= 0 and attack_while_moving():
-		attempt_attack()
+		if npc.can_act(): # Stunned or frozen NPCs can't attack.
+			attempt_attack()
 		state_chart.send_event(state_after_attack)
 	else:
 		count_down -= delta

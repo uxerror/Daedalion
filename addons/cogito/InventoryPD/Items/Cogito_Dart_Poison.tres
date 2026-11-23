@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="WieldableItemPD" format=3]
+
+[ext_resource type="Script" uid="uid://6vgnb68cqtwh" path="res://addons/cogito/InventoryPD/CustomResources/AmmoItemPD.gd" id="1_h8lvk"]
+[ext_resource type="Texture2D" path="res://addons/cogito/Assets/Graphics/ItemIcons/Dart_Poison.png" id="1_w1vsy"]
+[ext_resource type="Script" uid="uid://bkxgkf3pj8kb8" path="res://addons/cogito/InventoryPD/CustomResources/WieldableItemPD.gd" id="2_ujs5g"]
+[ext_resource type="AudioStream" uid="uid://npav2p2tk10i" path="res://addons/cogito/Assets/Audio/Kenney/handleSmallLeather.ogg" id="3_0cghm"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Wieldables/throw_dart_poison.tscn" id="4_lhyfl"]
+
+[resource]
+script = ExtResource("2_ujs5g")
+wieldable_scene = ExtResource("4_lhyfl")
+no_reload = true
+charge_max = 1.0
+charge_current = 1.0
+wieldable_range = 10.0
+wieldable_damage = 1.0
+name = "Poison Dart"
+description = "Tipped with something nasty. Poisons whatever it hits."
+icon = ExtResource("1_w1vsy")
+is_stackable = true
+stack_size = 5
+drop_scene = "res://addons/cogito/PackedScenes/Pickups/pickup_dart_poison.tscn"
+sound_pickup = ExtResource("3_0cghm")

@@ -1,0 +1,188 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/cogito/DemoScenes/DemoPrefabs/ElementStands/element_stand.gd" id="stand"]
+[ext_resource type="FontFile" uid="uid://0n6rmlh8d60u" path="res://addons/cogito/Assets/Fonts/Montserrat/Montserrat-ExtraBold.ttf" id="font"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Properties/cogito_element_area.gd" id="area"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Properties/cogito_element_debug_label.gd" id="dbg"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Assets/VFX/vfx_poison_gas.tscn" id="gas"]
+[ext_resource type="PackedScene" path="res://addons/cogito/DemoScenes/DemoPrefabs/ElementStands/element_dummy.tscn" id="dummy"]
+[ext_resource type="PackedScene" uid="uid://6k5rvlwcpys1" path="res://addons/cogito/DemoScenes/DemoPrefabs/generic_switch.tscn" id="switch"]
+[ext_resource type="PackedScene" uid="uid://cs6raqlyejqul" path="res://addons/cogito/DemoScenes/DemoPrefabs/generic_button.tscn" id="button"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
+albedo_color = Color(0.22, 0.24, 0.27, 1)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_2"]
+material = SubResource("StandardMaterial3D_1")
+size = Vector2(4, 4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_3"]
+albedo_color = Color(0.3, 0.32, 0.36, 1)
+metallic = 0.6
+roughness = 0.5
+
+[sub_resource type="BoxMesh" id="BoxMesh_4"]
+material = SubResource("StandardMaterial3D_3")
+size = Vector3(2.6, 0.9, 0.35)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_5"]
+size = Vector3(2.6, 0.9, 0.35)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_6"]
+size = Vector3(3.4, 2.2, 1.3)
+
+[node name="StandPoison" type="Node3D"]
+script = ExtResource("stand")
+reset_nodes = Array[NodePath]([NodePath("Dummy0"), NodePath("Dummy50"), NodePath("Dummy100"), NodePath("DummyFireproof")])
+cure_targets = Array[NodePath]([NodePath("Dummy0"), NodePath("Dummy50"), NodePath("Dummy100"), NodePath("DummyFireproof")])
+
+[node name="Base" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
+mesh = SubResource("PlaneMesh_2")
+cast_shadow = 0
+
+[node name="Title" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.55, -1.9)
+text = "POISON AND RESISTANCES"
+font = ExtResource("font")
+font_size = 48
+outline_size = 10
+
+[node name="Instructions" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, -1.9)
+text = "Poison gas builds up slower on resistant targets
+and hurts them less. The antidote cures them.
+Try fire and cold darts on the fireproof dummy."
+font = ExtResource("font")
+font_size = 22
+outline_size = 8
+line_spacing = -4.0
+
+[node name="Console" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.75)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, 0)
+mesh = SubResource("BoxMesh_4")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, 0)
+shape = SubResource("BoxShape3D_5")
+
+[node name="PoisonGas" type="Area3D" parent="." node_paths=PackedStringArray("visuals")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, -0.7)
+collision_layer = 0
+collision_mask = 50
+script = ExtResource("area")
+element = 5
+enabled = false
+amount_per_second = 1.5
+visuals = [NodePath("Gas")]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PoisonGas"]
+shape = SubResource("BoxShape3D_6")
+
+[node name="ElementDebugLabel" type="Label3D" parent="PoisonGas"]
+script = ExtResource("dbg")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.35, 0)
+
+[node name="Gas" parent="PoisonGas" instance=ExtResource("gas")]
+transform = Transform3D(1.7, 0, 0, 0, 1.1, 0, 0, 0, 0.65, 0, 0, 0)
+
+[node name="Dummy0" parent="." instance=ExtResource("dummy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.2, 0, -0.7)
+
+[node name="CogitoProperties" parent="Dummy0"]
+resist_poison = 0.0
+
+[node name="Dummy0Label" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.2, 0.3, -0.35)
+text = "Resist 0%"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[node name="Dummy50" parent="." instance=ExtResource("dummy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.7)
+
+[node name="CogitoProperties" parent="Dummy50"]
+resist_poison = 50.0
+
+[node name="Dummy50Label" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, -0.35)
+text = "Resist 50%"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[node name="Dummy100" parent="." instance=ExtResource("dummy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.2, 0, -0.7)
+
+[node name="CogitoProperties" parent="Dummy100"]
+resist_poison = 100.0
+
+[node name="Dummy100Label" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.2, 0.3, -0.35)
+text = "Resist 100%"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[node name="DummyFireproof" parent="." instance=ExtResource("dummy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0, 0.75)
+
+[node name="CogitoProperties" parent="DummyFireproof"]
+resist_fire = 100.0
+resist_cold = -50.0
+
+[node name="DummyFireproofLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.3, 1.1)
+text = "Fire 100%
+Cold -50%"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[node name="GasSwitch" parent="Console" instance=ExtResource("switch")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, 0.975, 0)
+display_name = "Poison gas"
+
+[node name="GasSwitchLabel" type="Label3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, 1.15, 0)
+text = "POISON GAS"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[node name="AntidoteButton" parent="Console" instance=ExtResource("button")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, 0.975, 0)
+display_name = "Antidote"
+usable_interaction_text = "Cure"
+
+[node name="AntidoteButtonLabel" type="Label3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, 1.15, 0)
+text = "ANTIDOTE"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[node name="ResetButton" parent="Console" instance=ExtResource("button")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 0.975, 0)
+display_name = "Reset"
+usable_interaction_text = "Reset"
+
+[node name="ResetButtonLabel" type="Label3D" parent="Console"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 1.15, 0)
+text = "RESET"
+font = ExtResource("font")
+font_size = 20
+outline_size = 6
+
+[connection signal="switched" from="Console/GasSwitch" to="PoisonGas" method="set_enabled"]
+[connection signal="pressed" from="Console/AntidoteButton" to="." method="cure_all"]
+[connection signal="pressed" from="Console/ResetButton" to="." method="reset_stand"]
+
+[editable path="Dummy0"]
+[editable path="Dummy50"]
+[editable path="Dummy100"]
+[editable path="DummyFireproof"]

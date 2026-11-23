@@ -259,6 +259,9 @@ func _ready():
 	crouch_shapecast.add_exception(self)
 
 	setup_attributes_and_currencies()
+	setup_elements()
+	if actor_elements:
+		actor_elements.stunned.connect(_on_element_stunned)
 	
 	_initialize_state_chart()
 	_reload_options()
@@ -363,7 +366,13 @@ func on_input(event):
 		if event.get_axis() == 3:
 			joystick_h_event = event
 	
-	player_interaction_component.on_input(event)
+	# Struggling against a freeze: every new movement key press breaks some of the ice.
+	if actor_elements and actor_elements.is_frozen() and _is_new_move_press(event):
+		actor_elements.struggle()
+	
+	# Element states (stunned, frozen) block interacting and using wieldables. Releases still pass, so held actions end.
+	if can_act() or !event.is_pressed():
+		player_interaction_component.on_input(event)
 	
 	# Opens Pause Menu if Menu button is proessed.
 	if event.is_action_pressed("menu"):
@@ -391,8 +400,31 @@ func on_input(event):
 		
 	# Quick slots are part of the first person HUD.
 	var fp_hud : CogitoPlayerHudManager = player_hud as CogitoPlayerHudManager
-	if fp_hud and fp_hud.inventory_interface and fp_hud.inventory_interface.quick_slots:
+	if fp_hud and fp_hud.inventory_interface and fp_hud.inventory_interface.quick_slots and can_act():
 		fp_hud.inventory_interface.quick_slots.on_input(event)
+
+
+func _is_new_move_press(event: InputEvent) -> bool:
+	if !event.is_pressed() or event.is_echo():
+		return false
+	for action in [&"forward", &"back", &"left", &"right"]:
+		if event.is_action_pressed(action):
+			return true
+	return false
+
+
+## A stun ends held wieldable actions (e.g. automatic fire).
+func _on_element_stunned() -> void:
+	var wieldables_handler := player_interaction_component.wieldables
+	if wieldables_handler.primary_action_held:
+		wieldables_handler.primary_action_held = false
+		if wieldables_handler.is_wielding and !player_interaction_component.carrying.is_carrying:
+			wieldables_handler.attempt_action_primary(true)
+
+
+## True while an element state (frozen, stunned) keeps the player from moving, crouching or climbing.
+func is_movement_locked_by_elements() -> bool:
+	return actor_elements != null and actor_elements.is_movement_locked()
 
 
 func get_params(transform3d, motion):
@@ -715,6 +747,8 @@ func is_in_sprinting_state():
 func _is_ledge_climbable() -> bool:
 	if not input_direction:
 		return false
+	if is_movement_locked_by_elements():
+		return false
 	
 	direction = (body.global_transform.basis * Vector3(input_direction.x, 0, input_direction.y)).normalized()
 
@@ -823,6 +857,8 @@ func _is_ledge_climbable() -> bool:
 func _can_jump() -> bool:
 	if is_sitting:
 		return false
+	if actor_elements and !actor_elements.can_jump():
+		return false
 		
 	var doesnt_need_stamina = not stamina_attribute or stamina_attribute.value_current >= stamina_attribute.jump_exhaustion
 	var crouch_jump = current_body_posture_state != BodyPostureState.Crouching or CAN_CROUCH_JUMP
@@ -915,10 +951,12 @@ func _input_handling_and_movement(delta):
 	var active = InputRouter.is_input_active(self)
 	input_direction = Input.get_vector("left", "right", "forward", "back")
 	current_speed = clamp(current_speed, MIN_SPEED, MAX_SPEED)
+	# Element states (chilled, frozen, stunned) slow the player down.
+	var target_speed : float = current_speed * get_element_speed_multiplier()
 	
 	if direction and active:
-		main_velocity.x = lerp(main_velocity.x, direction.x * current_speed, delta * current_lerp_speed)
-		main_velocity.z = lerp(main_velocity.z, direction.z * current_speed, delta * current_lerp_speed)
+		main_velocity.x = lerp(main_velocity.x, direction.x * target_speed, delta * current_lerp_speed)
+		main_velocity.z = lerp(main_velocity.z, direction.z * target_speed, delta * current_lerp_speed)
 	else:
 		main_velocity.x = lerp(main_velocity.x, 0.0, delta * current_lerp_speed)
 		main_velocity.z = lerp(main_velocity.z, 0.0, delta * current_lerp_speed)
@@ -1769,7 +1807,7 @@ func _process_on_ladder(_delta):
 	# Applying ladder input_dir to direction
 	var y_dir = 1 if looking_down else -1
 	direction = (body.global_transform.basis * Vector3(input_dir.x,input_dir.y * y_dir,0)).normalized()
-	main_velocity = direction * ladder_speed
+	main_velocity = direction * ladder_speed * get_element_speed_multiplier()
 	
 	if jump:
 		var jump_direction = (body.global_transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
@@ -1890,7 +1928,7 @@ func _handle_water_physics(delta) -> void:
 	
 	if input_direction or Input.is_action_pressed("jump") or Input.is_action_pressed("crouch"):
 		is_moving = true
-		main_velocity = lerp(main_velocity, direction * current_speed, delta * LERP_SPEED)
+		main_velocity = lerp(main_velocity, direction * current_speed * get_element_speed_multiplier(), delta * LERP_SPEED)
 	else:
 		main_velocity = lerp(main_velocity, Vector3.ZERO, delta * LERP_SPEED)
 		
@@ -2050,7 +2088,7 @@ func _on_crouching_state_physics_processing(delta: float) -> void:
 	# Kept up to date while swimming too: the swimming state sends "stand_up" itself.
 	state_chart.set_expression_property("is_crouch_shapecast_colliding", crouch_shapecast.is_colliding())
 
-	if current_moving_state != MovingState.Swimming and current_moving_state != MovingState.LedgeClimbing:
+	if current_moving_state != MovingState.Swimming and current_moving_state != MovingState.LedgeClimbing and !is_movement_locked_by_elements():
 		if TOGGLE_CROUCH and Input.is_action_just_pressed("crouch"):
 			try_crouch = !try_crouch
 		elif !TOGGLE_CROUCH:
@@ -2074,6 +2112,7 @@ func _on_standing_state_exited() -> void:
 
 func _on_standing_state_input(event: InputEvent) -> void:
 	if !InputRouter.is_input_active(self): return
+	if is_movement_locked_by_elements(): return
 	
 	if event.is_action_pressed("crouch") and TOGGLE_CROUCH:
 		try_crouch = !try_crouch

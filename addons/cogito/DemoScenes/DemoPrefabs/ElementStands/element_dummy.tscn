@@ -1,0 +1,93 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://dmeh01c5ccjqc" path="res://addons/cogito/CogitoObjects/cogito_object.gd" id="obj"]
+[ext_resource type="PackedScene" uid="uid://cqgg1nng0vvbh" path="res://addons/cogito/Components/Attributes/HealthAttribute.tscn" id="health"]
+[ext_resource type="PackedScene" uid="uid://k28yrbg3k3pw" path="res://addons/cogito/Components/HitboxComponent.tscn" id="hitbox"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Assets/VFX/vfx_chilled.tscn" id="chilled"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Assets/VFX/vfx_frozen.tscn" id="frozen"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Assets/VFX/vfx_poisoned.tscn" id="poisoned"]
+[ext_resource type="PackedScene" uid="uid://cj0yaeh3yg7tu" path="res://addons/cogito/Components/Properties/CogitoProperties.tscn" id="props"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Properties/cogito_element_debug_label.gd" id="dbg"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
+albedo_color = Color(0.55, 0.4, 0.25, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_2"]
+albedo_color = Color(0.85, 0.78, 0.6, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_3"]
+material = SubResource("StandardMaterial3D_1")
+top_radius = 0.05
+bottom_radius = 0.07
+height = 0.5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_4"]
+material = SubResource("StandardMaterial3D_1")
+top_radius = 0.25
+bottom_radius = 0.28
+height = 0.06
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_5"]
+material = SubResource("StandardMaterial3D_2")
+radius = 0.22
+height = 1.0
+
+[sub_resource type="SphereMesh" id="SphereMesh_6"]
+material = SubResource("StandardMaterial3D_2")
+radius = 0.16
+height = 0.32
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_7"]
+radius = 0.26
+height = 1.9
+
+[node name="ElementDummy" type="StaticBody3D"]
+collision_layer = 3
+script = ExtResource("obj")
+cogito_name = "Target Dummy"
+display_name = "Target Dummy"
+
+[node name="Foot" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 0)
+mesh = SubResource("CylinderMesh_4")
+
+[node name="Post" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
+mesh = SubResource("CylinderMesh_3")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+mesh = SubResource("CapsuleMesh_5")
+
+[node name="Head" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.65, 0)
+mesh = SubResource("SphereMesh_6")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
+shape = SubResource("CapsuleShape3D_7")
+
+[node name="HealthAttribute" parent="." instance=ExtResource("health")]
+value_max = 100.0
+value_start = 100.0
+attribute_visibility = 3
+
+[node name="HitboxComponent" parent="." node_paths=PackedStringArray("health_attribute") instance=ExtResource("hitbox")]
+health_attribute = NodePath("../HealthAttribute")
+
+[node name="CogitoProperties" parent="." instance=ExtResource("props")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+reaction_threshold_time = 1.0
+dry_time = 8.0
+chill_time = 4.0
+freeze_time = 6.0
+poison_time = 6.0
+poison_damage_per_second = 4.0
+spawn_on_chilled = ExtResource("chilled")
+spawn_on_frozen = ExtResource("frozen")
+spawn_on_poisoned = ExtResource("poisoned")
+is_logging = false
+
+[node name="ElementDebugLabel" type="Label3D" parent="."]
+script = ExtResource("dbg")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)

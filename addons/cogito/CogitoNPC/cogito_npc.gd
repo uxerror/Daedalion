@@ -22,6 +22,8 @@ enum PromptPositionMode{
 @export var head: Node3D
 var interaction_nodes : Array[Node]
 var cogito_properties : CogitoProperties = null
+## Element effects on movement and actions (chilled, frozen, stunned), or null. Found among the children.
+var actor_elements : CogitoActorElements = null
 var properties : int
 #endregion
 
@@ -114,7 +116,9 @@ enum BehaviourState {
 	## NPC has caught up to the player and is attacking them
 	Attacking,
 	## NPC has lost the player in a chase, and is now searching for them
-	Searching
+	Searching,
+	## NPC is on fire and runs around in panic
+	Panicking,
 }
 var previous_behaviour: BehaviourState
 var current_behaviour: BehaviourState
@@ -154,6 +158,7 @@ func _ready():
 	self.add_to_group("Persist") #Adding object to group for persistence
 	find_interaction_nodes()
 	find_cogito_properties()
+	find_actor_elements()
 	connect_weapon_to_hand()
 	find_health_attribute()
 
@@ -167,9 +172,52 @@ func find_health_attribute():
 
 
 func find_cogito_properties():
-	var property_nodes = find_children("","CogitoProperties",true) #Grabs all attached property components
+	# A CogitoProperties directly on the NPC wins over ones further down (e.g. on a weapon).
+	var property_nodes = find_children("","CogitoProperties",false)
+	if !property_nodes:
+		property_nodes = find_children("","CogitoProperties",true) #Grabs all attached property components
 	if property_nodes:
 		cogito_properties = property_nodes[0]
+
+
+## Finds the CogitoActorElements child and hooks up fire panic. Without one, element states don't affect the NPC.
+func find_actor_elements():
+	var nodes := find_children("", "CogitoActorElements", false)
+	if !nodes:
+		return
+	actor_elements = nodes[0]
+	if actor_elements.properties:
+		cogito_properties = actor_elements.properties
+	if cogito_properties and !cogito_properties.has_ignited.is_connected(_on_ignited):
+		cogito_properties.has_ignited.connect(_on_ignited)
+		cogito_properties.has_been_extinguished.connect(_on_extinguished)
+
+
+## Multiplier for the NPC's movement speed from element states (chilled, frozen, stunned).
+func get_speed_multiplier() -> float:
+	return actor_elements.speed_multiplier if actor_elements else 1.0
+
+
+## False while the NPC can't attack: stunned, frozen or panicking.
+func can_act() -> bool:
+	if current_behaviour == BehaviourState.Panicking:
+		return false
+	return actor_elements == null or actor_elements.can_act()
+
+
+func is_panicking() -> bool:
+	return current_behaviour == BehaviourState.Panicking
+
+
+# A burning NPC panics (the "panic" event leads to the Panic state of the state chart).
+func _on_ignited() -> void:
+	if is_dead():
+		return
+	state_chart.send_event("panic")
+
+
+func _on_extinguished() -> void:
+	state_chart.send_event("calm_down")
 
 
 func connect_weapon_to_hand():
@@ -209,13 +257,19 @@ func _physics_process(delta: float) -> void:
 
 
 func move_npc_to_next_position(_delta: float) -> void:
-	var current_location = global_transform.origin
 	var next_position = nav_agent.get_next_path_position()
 	
 	if nav_agent.is_target_reachable():
 		last_reachable_path = next_position
-		
-	var new_velocity = (next_position - current_location).normalized() * move_speed 
+	
+	move_npc_towards(next_position, _delta)
+
+
+## Moves the NPC straight towards a position at move_speed (scaled by element states).
+func move_npc_towards(next_position: Vector3, _delta: float) -> void:
+	var current_location = global_transform.origin
+	var speed : float = move_speed * get_speed_multiplier()
+	var new_velocity = (next_position - current_location).normalized() * speed
 	# Add the gravity.
 	if not is_on_floor():
 		new_velocity += get_gravity() * _delta
@@ -235,6 +289,8 @@ func move_npc_to_next_position(_delta: float) -> void:
 
 
 func face_direction(face_direction: Vector3) -> void:
+	if actor_elements and actor_elements.is_movement_locked():
+		return # Frozen or stunned NPCs can't turn.
 	var face_at_target = global_position.direction_to(face_direction)
 	var face_at_target_xz := Vector3(face_at_target.x, 0, face_at_target.z)
 	if face_at_target_xz != Vector3.ZERO:
@@ -327,6 +383,15 @@ func load_state_chart():
 	CogitoGlobals.debug_log(true, "CogitoNPC", "Deserialising state chart, errors: %s" % errors)
 	# Deserializing doesn't emit state_entered, so the state processors' enter_state() doesn't run.
 	_restore_current_behaviour()
+	# The element states of a scene state are restored after set_state() (CogitoSceneManager applies them deferred),
+	# so the panic is checked against the fire once they are.
+	_end_panic_without_fire.call_deferred()
+
+
+## A loaded NPC keeps panicking only if it is still on fire.
+func _end_panic_without_fire() -> void:
+	if is_panicking() and !(cogito_properties and cogito_properties.is_on_fire):
+		state_chart.send_event("calm_down")
 
 
 ## Sets current_behaviour from the active behaviour state, as its StateProcessor would on enter.
@@ -355,6 +420,8 @@ func load_attention_target():
 
 
 func _on_hitbox_component_got_hit(object) -> void:
+	if object == null or object == self or object is CogitoElementArea:
+		return # Damage ticks of its own element states (burning, poison) or element areas give nothing to look at.
 	if object is CogitoProjectile:
 		sight_detection.generate_attention_target(object.throw_point)
 	elif object is CogitoWieldable:
