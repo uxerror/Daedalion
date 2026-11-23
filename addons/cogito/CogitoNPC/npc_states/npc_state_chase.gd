@@ -74,7 +74,7 @@ func start_searching() -> void:
 	state_chart.send_event("search")
 
 
-func get_wieldable_range() -> int:
+func get_wieldable_range() -> float:
 	if npc.weapon:
 		return npc.weapon.npc_wieldable_range
 	return 0

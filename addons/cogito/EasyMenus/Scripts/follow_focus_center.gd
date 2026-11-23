@@ -40,4 +40,4 @@ func _input(event):
 			
 func _process(delta: float) -> void:
 	if abs(gamepad_scroll) > abs(gamepad_scroll_deadzone):
-		scroll_vertical = scroll_vertical + gamepad_scroll_speed * gamepad_scroll
+		get_v_scroll_bar().value += gamepad_scroll_speed * gamepad_scroll

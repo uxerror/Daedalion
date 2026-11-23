@@ -114,7 +114,8 @@ func goto(state: String, args = null) -> void:
 		
 	# Restart the state if we are asked to change to the same
 	if state == current:
-		return self.restart(args)
+		await self.restart(args)
+		return
 
 	var exiting = await self.caller("_state_exit")
 

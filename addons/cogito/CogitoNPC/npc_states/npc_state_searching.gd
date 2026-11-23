@@ -54,7 +54,8 @@ var stuck_timer: Timer
 
 var head: LookAtModifier3D
 
-func _enter_tree() -> void:
+func _ready() -> void:
+	super()
 	if show_search_points:
 		search_point_one_label = create_debug_label("1")
 		search_point_two_label = create_debug_label("2")
@@ -67,9 +68,6 @@ func _enter_tree() -> void:
 
 func _on_searching_state_entered() -> void:
 	super.enter_state()
-	if show_search_points and not search_point_one_label.is_inside_tree():
-			get_tree().current_scene.add_child(search_point_one_label)
-			get_tree().current_scene.add_child(search_point_two_label)
 	
 	npc.nav_agent.target_position = broken_los_point
 	if not npc.nav_agent.target_reached.is_connected(reached_target):
@@ -186,4 +184,7 @@ func create_debug_label(text: String) -> Label3D:
 	var label = Label3D.new()
 	label.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
 	label.text = text
+	label.visible = false
+	label.top_level = true
+	add_child(label)
 	return label

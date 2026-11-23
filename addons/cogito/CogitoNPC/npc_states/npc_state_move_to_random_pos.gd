@@ -48,7 +48,7 @@ func _physics_process(_delta):
 
 func pick_destination():
 	var current_position = Host.get_global_position()
-	var new_destination = random_position(random_direction())
+	var new_destination = current_position + random_position(random_direction())
 	return new_destination
 
 
@@ -85,7 +85,8 @@ func move_host_to_next_position(_delta: float) -> void:
 
 func random_position(direction: Vector3) -> Vector3:
 	var target_position : Vector3
-	var distance: float = randi_range(1, max_distance_from_host)
+	var radius := maxf(0, max_distance_from_host)
+	var distance: float = randf_range(minf(1, radius), radius)
 	target_position = direction * distance
 	return target_position
 
