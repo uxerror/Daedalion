@@ -143,7 +143,7 @@ func start_new_game():
 		var path_to_scene = CogitoGlobals.cogito_settings.new_game_start_scene.resource_path
 		CogitoSceneManager.load_next_scene(path_to_scene, "", "temp", CogitoSceneManager.CogitoSceneLoadMode.RESET) #Load_mode 2 means there's no attempt to load a state.
 		#Setting new game world state:
-		CogitoSceneManager._current_world_dict = CogitoGlobals.cogito_settings.new_game_world_state.get_world_dict()
+		CogitoSceneManager._current_world_dict = CogitoGlobals.cogito_settings.get_new_game_world_dict()
 	else:
 		print("ISSUE: No start game scene set.")
 
