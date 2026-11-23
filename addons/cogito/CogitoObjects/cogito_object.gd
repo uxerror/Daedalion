@@ -158,7 +158,6 @@ func save():
 		"parent" : get_parent().get_path(),
 		#"slot_data" : slot_data,
 		#"item_charge" : slot_data.inventory_item.charge_current,
-		"interaction_nodes" : interaction_nodes,
 		"pos_x" : position.x,
 		"pos_y" : position.y,
 		"pos_z" : position.z,

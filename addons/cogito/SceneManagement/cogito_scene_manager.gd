@@ -44,9 +44,11 @@ class PreparedSlot:
 	var status := SlotStatus.BROKEN
 	var reason := ""
 	var player: CogitoPlayerState
-	var level: PackedScene
+	var slot: String
+	var warnings: Array[Dictionary] = []
 	var scene: CogitoSceneState
 
+const SaveCodec := preload("res://addons/cogito/SceneManagement/save_codec.gd")
 const SlotStorage := preload("res://addons/cogito/SceneManagement/cogito_slot_storage.gd")
 @onready var storage := SlotStorage.new(cogito_state_dir)
 var last_slot_message := ""
@@ -120,17 +122,37 @@ func send_player_hint(hint_icon: Texture2D, hint_text: String):
 
 
 func player_file(slot: String) -> String:
-	return cogito_state_dir.path_join(slot).path_join(cogito_player_state_prefix + ".res")
+	return cogito_state_dir.path_join(slot).path_join("player_state" + SaveCodec.SUFFIX)
 
 
 func scene_file(slot: String, level_name: String) -> String:
+	return cogito_state_dir.path_join(slot).path_join("scene_" + level_name + SaveCodec.SUFFIX)
+
+
+func legacy_player_file(slot: String) -> String:
+	return cogito_state_dir.path_join(slot).path_join(cogito_player_state_prefix + ".res")
+
+
+func legacy_scene_file(slot: String, level_name: String) -> String:
 	return cogito_state_dir.path_join(slot).path_join(cogito_scene_state_prefix + level_name + ".res")
 
 
-func get_existing_player_state(slot: String) -> CogitoPlayerState:
-	if storage.valid_slot(slot) and FileAccess.file_exists(player_file(slot)):
-		return ResourceLoader.load(player_file(slot), "", ResourceLoader.CACHE_MODE_IGNORE) as CogitoPlayerState
+func _read_state(path: String, legacy: String, kind: String, report: PreparedSlot) -> Resource:
+	if FileAccess.file_exists(path):
+		var codec := SaveCodec.new()
+		var state := codec.read(path, kind)
+		report.warnings.append_array(codec.warnings)
+		report.reason = codec.reason
+		return state
+	if FileAccess.file_exists(legacy):
+		return ResourceLoader.load(legacy, "", ResourceLoader.CACHE_MODE_IGNORE)
 	return null
+
+
+func get_existing_player_state(slot: String) -> CogitoPlayerState:
+	if not storage.valid_slot(slot):
+		return null
+	return _read_state(player_file(slot), legacy_player_file(slot), "player", PreparedSlot.new()) as CogitoPlayerState
 
 
 func prepare_slot(slot: String) -> PreparedSlot:
@@ -143,6 +165,7 @@ func prepare_slot(slot: String) -> PreparedSlot:
 
 func _prepare_files(slot: String) -> PreparedSlot:
 	var result := PreparedSlot.new()
+	result.slot = slot
 	var path := player_file(slot)
 	var dir_path := path.get_base_dir()
 	var directory := DirAccess.open(dir_path)
@@ -152,18 +175,22 @@ func _prepare_files(slot: String) -> PreparedSlot:
 			result.reason = "Cannot access save slot."
 			return result
 	var files := directory.get_files() if directory else PackedStringArray()
-	if not files.has(path.get_file()):
+	var legacy := legacy_player_file(slot)
+	if not files.has(path.get_file()) and not files.has(legacy.get_file()):
 		result.status = SlotStatus.EMPTY
 		result.reason = "Empty slot."
 		return result
-	result.player = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as CogitoPlayerState
+	result.player = _read_state(path, legacy, "player", result) as CogitoPlayerState
 	if not result.player:
-		result.reason = "Cannot read player state."
+		if result.reason.is_empty():
+			result.reason = "Cannot read player state."
 		return result
-	var level_path := result.player.player_current_scene_path
-	if ResourceLoader.exists(level_path, "PackedScene"):
-		result.level = ResourceLoader.load(level_path, "PackedScene") as PackedScene
-	if not result.level or not result.level.can_instantiate():
+	var level_path := ResourceUID.ensure_path(result.player.player_current_scene_path)
+	if (
+		level_path.is_empty()
+		or not ResourceLoader.get_recognized_extensions_for_type("PackedScene").has(level_path.get_extension())
+		or not SaveCodec.file_exists(level_path, "PackedScene")
+	):
 		result.reason = "Saved level is unavailable."
 		return result
 	var level_name := result.player.player_current_scene
@@ -171,10 +198,12 @@ func _prepare_files(slot: String) -> PreparedSlot:
 		result.reason = "Invalid saved level name."
 		return result
 	path = scene_file(slot, level_name)
-	if files.has(path.get_file()):
-		result.scene = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as CogitoSceneState
+	legacy = legacy_scene_file(slot, level_name)
+	if files.has(path.get_file()) or files.has(legacy.get_file()):
+		result.scene = _read_state(path, legacy, "scene", result) as CogitoSceneState
 		if not result.scene:
-			result.reason = "Cannot read level state."
+			if result.reason.is_empty():
+				result.reason = "Cannot read level state."
 			return result
 	result.status = SlotStatus.OK
 	return result
@@ -194,25 +223,29 @@ func loading_saved_game(slot: String, _current_scene_name_unused: String = "") -
 	var screen = _new_loading_screen()
 	if not screen:
 		return slot_error("Cannot open loading screen.", slot)
-	var level := prepared.level.instantiate()
-	if not level:
+	screen.prepared_slot = prepared
+	screen.next_scene_path = prepared.player.player_current_scene_path
+	screen.load_mode = CogitoSceneLoadMode.LOAD_SAVE
+	var error: Error = screen.request_scene()
+	if error != OK:
 		screen.free()
-		return slot_error("Cannot open saved level.", prepared.player.player_current_scene_path)
-	if slot != "temp":
-		var error := storage.replace("temp", slot)
+		return slot_error("Cannot open saved level.", prepared.player.player_current_scene_path, error)
+	get_tree().root.add_child(screen)
+	return await screen.save_load_ready
+
+
+## Called only after the threaded level was successfully instantiated. Until the
+## temp generation is published both the current game and its menus remain live.
+func activate_saved_slot(prepared: PreparedSlot) -> Error:
+	if prepared.slot != "temp":
+		var error := storage.replace("temp", prepared.slot)
 		if error != OK:
-			level.free()
-			screen.free()
-			return slot_error("Cannot prepare saved files.", slot, error)
+			return slot_error("Cannot prepare saved files.", prepared.slot, error)
 	if not prepared.scene:
-		push_warning("No level state in slot %s. Loading the original level." % slot)
-	_active_slot = slot
+		push_warning("No level state in slot %s. Loading the original level." % prepared.slot)
+	_active_slot = prepared.slot
 	is_loaded_from_start_new_game = false
 	scene_load_mode = CogitoSceneLoadMode.LOAD_SAVE
-	screen.load_mode = scene_load_mode
-	screen.prepared_level = level
-	screen.prepared_slot = prepared
-	get_tree().root.add_child(screen)
 	return OK
 
 
@@ -221,13 +254,25 @@ func apply_saved_game(prepared: PreparedSlot) -> void:
 	if _scene_state:
 		_apply_scene_state()
 	_apply_player_state(get_player(), prepared.player)
+	_show_save_warnings(prepared)
+
+
+func _show_save_warnings(report: PreparedSlot) -> void:
+	for entry: Dictionary in report.warnings:
+		push_warning("Could not restore %s (%s) at %s" % [entry.path, entry.uid, entry.field])
+	if not report.warnings.is_empty() and get_player():
+		send_player_hint(null, "Some saved items could not be restored.")
 
 
 #region PLAYER SAVE HANDLING
 func load_player_state(player: CogitoPlayer, slot: String) -> void:
-	var state := get_existing_player_state(slot)
+	if not storage.valid_slot(slot):
+		return
+	var report := PreparedSlot.new()
+	var state := _read_state(player_file(slot), legacy_player_file(slot), "player", report) as CogitoPlayerState
 	if state:
 		_apply_player_state(player, state)
+		_show_save_warnings(report)
 
 
 func _apply_player_state(player: CogitoPlayer, state: CogitoPlayerState) -> void:
@@ -243,7 +288,7 @@ func _apply_player_state(player: CogitoPlayer, state: CogitoPlayerState) -> void
 func write_state_resource(state: Resource, path: String) -> Error:
 	var error := DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	if error == OK:
-		error = ResourceSaver.save(state, path, ResourceSaver.FLAG_CHANGE_PATH)
+		error = SaveCodec.new().write(state, path, "player" if state is CogitoPlayerState else "scene")
 	return storage.check(error, path)
 #endregion
 
@@ -258,15 +303,22 @@ func slot_screenshot(state: CogitoPlayerState, placeholder: Texture2D) -> Textur
 
 func load_scene_state(level_name: String, slot: String) -> void:
 	var path := scene_file(slot, level_name)
-	if FileAccess.file_exists(path):
-		_scene_state = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as CogitoSceneState
+	var legacy := legacy_scene_file(slot, level_name)
+	if FileAccess.file_exists(path) or FileAccess.file_exists(legacy):
+		var report := PreparedSlot.new()
+		_scene_state = _read_state(path, legacy, "scene", report) as CogitoSceneState
 		if _scene_state:
 			_apply_scene_state()
+			_show_save_warnings(report)
 		else:
 			push_warning("Cannot read level state: " + path)
 
 
 func _apply_scene_state() -> void:
+	# A saved pickup without its item cannot be interacted with or saved again.
+	_scene_state.saved_nodes = _scene_state.saved_nodes.filter(
+		func(entry: Dictionary) -> bool: return not entry.has("slot_data") or entry.slot_data != null
+	)
 	if _scene_state.saved_nodes.all(func(node_data): return node_data.has("cogito_id")):
 		_load_persist_nodes_in_place(_scene_state.saved_nodes)
 	else:
@@ -283,6 +335,8 @@ func _apply_scene_state() -> void:
 		node_to_set.position = Vector3(state_data["pos_x"],state_data["pos_y"],state_data["pos_z"])
 		node_to_set.rotation = Vector3(state_data["rot_x"],state_data["rot_y"],state_data["rot_z"])
 		for data in state_data.keys():
+			if data == "inventory_data" and state_data[data] == null:
+				continue # The container keeps the inventory instantiated with the level.
 			if data == "filename" or data == "parent" or data == "pos_x" or data == "pos_y" or data == "pos_z" or data == "rot_x" or data == "rot_y" or data == "rot_z" or data in SAVE_ID_KEYS:
 				continue
 			node_to_set.set(data, state_data[data])
@@ -373,6 +427,8 @@ func _apply_saved_node_data(new_object: Node, node_data: Dictionary) -> void:
 			new_object.angular_velocity = Vector3(node_data["angular_velocity_x"], node_data["angular_velocity_y"], node_data["angular_velocity_z"])
 	# Set the remaining variables.
 	for data in node_data.keys():
+		if data == "inventory_data" and node_data[data] == null:
+			continue
 		if data == "filename" or data == "parent" or data == "pos_x" or data == "pos_y" or data == "pos_z" or data == "rot_x" or data == "rot_y" or data == "rot_z" or data == "item_charge" or data in SAVE_ID_KEYS:
 			continue
 		new_object.set(data, node_data[data])
@@ -560,7 +616,7 @@ func _new_loading_screen() -> CanvasLayer:
 
 func load_next_scene(target: String, connector_name: String, passed_slot: String, load_mode: CogitoSceneLoadMode) -> Error:
 	if load_mode == CogitoSceneLoadMode.LOAD_SAVE:
-		return loading_saved_game(passed_slot)
+		return await loading_saved_game(passed_slot)
 	var screen = _new_loading_screen()
 	if not screen:
 		scene_load_failed(target, ERR_CANT_CREATE)
@@ -651,7 +707,8 @@ func save_game(slot: String, update_history := true) -> Error:
 		state.player_state_screenshot_file = cogito_state_dir.path_join(slot).path_join("screenshot.png")
 	var writer := _write_generation.bind(state, scene, shot)
 	var skip := PackedStringArray([
-		player_file(slot).get_file(), scene_file(slot, level.name).get_file(), "screenshot.png"
+		player_file(slot).get_file(), scene_file(slot, level.name).get_file(), "screenshot.png",
+		legacy_player_file(slot).get_file(), legacy_scene_file(slot, level.name).get_file(),
 	])
 	var promote := save_last_saved_slot.bind(slot) if update_history else Callable()
 	var error := storage.recover("temp")
@@ -677,6 +734,8 @@ func _write_generation(directory: String, player: CogitoPlayerState, scene: Cogi
 		error = storage.before("write current scene")
 	if error == OK:
 		error = scene.write_state(staging, player.player_current_scene)
+	if error == OK:
+		error = _upgrade_visited_scenes(staging)
 	if error == OK and shot:
 		error = storage.before("write screenshot")
 		if error == OK:
@@ -684,11 +743,33 @@ func _write_generation(directory: String, player: CogitoPlayerState, scene: Cogi
 			error = storage.check(shot.save_png(path), path)
 	if error != OK:
 		return error
-	# Verify the freshly serialized resources before sealing staging. Ignore the
-	# root resource cache as in normal v1 reads (external assets remain shared).
+	# Verify the freshly serialized states before sealing staging.
 	var verified := _prepare_files(staging)
 	if verified.status != SlotStatus.OK or not verified.scene:
 		return storage.check(ERR_FILE_CORRUPT, directory + " " + verified.reason)
+	return OK
+
+
+## Convert previously visited levels in staging. On any error replace() discards
+## this generation and preserves the live slot, including its legacy files.
+func _upgrade_visited_scenes(staging: String) -> Error:
+	var directory := cogito_state_dir.path_join(staging)
+	for file in DirAccess.get_files_at(directory):
+		if not file.begins_with(cogito_scene_state_prefix) or not file.ends_with(".res"):
+			continue
+		var level := file.trim_prefix(cogito_scene_state_prefix).trim_suffix(".res")
+		var legacy := directory.path_join(file)
+		var path := scene_file(staging, level)
+		if not FileAccess.file_exists(path):
+			var scene := ResourceLoader.load(legacy, "", ResourceLoader.CACHE_MODE_IGNORE) as CogitoSceneState
+			if not scene:
+				return storage.check(ERR_FILE_CORRUPT, legacy)
+			var error := scene.write_state(staging, level)
+			if error != OK:
+				return error
+		var removed := DirAccess.remove_absolute(legacy)
+		if removed != OK:
+			return storage.check(removed, legacy)
 	return OK
 
 

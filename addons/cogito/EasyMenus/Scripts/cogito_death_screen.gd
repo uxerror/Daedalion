@@ -155,7 +155,7 @@ func _on_back_to_main_menu_pressed() -> void:
 
 
 func _on_reload_button_pressed() -> void:
-	if CogitoSceneManager.loading_saved_game(CogitoSceneManager._active_slot) != OK:
+	if await CogitoSceneManager.loading_saved_game(CogitoSceneManager._active_slot) != OK:
 		load_button.text = CogitoSceneManager.last_slot_message
 		return
 	get_tree().paused = false

@@ -234,7 +234,7 @@ func _on_quickload_button_pressed() -> void:
 		start_new_game()
 		return
 	
-	if CogitoSceneManager.loading_saved_game(CogitoSceneManager._active_slot) != OK:
+	if await CogitoSceneManager.loading_saved_game(CogitoSceneManager._active_slot) != OK:
 		%QuickLoadButton.text = CogitoSceneManager.last_slot_message
 		return
 	_on_resume_game_button_pressed()

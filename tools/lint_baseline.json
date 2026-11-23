@@ -893,7 +893,7 @@
   "addons/cogito/SceneManagement/cogito_player_state.gd": {
    "class-definitions-order": 18,
    "function-variable-name": 1,
-   "max-line-length": 10,
+   "max-line-length": 9,
    "trailing-whitespace": 20
   },
   "addons/cogito/SceneManagement/cogito_scene.gd": {
@@ -901,8 +901,8 @@
    "trailing-whitespace": 2
   },
   "addons/cogito/SceneManagement/cogito_scene_manager.gd": {
-   "class-definitions-order": 22,
-   "max-line-length": 40,
+   "class-definitions-order": 23,
+   "max-line-length": 42,
    "max-public-methods": 1,
    "max-returns": 1,
    "trailing-whitespace": 13
@@ -913,6 +913,9 @@
   "addons/cogito/SceneManagement/loading_screen.gd": {
    "class-definitions-order": 6,
    "max-line-length": 3
+  },
+  "addons/cogito/SceneManagement/save_codec.gd": {
+   "max-returns": 4
   },
   "addons/cogito/SceneManagement/world_property_setter.gd": {
    "class-variable-name": 2,

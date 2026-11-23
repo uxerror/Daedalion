@@ -64,7 +64,7 @@ func make_slot(slot: String) -> CogitoPlayerSimpleState:
 	state.player_state_slot_name = slot
 	state.player_inventory = CogitoInventory.new()
 	state.world_dictionary = {"loaded": slot}
-	assert_int(ResourceSaver.save(state, manager.player_file(slot))).is_equal(OK)
+	assert_int(ResourceSaver.save(state, manager.legacy_player_file(slot))).is_equal(OK)
 	return state
 
 
@@ -72,6 +72,7 @@ func write_text(path: String, contents: String) -> void:
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	assert_object(file).is_not_null()
 	assert_bool(file.store_string(contents)).is_true()
+	file.close()
 
 
 func make_button(slot: String) -> CogitoSaveSlotButton:

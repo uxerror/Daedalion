@@ -66,8 +66,8 @@ func test_io_failure_preserves_generation_and_index(
 	step: String,
 	_test_parameters := [
 		["create staging"],
-		["copy COGITO_scene_state_C.res"],
-		["copy COGITO_scene_state_D.res"],
+		["copy scene_C.v2.json"],
+		["copy scene_D.v2.json"],
 		["write player"],
 		["write current scene"],
 		["write screenshot"],

@@ -131,7 +131,7 @@ func save_in_slot() -> Error:
 
 
 func load_from_slot() -> Error:
-	var error := CogitoSceneManager.loading_saved_game(manual_save_slot_name)
+	var error := await CogitoSceneManager.loading_saved_game(manual_save_slot_name)
 	if error != OK:
 		save_time_label.text = CogitoSceneManager.last_slot_message
 		return error

@@ -40,6 +40,7 @@ func save_common_data(player, slot) -> void:
 	self.player_quickslots = player.inventory_data.assigned_quickslots # Saving assigned quickslots
 	
 	# Saving current quests to player state.
+	self.player_active_quest_progression = player.saved_quest_progression.duplicate(true)
 	self.player_active_quests.clear()
 	for quest in CogitoQuestManager.active.quests:
 		self.player_active_quests.append(quest)
@@ -107,29 +108,37 @@ func save_common_data(player, slot) -> void:
 
 ## Counterpart of save_common_data(). Call it first in populate_player_data().
 func load_common_data(player) -> void:
-	player.inventory_data = self.player_inventory # Loading inventory data from saved player state to current player inventory.
+	if player_inventory:
+		player.inventory_data = player_inventory
 	player.inventory_data.assigned_quickslots = self.player_quickslots
 	
 	# Loading quests from player state with proper initialization:
 	CogitoQuestManager.active.clear_group()
 	for quest in self.player_active_quests:
+		if not quest:
+			continue
 		quest.start(true)  # Initialize active quests (mute audio)
 		CogitoQuestManager.active.add_quest(quest)
 	
+	player.saved_quest_progression = player_active_quest_progression.duplicate(true)
 	var _temp_active_quest_dir = self.player_active_quest_progression
 	for entry in _temp_active_quest_dir:
 		for quest in CogitoQuestManager.active.quests:
-			if quest.quest_name == entry:
+			if quest.quest_name == entry and "quest_counter" in quest:
 				quest.quest_counter = _temp_active_quest_dir[entry]
 				CogitoGlobals.debug_log(true,"CSM", "Loading active quests. Quest " + quest.quest_name + " found. Setting progression to " + str(_temp_active_quest_dir[entry]) )
 	
 	CogitoQuestManager.completed.clear_group()
 	for quest in self.player_completed_quests:
+		if not quest:
+			continue
 		quest.complete(true)  # Initialize completed quests (mute audio)
 		CogitoQuestManager.completed.add_quest(quest)
 	
 	CogitoQuestManager.failed.clear_group()
 	for quest in self.player_failed_quests:
+		if not quest:
+			continue
 		quest.failed(true)  # Initialize failed quests (mute audio)
 		CogitoQuestManager.failed.add_quest(quest)
 	

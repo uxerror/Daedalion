@@ -177,5 +177,5 @@ func open_save_load_menu() -> void:
 func _on_main_menu_continue_pressed() -> void:
 	var last_saved_slot: String = CogitoSceneManager.get_last_saved_slot()
 	
-	if CogitoSceneManager.loading_saved_game(last_saved_slot) != OK:
+	if await CogitoSceneManager.loading_saved_game(last_saved_slot) != OK:
 		%Continue.text = CogitoSceneManager.last_slot_message

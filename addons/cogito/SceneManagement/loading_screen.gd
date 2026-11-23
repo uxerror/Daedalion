@@ -11,7 +11,7 @@ var connector_name : String
 var load_mode: CogitoSceneManager.CogitoSceneLoadMode
 var progress_array: Array
 var prepared_slot: CogitoSceneManager.PreparedSlot
-var prepared_level: Node
+signal save_load_ready(error: Error)
 
 
 func request_scene() -> Error:
@@ -21,27 +21,36 @@ func request_scene() -> Error:
 
 
 func _process(_delta: float) -> void:
-	if not prepared_level:
-		var status := ResourceLoader.load_threaded_get_status(next_scene_path, progress_array)
-		match status:
-			ResourceLoader.THREAD_LOAD_IN_PROGRESS:
-				if not progress_array.is_empty():
-					label_progress.text = "%d%%" % int(99 * float(progress_array[0]))
-				return
-			ResourceLoader.THREAD_LOAD_LOADED:
-				var packed := ResourceLoader.load_threaded_get(next_scene_path) as PackedScene
-				if packed and packed.can_instantiate():
-					prepared_level = packed.instantiate()
-		if not prepared_level:
-			set_process(false)
+	var status := ResourceLoader.load_threaded_get_status(next_scene_path, progress_array)
+	if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+		if not progress_array.is_empty():
+			label_progress.text = "%d%%" % int(99 * float(progress_array[0]))
+		return
+	set_process(false)
+	var level: Node
+	if status == ResourceLoader.THREAD_LOAD_LOADED:
+		var packed := ResourceLoader.load_threaded_get(next_scene_path) as PackedScene
+		if packed and packed.can_instantiate():
+			await get_tree().create_timer(forced_delay).timeout
+			level = packed.instantiate()
+	if not level:
+		if prepared_slot:
+			CogitoSceneManager.is_currently_loading = false
+			save_load_ready.emit(CogitoSceneManager.slot_error("Cannot open saved level.", next_scene_path))
+		else:
 			CogitoSceneManager.scene_load_failed(next_scene_path, ERR_CANT_OPEN)
+		queue_free()
+		return
+
+	if prepared_slot:
+		var error := CogitoSceneManager.activate_saved_slot(prepared_slot)
+		# Resume the initiating menu while it is still alive to display the error
+		# or close itself and release its input handler on success.
+		save_load_ready.emit(error)
+		if error != OK:
+			level.free()
 			queue_free()
 			return
-
-	set_process(false)
-	await get_tree().create_timer(forced_delay).timeout
-	var level := prepared_level
-	prepared_level = null
 	var current := get_tree().current_scene
 	if current:
 		current.free()
@@ -65,11 +74,6 @@ func _process(_delta: float) -> void:
 		level.move_player_to_connector(connector_name)
 	CogitoSceneManager.is_currently_loading = false
 	queue_free()
-
-
-func _notification(what: int) -> void:
-	if what == NOTIFICATION_PREDELETE and is_instance_valid(prepared_level):
-		prepared_level.free()
 
 
 func shader_precompilation() -> void:
