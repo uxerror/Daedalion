@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="CogitoMusicState" format=3]
+[gd_resource type="Resource" script_class="CogitoMusicState" format=3 uid="uid://cfnbqcc3i6pna"]
 
 [ext_resource type="Script" uid="uid://lg0bujp81s8d" path="res://addons/cogito/Scripts/cogito_music_state.gd" id="1_state"]
 [ext_resource type="Script" uid="uid://g0c846pk6f2c" path="res://addons/cogito/Scripts/cogito_music_layer.gd" id="2_layer"]
@@ -13,6 +13,5 @@ sync_playback = false
 [resource]
 script = ExtResource("1_state")
 layers = Array[ExtResource("2_layer")]([SubResource("Resource_layer")])
-priority = 0
 fade_in_time = 4.0
 fade_out_time = 3.0

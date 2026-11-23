@@ -26,7 +26,12 @@ Daedalion is a fork of **COGITO**, the first person immersive sim template for G
 changes that were proposed upstream but are not merged there yet, so they can be used and
 developed further without waiting. Everything here is meant to go back to Cogito.
 
-[![Based on COGITO](https://img.shields.io/badge/based_on-COGITO_1.2-35A1D7?labelColor=0E887A)](https://codeberg.org/Phazorknight/Cogito)
+[![Based on COGITO](https://img.shields.io/badge/based_on-COGITO_1.2-35A1D7?labelColor=0E887A)](https://codeberg.org/Phazorknight/Cogito) [![GodotEngine](https://img.shields.io/badge/Godot_4.7.2_stable-blue?logo=godotengine&logoColor=white)](https://godotengine.org/)
+
+`main` targets **Godot 4.7.2**: its resources and `.import` files are saved in the 4.7 format.
+The `upstream`, `1.3.0-dev` and `pr/*` branches stay in Cogito's format (Godot 4.6), so that they
+remain applicable to Cogito. Opening them in 4.7 rewrites ~260 `.import` files and a few resources;
+do not commit those changes there (`git checkout -- .`).
 
 ## What is different from Cogito
 
@@ -43,6 +48,12 @@ developed further without waiting. Everything here is meant to go back to Cogito
   the input instead of thresholded spin detection, with an on-screen input indicator.
 - **Fixes** ([PR #633](https://codeberg.org/Phazorknight/Cogito/pulls/633)): elemental property states
   and an NPC alerted-state crash.
+- **Elements**: elemental damage and states (burning, cold, poison...) for properties and actors,
+  with demo stands and tests in `tests/elements/`.
+- **Damage arguments**: burn damage passes the full `damage_received` arguments; buttons, switches
+  and NPCs react to it correctly.
+- **Demo decoupling**: the addon works without `DemoScenes`; the demo uses its own settings file
+  (`cogito/settings/settings_file`).
 
 ## Branches
 
@@ -54,6 +65,9 @@ developed further without waiting. Everything here is meant to go back to Cogito
 | `pr/quickslot-sets` | PR #631 as sent (on `upstream`, without the 1.3 split) |
 | `pr/spinner-input` | PR #632 as sent |
 | `pr/fixes-batch` | PR #633 as sent |
+| `feat/elements` | elements system (on `1.3.0-dev`) |
+| `pr/damage-args` | burn damage arguments, not sent yet |
+| `pr/demo-decouple` | addon independent from the demo, not sent yet |
 
 `pr/*` and `1.3.0-dev` branch off `upstream`, so each one is exactly the change set proposed to Cogito.
 New features also go into their own branch off `upstream` first and are merged into `main` after that.
