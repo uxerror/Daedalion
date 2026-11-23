@@ -102,8 +102,4 @@ class RestoreSignals:
 
 
 static func make_npc() -> CogitoNPC:
-	var npc: CogitoNPC = NPC.instantiate()
-	# SearchingState otherwise allocates two unparented debug labels before searching.
-	# These scenarios exercise NPC behaviour, not search-point visualization.
-	npc.get_node("StateChart/Root/BehaviourState/Searching/SearchingState").show_search_points = false
-	return npc
+	return NPC.instantiate()
