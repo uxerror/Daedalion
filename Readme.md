@@ -22,9 +22,11 @@
 >   branch stays a linear continuation of the filtered Cogito history.
 
 Daedalion is a fork of **COGITO**, the first person immersive sim template for Godot 4 by
-[Philip Drobar](https://www.philipdrobar.com) and contributors. It is current Cogito plus
-changes that were proposed upstream but are not merged there yet, so they can be used and
-developed further without waiting. Everything here is meant to go back to Cogito.
+[Philip Drobar](https://www.philipdrobar.com) and contributors. It started as current Cogito plus
+changes proposed upstream but not merged there yet, and is now developed as its own project:
+the goal is to move the template forward, not to stay mergeable with Cogito. Changes that fit
+Cogito are still offered upstream where practical (see
+[Sending changes back to Cogito](#sending-changes-back-to-cogito)), but that is optional.
 
 [![Based on COGITO](https://img.shields.io/badge/based_on-COGITO_1.2-35A1D7?labelColor=0E887A)](https://codeberg.org/Phazorknight/Cogito) [![GodotEngine](https://img.shields.io/badge/Godot_4.7.2_stable-blue?logo=godotengine&logoColor=white)](https://godotengine.org/)
 
@@ -74,7 +76,7 @@ New features also go into their own branch off `upstream` first and are merged i
 
 ## Sending changes back to Cogito
 
-Because the hashes differ, branches are not pushed to Codeberg directly; the commits are carried
+Optional: done where a change fits Cogito and is practical to port. Because the hashes differ, branches are not pushed to Codeberg directly; the commits are carried
 over as patches, which keeps authorship, dates and messages:
 
 ```sh
