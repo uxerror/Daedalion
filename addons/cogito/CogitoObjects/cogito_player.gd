@@ -56,9 +56,24 @@ var radius : float
 
 
 @abstract func create_new_state() -> CogitoPlayerState
-@abstract func pause() -> void
-@abstract func resume() -> void
-@abstract func override_gravity(_external_gravity_force : float, _external_gravity_vector: Vector3)
+
+
+## Stops the player from moving and acting, for example while a loading screen or the death screen is shown.
+## Does nothing by default; override it if your player has states to pause.
+func pause() -> void:
+	pass
+
+
+## Lets the player move and act again after pause().
+## Does nothing by default; override it if your player has states to pause.
+func resume() -> void:
+	pass
+
+
+## Sets the gravity acting on the player, for example inside a gravity zone. Called again with the defaults on leaving it.
+## Does nothing by default; override it if your player has its own gravity.
+func override_gravity(_external_gravity_force : float, _external_gravity_vector: Vector3):
+	pass
 
 
 ## Collects the CogitoAttribute and CogitoCurrency children of the player and connects them: health to death,
@@ -152,7 +167,7 @@ func apply_external_force(force_vector: Vector3):
 func drop_item(slot_data: InventorySlotPD) -> bool:
 	var player_radius = radius
 	var shape_cast = item_drop_shapecast
-	var item_drop_distance_offset = (player_hud as CogitoPlayerHudManager).item_drop_distance_offset
+	var item_drop_distance_offset = player_hud.item_drop_distance_offset
 	var camera_basis_z = get_viewport().get_camera_3d().get_global_transform().basis.z
 	
 	var drop_distance = abs(shape_cast.target_position.z - item_drop_distance_offset)

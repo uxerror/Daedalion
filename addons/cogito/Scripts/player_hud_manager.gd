@@ -22,9 +22,6 @@ extends CogitoHud
 ## The hint icon that displays when no other icon is passed.
 @export var default_hint_icon : Texture2D
 
-## This sets how far away from the player dropped items appear. 0 = items appear on the tip of the player interaction raycast. Negative values mean closer, positive values mean further away that this.
-@export var item_drop_distance_offset : float = -1
-
 @export_group("HUD")
 ## Reference to PackedScene that gets instantiated for each player attribute.
 @export var ui_attribute_prefab : PackedScene

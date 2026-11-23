@@ -62,7 +62,7 @@ func perform_hold_action(_player_interaction_component: PlayerInteractionCompone
 func get_actions(_player_interaction_component: PlayerInteractionComponent) -> Array[CogitoInteractionAction]:
 	if !pickup:
 		return []
-	var can_use := !set_disabled(_player_interaction_component.player)
+	var can_use := !_is_use_blocked(_player_interaction_component.player)
 	var can_pick_up : bool = _player_interaction_component.get_inventory().can_pick_up_slot_data(pickup.slot_data)
 	return [
 		CogitoInteractionAction.new(pickup.interaction_text, self, perform_quick_action, can_pick_up),
@@ -88,26 +88,36 @@ func set_disabled(player: CogitoPlayer) -> bool:
 		return is_disabled
 	
 	player_interaction_component = player.player_interaction_component
+	is_disabled = _is_use_blocked(player)
+	
+	# Invert pickup is_disabled state based on this disabled state
+	pickup.is_disabled = !is_disabled
+	
+	return is_disabled
+
+
+# Whether using the item is impossible right now. Only checks, unlike set_disabled() it changes nothing.
+func _is_use_blocked(player: CogitoPlayer) -> bool:
+	if !pickup:
+		return true
+	
+	var pic := player.player_interaction_component
 	var item:= pickup.slot_data.inventory_item
 	if item is ConsumableItemPD:
 		var consumable: ConsumableItemPD = item as ConsumableItemPD
 		if player.player_attributes.has(consumable.attribute_name):
 			var attribute: CogitoAttribute = player.player_attributes[consumable.attribute_name] as CogitoAttribute
 			if consumable.value_to_change == ConsumableItemPD.ValueType.CURRENT:
-				is_disabled = attribute.value_current == attribute.value_max
+				return attribute.value_current == attribute.value_max
 			elif consumable.value_to_change == ConsumableItemPD.ValueType.MAX:
-				is_disabled = false # Since there's no limit to max, always allow it
+				return false # Since there's no limit to max, always allow it
 	elif item is AmmoItemPD:
-		if player_interaction_component.wieldables.is_wielding:
-			is_disabled = cant_reload_current_wieldable()
-		else:
-			is_disabled = true
+		if pic.wieldables.is_wielding:
+			return _cant_reload_wieldable_of(pic)
+		return true
 	elif item is WieldableItemPD:
 		# Disable if no space in inventory
-		is_disabled = player_interaction_component.carrying.is_carrying or !player_interaction_component.get_inventory().can_pick_up_slot_data(pickup.slot_data)
-	
-	# Invert pickup is_disabled state based on this disabled state
-	pickup.is_disabled = !is_disabled
+		return pic.carrying.is_carrying or !pic.get_inventory().can_pick_up_slot_data(pickup.slot_data)
 	
 	return is_disabled
 
@@ -126,14 +136,18 @@ func consume(consumable: ConsumableItemPD) -> void:
 #region Ammos
 ## Called if the PickupComponent item is an AmmoItem type
 func cant_reload_current_wieldable() -> bool:
-	if player_interaction_component.wieldables.equipped_wieldable_node.animation_player.is_playing():
+	return _cant_reload_wieldable_of(player_interaction_component)
+
+
+func _cant_reload_wieldable_of(pic: PlayerInteractionComponent) -> bool:
+	if pic.wieldables.equipped_wieldable_node.animation_player.is_playing():
 		return true
-	if player_interaction_component.wieldables.equipped_wieldable_item.get_current_ammo().name != pickup.slot_data.inventory_item.name:
+	if pic.wieldables.equipped_wieldable_item.get_current_ammo().name != pickup.slot_data.inventory_item.name:
 		return true
-	if player_interaction_component.wieldables.equipped_wieldable_item.no_reload:
+	if pic.wieldables.equipped_wieldable_item.no_reload:
 		return true
 	
-	var ammo_needed: int = abs(player_interaction_component.wieldables.equipped_wieldable_item.charge_max - player_interaction_component.wieldables.equipped_wieldable_item.charge_current)
+	var ammo_needed: int = abs(pic.wieldables.equipped_wieldable_item.charge_max - pic.wieldables.equipped_wieldable_item.charge_current)
 	return ammo_needed <= 0
 
 

@@ -8,6 +8,9 @@ signal show_inventory
 ## Emitted when the inventory interface closes.
 signal hide_inventory
 
+## This sets how far away from the player dropped items appear. 0 = items appear on the tip of the player interaction raycast. Negative values mean closer, positive values mean further away that this.
+@export var item_drop_distance_offset : float = -1
+
 
 ## Shows the hold progress for a hold interaction (HoldInteraction, DualInteraction, ExtendedPickupInteraction).
 @abstract func start_hold(hold_interaction: HoldInteraction) -> void
