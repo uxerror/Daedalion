@@ -244,7 +244,8 @@ func _ready():
 	reaction_timer.timeout.connect(check_for_systemic_reactions)
 	damage_timer.timeout.connect(apply_burn_damage)
 	
-	await get_parent().is_node_ready()
+	if not get_parent().is_node_ready():
+		await get_parent().ready
 	
 	if ignite_on_ready:
 		set_on_fire.call_deferred()

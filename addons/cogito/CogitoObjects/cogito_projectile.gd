@@ -1,3 +1,4 @@
+@tool
 @icon("res://addons/cogito/Assets/Graphics/Editor/Icon_CogitoObject.svg")
 extends CogitoObject
 ## Derived from CogitoObject, this class handles additional information for projectiles like lifespan, damage, destroy_on_impact. Some of these are inherited from the Wieldable that spawns this projectile.
@@ -34,6 +35,8 @@ var _impact_element_applied : bool = false
 var direction
 
 func _ready():
+	if Engine.is_editor_hint():
+		return
 	super()
 	add_to_group("interactable")
 	self.add_to_group("Persist") #Adding object to group for persistence
