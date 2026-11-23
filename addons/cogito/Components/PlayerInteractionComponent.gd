@@ -172,6 +172,10 @@ func perform_action(action: CogitoInteractionAction) -> void:
 	if !action.enabled:
 		return
 	var node := action.component
+	# While carrying, only the carried object's own actions work, like with input actions in start_interaction().
+	if carrying.is_carrying:
+		if !is_instance_valid(carrying.carried_object) or node.get_parent() != carrying.carried_object.get_parent():
+			return
 	if player.get("is_in_interaction_state") and !player.is_in_interaction_state or (!player.is_on_floor() and node.disable_interaction_in_air):
 		return
 	if !node.ignore_open_gui and get_parent().is_showing_ui:
