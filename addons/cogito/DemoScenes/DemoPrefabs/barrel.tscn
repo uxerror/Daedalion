@@ -133,6 +133,5 @@ use_3d_avoidance = true
 
 [connection signal="body_entered" from="." to="." method="_on_body_entered"]
 [connection signal="body_exited" from="." to="." method="_on_body_exited"]
-[connection signal="deal_burn_damage" from="CogitoProperties" to="HealthAttribute" method="subtract"]
 
 [editable path="HitboxComponent"]

@@ -413,9 +413,12 @@ func start_burn_damage_timer():
 func apply_burn_damage():
 	var amount := burn_damage_amount * get_damage_multiplier(Element.FIRE)
 	deal_burn_damage.emit(amount)
-	# Calling damage received on Cogito Object or Enemy parent node.
-	if get_parent().has_signal("damage_received"):
-		get_parent().damage_received.emit(amount)
+	# Calling damage received on Cogito Object or Enemy parent node, with the same arguments as other damage
+	# (amount, source, hit direction, hit position). The parent itself is the source.
+	var parent := get_parent()
+	if parent.has_signal("damage_received"):
+		var hit_position : Vector3 = parent.global_position if parent is Node3D else Vector3.ZERO
+		parent.damage_received.emit(amount, parent, Vector3.ZERO, hit_position)
 	
 	if is_on_fire:
 		start_burn_damage_timer()

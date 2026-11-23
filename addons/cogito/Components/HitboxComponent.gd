@@ -23,7 +23,7 @@ func _ready() -> void:
 		CogitoGlobals.debug_log(true, "HitboxComponent", "Parent " + parent.name + " is missing a damage_received() signal.")
 
 
-func damage(damage_amount: float, object: Node3D, _hit_direction:= Vector3.ZERO, _hit_position:= Vector3.ZERO):
+func damage(damage_amount: float, object: Node3D = null, _hit_direction:= Vector3.ZERO, _hit_position:= Vector3.ZERO):
 	if health_attribute:
 		health_attribute.subtract(damage_amount)
 	
