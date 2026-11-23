@@ -512,6 +512,12 @@ func test_poison(_timeout := 25000) -> void:
 		. is_true()
 	)
 	var weak: Node = stand.get_node("DummyFireproof")
+	for path: NodePath in stand.reset_nodes:
+		var dummy := stand.get_node(path)
+		assert_object(dummy.owner).is_same(stand)
+		for child in dummy.find_children("*", "", true, false):
+			if child.owner:
+				assert_bool(child.owner.is_ancestor_of(child)).is_true()
 	(
 		assert_bool(
 			_properties_of(weak).resist_fire == 100.0 and _properties_of(weak).resist_cold == -50.0

@@ -31,16 +31,13 @@
   "UNUSED_VARIABLE": 1
  },
  "addons/cogito/CogitoNPC/npc_states/npc_state_chase.gd": {
-  "NARROWING_CONVERSION": 1,
   "UNUSED_VARIABLE": 1
  },
  "addons/cogito/CogitoNPC/npc_states/npc_state_machine.gd": {
-  "UNSAFE_VOID_RETURN": 1,
   "UNUSED_VARIABLE": 1
  },
  "addons/cogito/CogitoNPC/npc_states/npc_state_move_to_random_pos.gd": {
-  "NARROWING_CONVERSION": 1,
-  "UNUSED_VARIABLE": 2
+  "UNUSED_VARIABLE": 1
  },
  "addons/cogito/CogitoNPC/npc_states/npc_state_patrol_on_path.gd": {
   "UNUSED_VARIABLE": 1
@@ -54,13 +51,9 @@
  "addons/cogito/CogitoObjects/cogito_loot_drop_container.gd": {
   "SHADOWED_VARIABLE_BASE_CLASS": 1
  },
- "addons/cogito/CogitoObjects/cogito_lootable_container.gd": {
-  "INTEGER_DIVISION": 2
- },
  "addons/cogito/CogitoObjects/cogito_object.gd": {
   "SHADOWED_VARIABLE": 1,
-  "SHADOWED_VARIABLE_BASE_CLASS": 1,
-  "UNUSED_VARIABLE": 1
+  "SHADOWED_VARIABLE_BASE_CLASS": 1
  },
  "addons/cogito/CogitoObjects/cogito_player.gd": {
   "SHADOWED_VARIABLE": 1,
@@ -78,9 +71,6 @@
  },
  "addons/cogito/CogitoObjects/cogito_pressure_plate.gd": {
   "UNUSED_SIGNAL": 2
- },
- "addons/cogito/CogitoObjects/cogito_projectile.gd": {
-  "MISSING_TOOL": 1
  },
  "addons/cogito/CogitoObjects/cogito_static_interactable.gd": {
   "UNUSED_SIGNAL": 1
@@ -116,7 +106,6 @@
   "UNUSED_SIGNAL": 1
  },
  "addons/cogito/Components/LootComponent.gd": {
-  "INTEGER_DIVISION": 1,
   "UNUSED_VARIABLE": 1
  },
  "addons/cogito/Components/LootTables/LootDropEntry.gd": {
@@ -128,9 +117,6 @@
  "addons/cogito/Components/PlayerInteractionComponent.gd": {
   "SHADOWED_VARIABLE": 1,
   "UNUSED_SIGNAL": 7
- },
- "addons/cogito/Components/Properties/cogito_properties.gd": {
-  "REDUNDANT_AWAIT": 1
  },
  "addons/cogito/DynamicFootstepSystem/Scripts/footstep_surface_detector.gd": {
   "INTEGER_DIVISION": 1
@@ -149,7 +135,7 @@
   "UNUSED_SIGNAL": 1
  },
  "addons/cogito/EasyMenus/Scripts/follow_focus_center.gd": {
-  "NARROWING_CONVERSION": 2,
+  "NARROWING_CONVERSION": 1,
   "UNUSED_PARAMETER": 1
  },
  "addons/cogito/EasyMenus/Scripts/menu_template_manager.gd": {
@@ -206,9 +192,6 @@
  "addons/cogito/QuestSystem/Flags/inventory_flag.gd": {
   "MISSING_TOOL": 1
  },
- "addons/cogito/QuestSystem/Flags/multi_flag_group.gd": {
-  "UNUSED_VARIABLE": 1
- },
  "addons/cogito/SceneManagement/cogito_scene_manager.gd": {
   "UNUSED_PRIVATE_CLASS_VARIABLE": 2,
   "UNUSED_SIGNAL": 4,
@@ -238,7 +221,6 @@
   "UNUSED_SIGNAL": 2
  },
  "addons/cogito/Scripts/cogito_prompt_ui.gd": {
-  "INTEGER_DIVISION": 1,
   "UNUSED_PARAMETER": 1,
   "UNUSED_VARIABLE": 1
  },

@@ -33,8 +33,15 @@ func reset_stand() -> void:
 			old.name = String(old.name) + "_old" # Frees the name for the new node.
 			parent.remove_child(old)
 			old.queue_free()
+		var owners := {}
+		for node: Node in [fresh_node] + fresh_node.find_children("*", "", true, false):
+			if node.owner and node.owner.is_ancestor_of(fresh_node):
+				owners[node] = get_node(fresh.get_path_to(node.owner))
+				node.owner = null
 		fresh_node.get_parent().remove_child(fresh_node)
 		parent.add_child(fresh_node)
+		for node: Node in owners:
+			node.owner = owners[node]
 		if index >= 0:
 			parent.move_child(fresh_node, mini(index, parent.get_child_count() - 1))
 	fresh.free()
