@@ -80,9 +80,9 @@ func rotate():
 
 func get_region(x, y) -> Image:
 	var image: Image = rotated_texture.get_image() if rotated else icon.get_image()
-	var x_chunk = image.get_width() / item_size.x
-	var y_chunk = image.get_height() / item_size.y
-	var region = Rect2i(Vector2i(x * x_chunk, y * y_chunk), Vector2i(x_chunk, y_chunk))
+	var origin := Vector2i(x, y) * image.get_size() / item_size
+	var end := Vector2i(x + 1, y + 1) * image.get_size() / item_size
+	var region = Rect2i(origin, end - origin)
 	return image.get_region(region)
 
 
