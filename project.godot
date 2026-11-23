@@ -35,6 +35,13 @@ InputRouter="*uid://byboexsy6hrjq"
 
 settings/settings_file="res://addons/cogito/DemoScenes/DemoCogitoSettings.tres"
 
+[debug]
+
+gdscript/warnings/directory_rules={
+"res://addons": 0,
+"res://addons/cogito": 1
+}
+
 [display]
 
 window/size/viewport_width=1920
