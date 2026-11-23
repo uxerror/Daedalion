@@ -4,7 +4,7 @@ const PROPS := preload("res://addons/cogito/Components/Properties/CogitoProperti
 var fails := 0
 
 class Holder extends Node3D:
-	signal damage_received(amount)
+	signal damage_received(amount, source, hit_direction, hit_position)
 	var cogito_properties : CogitoProperties
 
 func make(flags: int, with_audio := true) -> CogitoProperties:
@@ -78,9 +78,11 @@ func _ready():
 	var dmg := make(F.FLAMMABLE)
 	dmg.burn_damage_amount = 2.0
 	var got := [0.0]
-	dmg.get_parent().damage_received.connect(func(x): got[0] += x)
+	var src := [null]
+	dmg.get_parent().damage_received.connect(func(x, s, _d, _p): got[0] += x; src[0] = s)
 	dmg.apply_burn_damage()
 	check(got[0] == 2.0, "burn damage reaches parent")
+	check(src[0] == dmg.get_parent(), "burn damage comes from the burning parent itself")
 	var nosig := Node3D.new(); add_child(nosig)
 	var p2 : CogitoProperties = PROPS.instantiate(); p2.is_logging = false; nosig.add_child(p2)
 	p2.apply_burn_damage()
