@@ -340,3 +340,10 @@ func save_input_action_to_settings(input_name: String, input_kbm:InputEventWithM
 	ProjectSettings.set_setting(setting_name, input)
 	ProjectSettings.save()
 	print("COGITO: Saved input to settings: ", setting_name, ". input_kbm=", input_kbm, ". input_gamepad=", input_gamepad)
+
+
+## The world variables a new game starts with, or an empty dictionary if new_game_world_state isn't set.
+func get_new_game_world_dict() -> Dictionary:
+	if new_game_world_state:
+		return new_game_world_state.get_world_dict()
+	return {}
