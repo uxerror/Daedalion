@@ -1,0 +1,60 @@
+name: Checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install gdtoolkit==4.5.0
+      - run: python tools/lint.py
+
+  godot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache Godot
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}
+      - name: Download Godot
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/godot && cd ~/godot
+          curl -sSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip && rm godot.zip
+          mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 godot
+      - name: Import project
+        run: |
+          # The first import prints font/theme errors; a second pass settles the cache.
+          ~/godot/godot --headless --path . --import > /dev/null 2>&1 || true
+          ~/godot/godot --headless --path . --import > /dev/null 2>&1 || true
+      - name: Godot warnings
+        run: python3 tools/gd_warnings.py
+        env:
+          GODOT_BIN: /home/runner/godot/godot
+      - name: Tests and smoke
+        run: tools/check.sh tests smoke
+        env:
+          GODOT_BIN: /home/runner/godot/godot
+          NICE: ""
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gdunit-report
+          path: reports/
+          if-no-files-found: ignore

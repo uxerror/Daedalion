@@ -1,0 +1,1375 @@
+{
+ "problems": {
+  "addons/cogito/Assets/Shader/ConvertedStandardMaterial3D.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 2
+  },
+  "addons/cogito/Assets/Shader/Material3DConversion.gd": {
+   "class-definitions-order": 1,
+   "constant-name": 1,
+   "max-line-length": 59,
+   "trailing-whitespace": 23
+  },
+  "addons/cogito/Assets/Shader/ShaderPrecompiler.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 1,
+   "trailing-whitespace": 3
+  },
+  "addons/cogito/Assets/Shader/ShaderSpace.gd": {
+   "class-definitions-order": 6,
+   "max-line-length": 7,
+   "no-elif-return": 1,
+   "trailing-whitespace": 5
+  },
+  "addons/cogito/Assets/Shader/ViewmodelSpace.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 3,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/Assets/VFX/Explosion_01/explosion.gd": {
+   "max-line-length": 5,
+   "trailing-whitespace": 9
+  },
+  "addons/cogito/Assets/VFX/vfx_mesh_overlay.gd": {
+   "max-line-length": 2
+  },
+  "addons/cogito/CogitoNPC/cogito_body_drag.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 6,
+   "trailing-whitespace": 9,
+   "unnecessary-pass": 1
+  },
+  "addons/cogito/CogitoNPC/cogito_npc.gd": {
+   "class-definitions-order": 32,
+   "class-variable-name": 2,
+   "enum-element-name": 9,
+   "max-line-length": 14,
+   "max-public-methods": 1,
+   "trailing-whitespace": 16
+  },
+  "addons/cogito/CogitoNPC/cogito_npc_posture.gd": {
+   "max-line-length": 3,
+   "trailing-whitespace": 1,
+   "unused-argument": 3
+  },
+  "addons/cogito/CogitoNPC/cogito_patrol_path.gd": {
+   "class-definitions-order": 3,
+   "max-line-length": 3,
+   "trailing-whitespace": 11
+  },
+  "addons/cogito/CogitoNPC/cogito_patrol_point.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 4,
+   "no-elif-return": 1,
+   "trailing-whitespace": 2
+  },
+  "addons/cogito/CogitoNPC/detection/detection_indicator.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/CogitoNPC/detection/hearing_detection.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 5,
+   "trailing-whitespace": 6
+  },
+  "addons/cogito/CogitoNPC/detection/hearing_indicator.gd": {
+   "unnecessary-pass": 1
+  },
+  "addons/cogito/CogitoNPC/detection/sight_detection.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 15,
+   "no-elif-return": 1,
+   "no-else-return": 2,
+   "trailing-whitespace": 6
+  },
+  "addons/cogito/CogitoNPC/npc_state_processor.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 6,
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/CogitoNPC/npc_states/npc_investigate.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/CogitoNPC/npc_states/npc_state_alerted.gd": {
+   "max-line-length": 5,
+   "trailing-whitespace": 3
+  },
+  "addons/cogito/CogitoNPC/npc_states/npc_state_attack.gd": {
+   "trailing-whitespace": 3
+  },
+  "addons/cogito/CogitoNPC/npc_states/npc_state_chase.gd": {
+   "class-definitions-order": 8,
+   "max-line-length": 6,
+   "trailing-whitespace": 15
+  },
+  "addons/cogito/CogitoNPC/npc_states/npc_state_machine.gd": {
+   "class-definitions-order": 5,
+   "max-line-length": 3,
+   "no-else-return": 1,
+   "trailing-whitespace": 2
+  },
+  "addons/cogito/CogitoNPC/npc_states/npc_state_move_to_random_pos.gd": {
+   "class-definitions-order": 3,
+   "class-variable-name": 2,
+   "max-line-length": 2,
+   "trailing-whitespace": 9
+  },
+  "addons/cogito/CogitoNPC/npc_states/npc_state_panic.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 2
+  },
+  "addons/cogito/CogitoNPC/npc_states/npc_state_patrol_on_path.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 2,
+   "no-else-return": 1,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/CogitoNPC/npc_states/npc_state_searching.gd": {
+   "max-line-length": 2,
+   "trailing-whitespace": 10
+  },
+  "addons/cogito/CogitoObjects/cogito_button.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 11,
+   "trailing-whitespace": 12
+  },
+  "addons/cogito/CogitoObjects/cogito_container.gd": {
+   "class-definitions-order": 9,
+   "max-line-length": 4,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/CogitoObjects/cogito_door.gd": {
+   "class-definitions-order": 23,
+   "enum-element-name": 4,
+   "max-line-length": 12,
+   "no-else-return": 1,
+   "trailing-whitespace": 25
+  },
+  "addons/cogito/CogitoObjects/cogito_keypad.gd": {
+   "class-definitions-order": 24,
+   "max-line-length": 7,
+   "trailing-whitespace": 11
+  },
+  "addons/cogito/CogitoObjects/cogito_loot_drop_container.gd": {
+   "class-definitions-order": 16,
+   "function-variable-name": 1,
+   "max-line-length": 34,
+   "no-elif-return": 1,
+   "trailing-whitespace": 40
+  },
+  "addons/cogito/CogitoObjects/cogito_lootable_container.gd": {
+   "class-definitions-order": 23,
+   "function-variable-name": 3,
+   "max-line-length": 31,
+   "trailing-whitespace": 34
+  },
+  "addons/cogito/CogitoObjects/cogito_object.gd": {
+   "class-definitions-order": 18,
+   "max-line-length": 10,
+   "trailing-whitespace": 21,
+   "unnecessary-pass": 1
+  },
+  "addons/cogito/CogitoObjects/cogito_player.gd": {
+   "class-definitions-order": 7,
+   "max-line-length": 26,
+   "no-elif-return": 1,
+   "no-else-return": 1,
+   "trailing-whitespace": 20
+  },
+  "addons/cogito/CogitoObjects/cogito_player_advanced.gd": {
+   "class-definitions-order": 100,
+   "class-variable-name": 55,
+   "enum-element-name": 20,
+   "function-argument-name": 2,
+   "max-file-lines": 1,
+   "max-line-length": 80,
+   "max-returns": 2,
+   "no-else-return": 3,
+   "trailing-whitespace": 258,
+   "unused-argument": 10
+  },
+  "addons/cogito/CogitoObjects/cogito_player_simple.gd": {
+   "class-definitions-order": 55,
+   "class-variable-name": 37,
+   "function-argument-name": 2,
+   "max-file-lines": 1,
+   "max-line-length": 57,
+   "mixed-tabs-and-spaces": 1,
+   "no-else-return": 1,
+   "trailing-whitespace": 112,
+   "unused-argument": 3
+  },
+  "addons/cogito/CogitoObjects/cogito_pressure_plate.gd": {
+   "class-definitions-order": 13,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/CogitoObjects/cogito_projectile.gd": {
+   "class-definitions-order": 13,
+   "max-line-length": 16,
+   "trailing-whitespace": 13
+  },
+  "addons/cogito/CogitoObjects/cogito_security_camera.gd": {
+   "class-definitions-order": 22,
+   "max-line-length": 9,
+   "no-else-return": 2,
+   "trailing-whitespace": 14
+  },
+  "addons/cogito/CogitoObjects/cogito_sittable.gd": {
+   "class-definitions-order": 18,
+   "class-variable-name": 1,
+   "max-line-length": 10,
+   "trailing-whitespace": 45
+  },
+  "addons/cogito/CogitoObjects/cogito_snap_slot.gd": {
+   "class-definitions-order": 21,
+   "max-line-length": 8,
+   "trailing-whitespace": 20,
+   "unnecessary-pass": 1
+  },
+  "addons/cogito/CogitoObjects/cogito_static_interactable.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 5,
+   "trailing-whitespace": 3,
+   "unnecessary-pass": 1
+  },
+  "addons/cogito/CogitoObjects/cogito_switch.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 9,
+   "trailing-whitespace": 27
+  },
+  "addons/cogito/CogitoObjects/cogito_turnwheel.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 5,
+   "trailing-whitespace": 9
+  },
+  "addons/cogito/CogitoObjects/cogito_vehicle.gd": {
+   "class-definitions-order": 1,
+   "unused-argument": 1
+  },
+  "addons/cogito/CogitoObjects/cogito_vendor.gd": {
+   "class-definitions-order": 4,
+   "max-line-length": 1,
+   "trailing-whitespace": 8
+  },
+  "addons/cogito/Components/Attributes/cogito_attribute.gd": {
+   "class-definitions-order": 2,
+   "enum-element-name": 4,
+   "max-line-length": 2,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/Components/Attributes/cogito_health_attribute.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 1,
+   "trailing-whitespace": 5
+  },
+  "addons/cogito/Components/Attributes/cogito_light_meter_attribute.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 4,
+   "trailing-whitespace": 5
+  },
+  "addons/cogito/Components/Attributes/cogito_oxygen_attribute.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 4,
+   "trailing-whitespace": 9
+  },
+  "addons/cogito/Components/Attributes/cogito_sanity_attribute.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 1,
+   "trailing-whitespace": 6
+  },
+  "addons/cogito/Components/Attributes/cogito_stamina_attribute.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 4,
+   "no-else-return": 1,
+   "trailing-whitespace": 6
+  },
+  "addons/cogito/Components/Attributes/cogito_visibility_attribute.gd": {
+   "class-definitions-order": 1,
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/Components/AutoConsumes/auto_consume.gd": {
+   "max-line-length": 16,
+   "trailing-whitespace": 9
+  },
+  "addons/cogito/Components/AutoConsumes/health_auto_consume.gd": {
+   "max-line-length": 1,
+   "trailing-whitespace": 2
+  },
+  "addons/cogito/Components/AutoPickUpZone.gd": {
+   "class-definitions-order": 5,
+   "max-line-length": 3,
+   "trailing-whitespace": 4,
+   "unnecessary-pass": 1
+  },
+  "addons/cogito/Components/CurrencyCheckComponent.gd": {
+   "class-definitions-order": 1,
+   "no-else-return": 1,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/Components/DynamicInputIcon.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 5,
+   "max-returns": 2,
+   "no-else-return": 5,
+   "trailing-whitespace": 10
+  },
+  "addons/cogito/Components/HitboxComponent.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 2,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/Components/ImpactAttributeDamage.gd": {
+   "class-definitions-order": 6,
+   "max-line-length": 3
+  },
+  "addons/cogito/Components/ImpactSounds.gd": {
+   "class-definitions-order": 4,
+   "max-line-length": 2,
+   "trailing-whitespace": 2
+  },
+  "addons/cogito/Components/Interactions/Addons/DialogicInteraction.gd": {
+   "max-line-length": 2,
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/Components/Interactions/Addons/DialogueManagerInteraction.gd": {
+   "max-line-length": 2
+  },
+  "addons/cogito/Components/Interactions/BackpackComponent.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 3,
+   "trailing-whitespace": 8
+  },
+  "addons/cogito/Components/Interactions/BasicInteraction.gd": {
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/Components/Interactions/CarryableComponent.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 9,
+   "trailing-whitespace": 14
+  },
+  "addons/cogito/Components/Interactions/CustomInteraction.gd": {
+   "max-line-length": 1,
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/Components/Interactions/DualInteraction.gd": {
+   "max-line-length": 7,
+   "trailing-whitespace": 2
+  },
+  "addons/cogito/Components/Interactions/ExtendedPickupInteraction.gd": {
+   "max-line-length": 15,
+   "max-returns": 1,
+   "no-elif-return": 1,
+   "trailing-whitespace": 23
+  },
+  "addons/cogito/Components/Interactions/HoldInteraction.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 1,
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/Components/Interactions/InteractionComponent.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 8,
+   "no-else-return": 1,
+   "trailing-whitespace": 7
+  },
+  "addons/cogito/Components/Interactions/LockInteraction.gd": {
+   "class-definitions-order": 1,
+   "function-variable-name": 2,
+   "max-line-length": 2,
+   "no-else-return": 1,
+   "trailing-whitespace": 5
+  },
+  "addons/cogito/Components/Interactions/PickupComponent.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 6,
+   "no-else-return": 1,
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/Components/Interactions/ReadableComponent.gd": {
+   "class-definitions-order": 6,
+   "max-line-length": 1,
+   "trailing-whitespace": 3
+  },
+  "addons/cogito/Components/Interactions/SpinnerInteraction.gd": {
+   "class-definitions-order": 4,
+   "max-line-length": 14,
+   "trailing-whitespace": 2
+  },
+  "addons/cogito/Components/Interactions/cogito_interaction_action.gd": {
+   "max-line-length": 2
+  },
+  "addons/cogito/Components/Interactions/lockpick_interaction.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 4,
+   "trailing-whitespace": 14
+  },
+  "addons/cogito/Components/LightzoneComponent.gd": {
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/Components/LootComponent.gd": {
+   "class-definitions-order": 11,
+   "function-variable-name": 2,
+   "max-line-length": 10,
+   "trailing-whitespace": 20
+  },
+  "addons/cogito/Components/LootTables/LootDropEntry.gd": {
+   "max-line-length": 6
+  },
+  "addons/cogito/Components/PlayerInteraction/CarryHandler.gd": {
+   "class-definitions-order": 3,
+   "max-line-length": 2,
+   "no-else-return": 2
+  },
+  "addons/cogito/Components/PlayerInteraction/InteractionTargeting.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 2,
+   "no-else-return": 2
+  },
+  "addons/cogito/Components/PlayerInteraction/WieldableHandler.gd": {
+   "class-definitions-order": 9,
+   "max-line-length": 15,
+   "no-else-return": 2
+  },
+  "addons/cogito/Components/PlayerInteractionComponent.gd": {
+   "class-definitions-order": 24,
+   "max-line-length": 22,
+   "max-public-methods": 1,
+   "no-else-return": 1
+  },
+  "addons/cogito/Components/Properties/cogito_actor_elements.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 10
+  },
+  "addons/cogito/Components/Properties/cogito_element_area.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 5,
+   "trailing-whitespace": 6
+  },
+  "addons/cogito/Components/Properties/cogito_element_debug_label.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 2
+  },
+  "addons/cogito/Components/Properties/cogito_properties.gd": {
+   "class-definitions-order": 78,
+   "max-file-lines": 1,
+   "max-line-length": 45,
+   "max-public-methods": 1,
+   "max-returns": 2,
+   "trailing-whitespace": 23
+  },
+  "addons/cogito/Components/SafezoneComponent.gd": {
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/Components/UI/UI_AttributeCircle.gd": {
+   "class-definitions-order": 10,
+   "max-line-length": 1,
+   "trailing-whitespace": 6
+  },
+  "addons/cogito/Components/UI/UI_AttributeComponent.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 2,
+   "trailing-whitespace": 6
+  },
+  "addons/cogito/Components/UI/UI_AttributeDisplay.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 5,
+   "trailing-whitespace": 7
+  },
+  "addons/cogito/Components/UI/UI_CurrencyComponent.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 1,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/Components/UI/UI_ElementStatus.gd": {
+   "class-definitions-order": 10,
+   "max-line-length": 8,
+   "max-returns": 1
+  },
+  "addons/cogito/Components/UI/UI_HintComponent.gd": {
+   "class-definitions-order": 4,
+   "max-line-length": 1,
+   "trailing-whitespace": 3
+  },
+  "addons/cogito/Components/UI/UI_HoldComponent.gd": {
+   "class-definitions-order": 3,
+   "max-line-length": 2,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/Components/UI/UI_ObjectNameComponent.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/Components/UI/UI_PromptComponent.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/Components/UI/Ui_StaminaAttribute.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 1,
+   "trailing-whitespace": 5
+  },
+  "addons/cogito/Components/UI/dynamic_bar.gd": {
+   "class-definitions-order": 3,
+   "max-line-length": 1,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/Components/UI/ui_progress_wheel.gd": {
+   "trailing-whitespace": 2
+  },
+  "addons/cogito/DemoScenes/DemoPrefabs/ElementStands/element_stand.gd": {
+   "max-line-length": 2
+  },
+  "addons/cogito/DynamicFootstepSystem/Scripts/footstep_material_library.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/DynamicFootstepSystem/Scripts/footstep_material_profile.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/DynamicFootstepSystem/Scripts/footstep_surface.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/DynamicFootstepSystem/Scripts/footstep_surface_detector.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 7,
+   "max-returns": 1,
+   "no-elif-return": 4,
+   "no-else-return": 1,
+   "trailing-whitespace": 8
+  },
+  "addons/cogito/EasyMenus/Components/SaveSlotButton.gd": {
+   "class-definitions-order": 5,
+   "max-line-length": 3,
+   "no-elif-return": 1,
+   "no-else-return": 1,
+   "trailing-whitespace": 17
+  },
+  "addons/cogito/EasyMenus/Components/gamepad_bind_button.gd": {
+   "class-definitions-order": 2,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/EasyMenus/Components/kbm_bind_button.gd": {
+   "class-definitions-order": 2,
+   "trailing-whitespace": 3
+  },
+  "addons/cogito/EasyMenus/Components/menu_separator.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/EasyMenus/Components/remap_entry.gd": {
+   "class-definitions-order": 2
+  },
+  "addons/cogito/EasyMenus/Scripts/OptionsTabMenu.gd": {
+   "class-definitions-order": 8,
+   "constant-name": 1,
+   "max-line-length": 8,
+   "trailing-whitespace": 25
+  },
+  "addons/cogito/EasyMenus/Scripts/cogito_death_screen.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 3,
+   "no-else-return": 1,
+   "trailing-whitespace": 9,
+   "unused-argument": 1
+  },
+  "addons/cogito/EasyMenus/Scripts/controller_echo_input_generator.gd": {
+   "max-line-length": 1
+  },
+  "addons/cogito/EasyMenus/Scripts/follow_focus_center.gd": {
+   "class-definitions-order": 5,
+   "max-line-length": 1,
+   "trailing-whitespace": 4,
+   "unused-argument": 1
+  },
+  "addons/cogito/EasyMenus/Scripts/input_map_updater.gd": {
+   "trailing-whitespace": 3
+  },
+  "addons/cogito/EasyMenus/Scripts/main_menu_controller.gd": {
+   "class-definitions-order": 6,
+   "max-line-length": 5,
+   "trailing-whitespace": 12
+  },
+  "addons/cogito/EasyMenus/Scripts/main_menu_saveslot_manager.gd": {
+   "max-line-length": 2,
+   "trailing-whitespace": 8
+  },
+  "addons/cogito/EasyMenus/Scripts/menu_template_manager.gd": {
+   "class-variable-name": 1
+  },
+  "addons/cogito/EasyMenus/Scripts/option_button_input_propagator.gd": {
+   "unnecessary-pass": 1
+  },
+  "addons/cogito/EasyMenus/Scripts/options_constants.gd": {
+   "class-definitions-order": 1,
+   "constant-name": 23,
+   "max-line-length": 1,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/EasyMenus/Scripts/pause_menu_controller.gd": {
+   "max-line-length": 7,
+   "no-else-return": 1,
+   "trailing-whitespace": 18,
+   "unused-argument": 1
+  },
+  "addons/cogito/EasyMenus/Scripts/slider_w_labels.gd": {
+   "class-definitions-order": 2
+  },
+  "addons/cogito/EasyMenus/Scripts/tab_menu.gd": {
+   "max-line-length": 9,
+   "no-else-return": 1,
+   "trailing-whitespace": 8
+  },
+  "addons/cogito/FloatableBody/floatable_body_3d.gd": {
+   "class-definitions-order": 1,
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/FloatableBody/floatable_player_3d.gd": {
+   "class-definitions-order": 1,
+   "trailing-whitespace": 3
+  },
+  "addons/cogito/FloatableBody/fluid_area_3d.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 1,
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/FloatableBody/fluid_interactor_3d.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 3,
+   "trailing-whitespace": 5
+  },
+  "addons/cogito/InventoryPD/CogitoQuickSlots.gd": {
+   "class-definitions-order": 7,
+   "max-line-length": 36,
+   "trailing-whitespace": 17
+  },
+  "addons/cogito/InventoryPD/CustomResources/AmmoItemPD.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 3,
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/InventoryPD/CustomResources/CombinableItemPD.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 3,
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/InventoryPD/CustomResources/ConsumableEffect.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 3,
+   "no-else-return": 1,
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/InventoryPD/CustomResources/ConsumableItemPD.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 4,
+   "no-else-return": 1,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/InventoryPD/CustomResources/CurrencyItemPD.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 5,
+   "no-else-return": 1,
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/InventoryPD/CustomResources/InventoryItemPD.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 10,
+   "trailing-whitespace": 2
+  },
+  "addons/cogito/InventoryPD/CustomResources/InventorySlotPD.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 1,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/InventoryPD/CustomResources/ItemValue.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/InventoryPD/CustomResources/KeyItemPD.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 3
+  },
+  "addons/cogito/InventoryPD/CustomResources/WieldableItemPD.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 29,
+   "no-else-return": 1,
+   "trailing-whitespace": 8
+  },
+  "addons/cogito/InventoryPD/CustomResources/cogito_currency.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 2,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/InventoryPD/Quickslots/cogito_ammo_quickslot_entry.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 15
+  },
+  "addons/cogito/InventoryPD/Quickslots/cogito_item_quickslot_entry.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 3
+  },
+  "addons/cogito/InventoryPD/Quickslots/cogito_quickslot_entry.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 6
+  },
+  "addons/cogito/InventoryPD/Quickslots/cogito_quickslot_set.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 10
+  },
+  "addons/cogito/InventoryPD/Quickslots/cogito_quickslot_view.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 7
+  },
+  "addons/cogito/InventoryPD/Quickslots/cogito_quickslot_wheel.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 47
+  },
+  "addons/cogito/InventoryPD/Quickslots/cogito_submenu_quickslot_entry.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 3
+  },
+  "addons/cogito/InventoryPD/UiScenes/CogitoQuickslotContainer.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 2,
+   "trailing-whitespace": 9
+  },
+  "addons/cogito/InventoryPD/UiScenes/InventoryUI.gd": {
+   "class-definitions-order": 6,
+   "max-line-length": 6,
+   "no-elif-return": 1,
+   "no-else-return": 1,
+   "trailing-whitespace": 12
+  },
+  "addons/cogito/InventoryPD/UiScenes/Slot.gd": {
+   "class-definitions-order": 12,
+   "max-line-length": 2,
+   "trailing-whitespace": 5
+  },
+  "addons/cogito/InventoryPD/UiScenes/SlotPanel.gd": {
+   "unused-argument": 4
+  },
+  "addons/cogito/InventoryPD/UiScenes/hot_bar_inventory.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 1,
+   "trailing-whitespace": 7
+  },
+  "addons/cogito/InventoryPD/UiScenes/inventory_interface.gd": {
+   "class-definitions-order": 10,
+   "max-line-length": 21,
+   "trailing-whitespace": 37
+  },
+  "addons/cogito/InventoryPD/cogito_inventory.gd": {
+   "class-definitions-order": 2,
+   "max-line-length": 16,
+   "max-public-methods": 1,
+   "no-else-return": 8,
+   "trailing-whitespace": 25
+  },
+  "addons/cogito/InventoryPD/cogito_loot_generator.gd": {
+   "class-definitions-order": 7,
+   "function-variable-name": 19,
+   "max-line-length": 24,
+   "trailing-whitespace": 38,
+   "unused-argument": 1
+  },
+  "addons/cogito/InventoryPD/cogito_pickup.gd": {
+   "max-line-length": 2,
+   "no-else-return": 1,
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/Localization/scripts/language_select.gd": {
+   "max-line-length": 3,
+   "trailing-whitespace": 22,
+   "unused-argument": 1
+  },
+  "addons/cogito/Localization/scripts/loc_resource_parser.gd": {
+   "max-line-length": 9,
+   "trailing-whitespace": 12
+  },
+  "addons/cogito/Localization/scripts/translation_key_dict.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/PackedScenes/cogito_lockpick_minigame.gd": {
+   "class-definitions-order": 3,
+   "max-line-length": 14,
+   "trailing-whitespace": 25,
+   "unused-argument": 1
+  },
+  "addons/cogito/PackedScenes/gravity_zone.gd": {
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/PackedScenes/laser_ray.gd": {
+   "class-definitions-order": 3,
+   "trailing-whitespace": 6
+  },
+  "addons/cogito/QuestSystem/Components/cogito_quest_updater.gd": {
+   "class-definitions-order": 2,
+   "enum-element-name": 4,
+   "max-line-length": 3,
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/QuestSystem/Components/quest_entry.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 1,
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/QuestSystem/Components/ui_quest_hud.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 2,
+   "trailing-whitespace": 6
+  },
+  "addons/cogito/QuestSystem/CustomResources/cogito_quest.gd": {
+   "class-definitions-order": 1,
+   "enum-element-name": 4,
+   "max-line-length": 2,
+   "trailing-whitespace": 11
+  },
+  "addons/cogito/QuestSystem/CustomResources/cogito_quest_group.gd": {
+   "class-definitions-order": 1,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/QuestSystem/CustomResources/cogito_quest_objective.gd": {
+   "class-definitions-order": 1,
+   "enum-element-name": 4,
+   "max-line-length": 2,
+   "trailing-whitespace": 2
+  },
+  "addons/cogito/QuestSystem/FlagInspector/flag_dropdown.gd": {
+   "trailing-whitespace": 12
+  },
+  "addons/cogito/QuestSystem/FlagInspector/flag_fetcher.gd": {
+   "max-line-length": 2,
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/QuestSystem/FlagInspector/flag_inspector_plugin.gd": {
+   "max-line-length": 2,
+   "no-else-return": 1
+  },
+  "addons/cogito/QuestSystem/Flags/bool_flag.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/QuestSystem/Flags/cogito_flag.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/QuestSystem/Flags/cogito_flag_group.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/QuestSystem/Flags/inventory_flag.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 1
+  },
+  "addons/cogito/QuestSystem/Flags/multi_flag_group.gd": {
+   "parse-error": 1
+  },
+  "addons/cogito/QuestSystem/Flags/numeric_flag.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 2
+  },
+  "addons/cogito/QuestSystem/Flags/single_flag_group.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/QuestSystem/Flags/world_flag.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/QuestSystem/QuestGroups/active_quests_group.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/QuestSystem/QuestGroups/available_quests_group.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/QuestSystem/QuestGroups/completed_quests_group.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/QuestSystem/QuestGroups/failed_quests_group.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/QuestSystem/cogito_quest_manager.gd": {
+   "max-line-length": 7,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/SceneManagement/cogito_persistent_id.gd": {
+   "max-line-length": 7
+  },
+  "addons/cogito/SceneManagement/cogito_player_advanced_state.gd": {
+   "max-line-length": 4,
+   "trailing-whitespace": 17
+  },
+  "addons/cogito/SceneManagement/cogito_player_simple_state.gd": {
+   "max-line-length": 2,
+   "trailing-whitespace": 8
+  },
+  "addons/cogito/SceneManagement/cogito_player_state.gd": {
+   "class-definitions-order": 19,
+   "function-variable-name": 1,
+   "max-line-length": 15,
+   "trailing-whitespace": 24
+  },
+  "addons/cogito/SceneManagement/cogito_scene.gd": {
+   "max-line-length": 7,
+   "trailing-whitespace": 2
+  },
+  "addons/cogito/SceneManagement/cogito_scene_manager.gd": {
+   "class-definitions-order": 17,
+   "max-line-length": 49,
+   "max-public-methods": 1,
+   "no-else-return": 3,
+   "trailing-whitespace": 52
+  },
+  "addons/cogito/SceneManagement/cogito_scene_state.gd": {
+   "class-definitions-order": 4,
+   "max-line-length": 6,
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/SceneManagement/loading_screen.gd": {
+   "class-definitions-order": 6,
+   "max-line-length": 9,
+   "trailing-whitespace": 11
+  },
+  "addons/cogito/SceneManagement/world_property_setter.gd": {
+   "class-variable-name": 2,
+   "max-line-length": 1,
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/Scripts/bullet_decal_pool.gd": {
+   "max-line-length": 3,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/Scripts/cogito_attribute_zone.gd": {
+   "max-line-length": 3,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/Scripts/cogito_audio.gd": {
+   "class-definitions-order": 8,
+   "max-line-length": 11
+  },
+  "addons/cogito/Scripts/cogito_credits.gd": {
+   "class-definitions-order": 2,
+   "function-variable-name": 1,
+   "max-line-length": 1,
+   "trailing-whitespace": 2,
+   "unused-argument": 1
+  },
+  "addons/cogito/Scripts/cogito_cutscene_trigger.gd": {
+   "class-definitions-order": 1,
+   "trailing-whitespace": 7
+  },
+  "addons/cogito/Scripts/cogito_game_config.gd": {
+   "class-definitions-order": 4,
+   "class-variable-name": 2,
+   "constant-name": 3,
+   "max-line-length": 23,
+   "trailing-whitespace": 21
+  },
+  "addons/cogito/Scripts/cogito_hover_tool.gd": {
+   "class-definitions-order": 4,
+   "max-line-length": 2
+  },
+  "addons/cogito/Scripts/cogito_hud.gd": {
+   "max-line-length": 6
+  },
+  "addons/cogito/Scripts/cogito_meter.gd": {
+   "class-definitions-order": 1,
+   "enum-element-name": 3,
+   "trailing-whitespace": 7
+  },
+  "addons/cogito/Scripts/cogito_music_layer.gd": {
+   "max-line-length": 1
+  },
+  "addons/cogito/Scripts/cogito_point.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/Scripts/cogito_prompt_ui.gd": {
+   "class-definitions-order": 1,
+   "function-variable-name": 1,
+   "max-line-length": 1,
+   "no-else-return": 2,
+   "trailing-whitespace": 9,
+   "unused-argument": 1
+  },
+  "addons/cogito/Scripts/cogito_ragdoll.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 2,
+   "trailing-whitespace": 8
+  },
+  "addons/cogito/Scripts/cogito_ragdoll_skeleton_modifier.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 1,
+   "trailing-whitespace": 9,
+   "unused-argument": 1
+  },
+  "addons/cogito/Scripts/cogito_rotator_tool.gd": {
+   "max-line-length": 1,
+   "unnecessary-pass": 1
+  },
+  "addons/cogito/Scripts/cogito_spawnzone.gd": {
+   "max-line-length": 3,
+   "trailing-whitespace": 2,
+   "unnecessary-pass": 1
+  },
+  "addons/cogito/Scripts/cogito_wieldable.gd": {
+   "class-definitions-order": 11,
+   "max-line-length": 9,
+   "trailing-whitespace": 4,
+   "unused-argument": 1
+  },
+  "addons/cogito/Scripts/cogito_world_state.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/Scripts/debug_line.gd": {
+   "max-line-length": 1,
+   "trailing-whitespace": 8
+  },
+  "addons/cogito/Scripts/door_setter_zone.gd": {
+   "trailing-whitespace": 7
+  },
+  "addons/cogito/Scripts/hazard_zone.gd": {
+   "max-line-length": 2
+  },
+  "addons/cogito/Scripts/impact_zone.gd": {
+   "class-definitions-order": 1,
+   "max-line-length": 1,
+   "trailing-whitespace": 2,
+   "unused-argument": 1
+  },
+  "addons/cogito/Scripts/input_router.gd": {
+   "max-line-length": 1,
+   "trailing-whitespace": 9
+  },
+  "addons/cogito/Scripts/interaction_raycast.gd": {
+   "class-definitions-order": 3,
+   "trailing-whitespace": 4
+  },
+  "addons/cogito/Scripts/inventory_checker.gd": {
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/Scripts/ladder_area.gd": {
+   "class-definitions-order": 1,
+   "function-variable-name": 1,
+   "max-line-length": 1,
+   "trailing-whitespace": 2
+  },
+  "addons/cogito/Scripts/object_noise.gd": {
+   "class-definitions-order": 1,
+   "enum-element-name": 2,
+   "max-line-length": 2,
+   "trailing-whitespace": 3,
+   "unnecessary-pass": 1
+  },
+  "addons/cogito/Scripts/particle_controller.gd": {
+   "trailing-whitespace": 1
+  },
+  "addons/cogito/Scripts/player_animation_tree.gd": {
+   "class-definitions-order": 8,
+   "max-line-length": 3,
+   "trailing-whitespace": 10
+  },
+  "addons/cogito/Scripts/player_hud_manager.gd": {
+   "max-line-length": 15,
+   "no-else-return": 1,
+   "trailing-whitespace": 20,
+   "unnecessary-pass": 1,
+   "unused-argument": 1
+  },
+  "addons/cogito/Scripts/scene_transition_zone.gd": {
+   "max-line-length": 3,
+   "trailing-whitespace": 7
+  },
+  "addons/cogito/Scripts/ui_wieldable_hud.gd": {
+   "max-line-length": 4,
+   "trailing-whitespace": 3
+  },
+  "addons/cogito/Scripts/water_area.gd": {
+   "class-definitions-order": 1
+  },
+  "addons/cogito/Theme/CogitoUiButton.gd": {
+   "class-definitions-order": 3,
+   "max-line-length": 4,
+   "trailing-whitespace": 12
+  },
+  "addons/cogito/Wieldables/npc_wieldable.gd": {
+   "class-definitions-order": 20,
+   "enum-element-name": 2,
+   "max-line-length": 8,
+   "trailing-whitespace": 8,
+   "unused-argument": 1
+  },
+  "addons/cogito/Wieldables/wieldable_consumable.gd": {
+   "trailing-whitespace": 6
+  },
+  "addons/cogito/Wieldables/wieldable_flashlight.gd": {
+   "class-definitions-order": 3,
+   "trailing-whitespace": 6
+  },
+  "addons/cogito/Wieldables/wieldable_laser_rifle.gd": {
+   "class-definitions-order": 16,
+   "function-variable-name": 1,
+   "max-line-length": 5,
+   "trailing-whitespace": 15
+  },
+  "addons/cogito/Wieldables/wieldable_pickaxe.gd": {
+   "max-line-length": 2,
+   "no-else-return": 2,
+   "trailing-whitespace": 6
+  },
+  "addons/cogito/Wieldables/wieldable_throwable.gd": {
+   "class-definitions-order": 4,
+   "function-variable-name": 1,
+   "max-line-length": 1,
+   "trailing-whitespace": 9
+  },
+  "addons/cogito/Wieldables/wieldable_toy_pistol.gd": {
+   "class-definitions-order": 9,
+   "function-variable-name": 1,
+   "max-line-length": 2,
+   "trailing-whitespace": 11
+  },
+  "addons/cogito/cogito_globals.gd": {
+   "max-line-length": 2,
+   "trailing-whitespace": 7,
+   "unused-argument": 1
+  },
+  "addons/cogito/cogito_plugin.gd": {
+   "load-constant-name": 1,
+   "max-line-length": 4,
+   "trailing-whitespace": 10
+  },
+  "addons/cogito/cogito_settings.gd": {
+   "constant-name": 2,
+   "max-line-length": 10,
+   "trailing-whitespace": 32
+  }
+ },
+ "unformatted": [
+  "addons/cogito/Assets/Shader/ConvertedStandardMaterial3D.gd",
+  "addons/cogito/Assets/Shader/Material3DConversion.gd",
+  "addons/cogito/Assets/Shader/ShaderPrecompiler.gd",
+  "addons/cogito/Assets/Shader/ShaderSpace.gd",
+  "addons/cogito/Assets/Shader/ViewmodelSpace.gd",
+  "addons/cogito/Assets/VFX/Explosion_01/explosion.gd",
+  "addons/cogito/Assets/VFX/vfx_mesh_overlay.gd",
+  "addons/cogito/CogitoNPC/cogito_body_drag.gd",
+  "addons/cogito/CogitoNPC/cogito_npc.gd",
+  "addons/cogito/CogitoNPC/cogito_npc_posture.gd",
+  "addons/cogito/CogitoNPC/cogito_patrol_path.gd",
+  "addons/cogito/CogitoNPC/cogito_patrol_point.gd",
+  "addons/cogito/CogitoNPC/detection/hearing_detection.gd",
+  "addons/cogito/CogitoNPC/detection/hearing_indicator.gd",
+  "addons/cogito/CogitoNPC/detection/sight_detection.gd",
+  "addons/cogito/CogitoNPC/detection/sight_indicator.gd",
+  "addons/cogito/CogitoNPC/npc_state_processor.gd",
+  "addons/cogito/CogitoNPC/npc_states/npc_investigate.gd",
+  "addons/cogito/CogitoNPC/npc_states/npc_state_alerted.gd",
+  "addons/cogito/CogitoNPC/npc_states/npc_state_attack.gd",
+  "addons/cogito/CogitoNPC/npc_states/npc_state_chase.gd",
+  "addons/cogito/CogitoNPC/npc_states/npc_state_idle.gd",
+  "addons/cogito/CogitoNPC/npc_states/npc_state_machine.gd",
+  "addons/cogito/CogitoNPC/npc_states/npc_state_move_to_random_pos.gd",
+  "addons/cogito/CogitoNPC/npc_states/npc_state_panic.gd",
+  "addons/cogito/CogitoNPC/npc_states/npc_state_patrol_on_path.gd",
+  "addons/cogito/CogitoNPC/npc_states/npc_state_searching.gd",
+  "addons/cogito/CogitoObjects/cogito_button.gd",
+  "addons/cogito/CogitoObjects/cogito_container.gd",
+  "addons/cogito/CogitoObjects/cogito_door.gd",
+  "addons/cogito/CogitoObjects/cogito_keypad.gd",
+  "addons/cogito/CogitoObjects/cogito_loot_drop_container.gd",
+  "addons/cogito/CogitoObjects/cogito_lootable_container.gd",
+  "addons/cogito/CogitoObjects/cogito_object.gd",
+  "addons/cogito/CogitoObjects/cogito_player.gd",
+  "addons/cogito/CogitoObjects/cogito_player_advanced.gd",
+  "addons/cogito/CogitoObjects/cogito_player_simple.gd",
+  "addons/cogito/CogitoObjects/cogito_pressure_plate.gd",
+  "addons/cogito/CogitoObjects/cogito_projectile.gd",
+  "addons/cogito/CogitoObjects/cogito_security_camera.gd",
+  "addons/cogito/CogitoObjects/cogito_sittable.gd",
+  "addons/cogito/CogitoObjects/cogito_snap_slot.gd",
+  "addons/cogito/CogitoObjects/cogito_static_interactable.gd",
+  "addons/cogito/CogitoObjects/cogito_switch.gd",
+  "addons/cogito/CogitoObjects/cogito_turnwheel.gd",
+  "addons/cogito/CogitoObjects/cogito_vehicle.gd",
+  "addons/cogito/CogitoObjects/cogito_vendor.gd",
+  "addons/cogito/Components/Attributes/cogito_attribute.gd",
+  "addons/cogito/Components/Attributes/cogito_health_attribute.gd",
+  "addons/cogito/Components/Attributes/cogito_light_meter_attribute.gd",
+  "addons/cogito/Components/Attributes/cogito_oxygen_attribute.gd",
+  "addons/cogito/Components/Attributes/cogito_sanity_attribute.gd",
+  "addons/cogito/Components/Attributes/cogito_stamina_attribute.gd",
+  "addons/cogito/Components/Attributes/cogito_visibility_attribute.gd",
+  "addons/cogito/Components/AutoConsumes/auto_consume.gd",
+  "addons/cogito/Components/AutoConsumes/health_auto_consume.gd",
+  "addons/cogito/Components/AutoConsumes/stamina_auto_consume.gd",
+  "addons/cogito/Components/AutoPickUpZone.gd",
+  "addons/cogito/Components/CurrencyCheckComponent.gd",
+  "addons/cogito/Components/DynamicInputIcon.gd",
+  "addons/cogito/Components/HitboxComponent.gd",
+  "addons/cogito/Components/ImpactAttributeDamage.gd",
+  "addons/cogito/Components/ImpactSounds.gd",
+  "addons/cogito/Components/Interactions/Addons/DialogicInteraction.gd",
+  "addons/cogito/Components/Interactions/Addons/DialogueManagerInteraction.gd",
+  "addons/cogito/Components/Interactions/BackpackComponent.gd",
+  "addons/cogito/Components/Interactions/BasicInteraction.gd",
+  "addons/cogito/Components/Interactions/CarryableComponent.gd",
+  "addons/cogito/Components/Interactions/CustomInteraction.gd",
+  "addons/cogito/Components/Interactions/DualInteraction.gd",
+  "addons/cogito/Components/Interactions/ExtendedPickupInteraction.gd",
+  "addons/cogito/Components/Interactions/HoldInteraction.gd",
+  "addons/cogito/Components/Interactions/InteractionComponent.gd",
+  "addons/cogito/Components/Interactions/LockInteraction.gd",
+  "addons/cogito/Components/Interactions/PickupComponent.gd",
+  "addons/cogito/Components/Interactions/ReadableComponent.gd",
+  "addons/cogito/Components/Interactions/SpinnerInteraction.gd",
+  "addons/cogito/Components/Interactions/cogito_interaction_action.gd",
+  "addons/cogito/Components/Interactions/lockpick_interaction.gd",
+  "addons/cogito/Components/LightzoneComponent.gd",
+  "addons/cogito/Components/LightzoneSwitchComponent.gd",
+  "addons/cogito/Components/LootComponent.gd",
+  "addons/cogito/Components/LootTables/LootDropEntry.gd",
+  "addons/cogito/Components/PlayerInteraction/CarryHandler.gd",
+  "addons/cogito/Components/PlayerInteraction/InteractionTargeting.gd",
+  "addons/cogito/Components/PlayerInteraction/WieldableHandler.gd",
+  "addons/cogito/Components/PlayerInteractionComponent.gd",
+  "addons/cogito/Components/Properties/cogito_actor_elements.gd",
+  "addons/cogito/Components/Properties/cogito_element_area.gd",
+  "addons/cogito/Components/Properties/cogito_element_debug_label.gd",
+  "addons/cogito/Components/Properties/cogito_properties.gd",
+  "addons/cogito/Components/SafezoneComponent.gd",
+  "addons/cogito/Components/UI/UI_AttributeCircle.gd",
+  "addons/cogito/Components/UI/UI_AttributeComponent.gd",
+  "addons/cogito/Components/UI/UI_AttributeDisplay.gd",
+  "addons/cogito/Components/UI/UI_CurrencyComponent.gd",
+  "addons/cogito/Components/UI/UI_ElementStatus.gd",
+  "addons/cogito/Components/UI/UI_HintComponent.gd",
+  "addons/cogito/Components/UI/UI_HoldComponent.gd",
+  "addons/cogito/Components/UI/UI_ObjectNameComponent.gd",
+  "addons/cogito/Components/UI/UI_PromptComponent.gd",
+  "addons/cogito/Components/UI/Ui_StaminaAttribute.gd",
+  "addons/cogito/Components/UI/dynamic_bar.gd",
+  "addons/cogito/Components/UI/ui_progress_wheel.gd",
+  "addons/cogito/DemoScenes/DemoPrefabs/ElementStands/element_stand.gd",
+  "addons/cogito/DynamicFootstepSystem/Scripts/footstep_material_library.gd",
+  "addons/cogito/DynamicFootstepSystem/Scripts/footstep_material_profile.gd",
+  "addons/cogito/DynamicFootstepSystem/Scripts/footstep_surface.gd",
+  "addons/cogito/DynamicFootstepSystem/Scripts/footstep_surface_detector.gd",
+  "addons/cogito/EasyMenus/Components/SaveSlotButton.gd",
+  "addons/cogito/EasyMenus/Components/gamepad_bind_button.gd",
+  "addons/cogito/EasyMenus/Components/kbm_bind_button.gd",
+  "addons/cogito/EasyMenus/Components/remap_entry.gd",
+  "addons/cogito/EasyMenus/Scripts/OptionsTabMenu.gd",
+  "addons/cogito/EasyMenus/Scripts/cogito_death_screen.gd",
+  "addons/cogito/EasyMenus/Scripts/controller_echo_input_generator.gd",
+  "addons/cogito/EasyMenus/Scripts/follow_focus_center.gd",
+  "addons/cogito/EasyMenus/Scripts/gamepad_closeable.gd",
+  "addons/cogito/EasyMenus/Scripts/input_map_updater.gd",
+  "addons/cogito/EasyMenus/Scripts/main_menu_controller.gd",
+  "addons/cogito/EasyMenus/Scripts/main_menu_saveslot_manager.gd",
+  "addons/cogito/EasyMenus/Scripts/menu_template_manager.gd",
+  "addons/cogito/EasyMenus/Scripts/option_button_input_propagator.gd",
+  "addons/cogito/EasyMenus/Scripts/options_constants.gd",
+  "addons/cogito/EasyMenus/Scripts/pause_menu_controller.gd",
+  "addons/cogito/EasyMenus/Scripts/slider_w_labels.gd",
+  "addons/cogito/EasyMenus/Scripts/startup_loader.gd",
+  "addons/cogito/EasyMenus/Scripts/tab_menu.gd",
+  "addons/cogito/FloatableBody/floatable_body_3d.gd",
+  "addons/cogito/FloatableBody/floatable_player_3d.gd",
+  "addons/cogito/FloatableBody/fluid_area_3d.gd",
+  "addons/cogito/FloatableBody/fluid_interactor_3d.gd",
+  "addons/cogito/InventoryPD/CogitoQuickSlots.gd",
+  "addons/cogito/InventoryPD/CustomResources/AmmoItemPD.gd",
+  "addons/cogito/InventoryPD/CustomResources/CombinableItemPD.gd",
+  "addons/cogito/InventoryPD/CustomResources/ConsumableEffect.gd",
+  "addons/cogito/InventoryPD/CustomResources/ConsumableItemPD.gd",
+  "addons/cogito/InventoryPD/CustomResources/CurrencyItemPD.gd",
+  "addons/cogito/InventoryPD/CustomResources/InventoryItemPD.gd",
+  "addons/cogito/InventoryPD/CustomResources/InventorySlotPD.gd",
+  "addons/cogito/InventoryPD/CustomResources/ItemValue.gd",
+  "addons/cogito/InventoryPD/CustomResources/KeyItemPD.gd",
+  "addons/cogito/InventoryPD/CustomResources/WieldableItemPD.gd",
+  "addons/cogito/InventoryPD/CustomResources/cogito_currency.gd",
+  "addons/cogito/InventoryPD/Quickslots/cogito_ammo_quickslot_entry.gd",
+  "addons/cogito/InventoryPD/Quickslots/cogito_item_quickslot_entry.gd",
+  "addons/cogito/InventoryPD/Quickslots/cogito_quickslot_set.gd",
+  "addons/cogito/InventoryPD/Quickslots/cogito_quickslot_view.gd",
+  "addons/cogito/InventoryPD/Quickslots/cogito_quickslot_wheel.gd",
+  "addons/cogito/InventoryPD/Quickslots/cogito_submenu_quickslot_entry.gd",
+  "addons/cogito/InventoryPD/UiScenes/CogitoQuickslotContainer.gd",
+  "addons/cogito/InventoryPD/UiScenes/InventoryUI.gd",
+  "addons/cogito/InventoryPD/UiScenes/Slot.gd",
+  "addons/cogito/InventoryPD/UiScenes/SlotPanel.gd",
+  "addons/cogito/InventoryPD/UiScenes/hot_bar_inventory.gd",
+  "addons/cogito/InventoryPD/UiScenes/inventory_interface.gd",
+  "addons/cogito/InventoryPD/cogito_inventory.gd",
+  "addons/cogito/InventoryPD/cogito_loot_generator.gd",
+  "addons/cogito/InventoryPD/cogito_pickup.gd",
+  "addons/cogito/Localization/scripts/language_select.gd",
+  "addons/cogito/Localization/scripts/loc_resource_parser.gd",
+  "addons/cogito/Localization/scripts/translation_key_dict.gd",
+  "addons/cogito/PackedScenes/cogito_lockpick_minigame.gd",
+  "addons/cogito/PackedScenes/gravity_zone.gd",
+  "addons/cogito/PackedScenes/laser_ray.gd",
+  "addons/cogito/QuestSystem/Components/cogito_quest_updater.gd",
+  "addons/cogito/QuestSystem/Components/quest_entry.gd",
+  "addons/cogito/QuestSystem/Components/ui_quest_hud.gd",
+  "addons/cogito/QuestSystem/CustomResources/cogito_quest.gd",
+  "addons/cogito/QuestSystem/CustomResources/cogito_quest_group.gd",
+  "addons/cogito/QuestSystem/CustomResources/cogito_quest_objective.gd",
+  "addons/cogito/QuestSystem/FlagInspector/flag_dropdown.gd",
+  "addons/cogito/QuestSystem/FlagInspector/flag_fetcher.gd",
+  "addons/cogito/QuestSystem/FlagInspector/flag_inspector_plugin.gd",
+  "addons/cogito/QuestSystem/Flags/bool_flag.gd",
+  "addons/cogito/QuestSystem/Flags/cogito_flag.gd",
+  "addons/cogito/QuestSystem/Flags/cogito_flag_group.gd",
+  "addons/cogito/QuestSystem/Flags/inventory_flag.gd",
+  "addons/cogito/QuestSystem/Flags/multi_flag_group.gd",
+  "addons/cogito/QuestSystem/Flags/numeric_flag.gd",
+  "addons/cogito/QuestSystem/Flags/single_flag_group.gd",
+  "addons/cogito/QuestSystem/QuestGroups/active_quests_group.gd",
+  "addons/cogito/QuestSystem/cogito_quest_manager.gd",
+  "addons/cogito/SceneManagement/cogito_persistent_id.gd",
+  "addons/cogito/SceneManagement/cogito_player_advanced_state.gd",
+  "addons/cogito/SceneManagement/cogito_player_simple_state.gd",
+  "addons/cogito/SceneManagement/cogito_player_state.gd",
+  "addons/cogito/SceneManagement/cogito_scene.gd",
+  "addons/cogito/SceneManagement/cogito_scene_manager.gd",
+  "addons/cogito/SceneManagement/cogito_scene_state.gd",
+  "addons/cogito/SceneManagement/loading_screen.gd",
+  "addons/cogito/SceneManagement/world_property_setter.gd",
+  "addons/cogito/Scripts/CogitoGUI.gd",
+  "addons/cogito/Scripts/bullet_decal_pool.gd",
+  "addons/cogito/Scripts/cogito_attribute_zone.gd",
+  "addons/cogito/Scripts/cogito_audio.gd",
+  "addons/cogito/Scripts/cogito_credits.gd",
+  "addons/cogito/Scripts/cogito_cutscene_trigger.gd",
+  "addons/cogito/Scripts/cogito_game_config.gd",
+  "addons/cogito/Scripts/cogito_hover_tool.gd",
+  "addons/cogito/Scripts/cogito_hud.gd",
+  "addons/cogito/Scripts/cogito_meter.gd",
+  "addons/cogito/Scripts/cogito_point.gd",
+  "addons/cogito/Scripts/cogito_prompt_ui.gd",
+  "addons/cogito/Scripts/cogito_ragdoll.gd",
+  "addons/cogito/Scripts/cogito_ragdoll_skeleton_modifier.gd",
+  "addons/cogito/Scripts/cogito_rotator_tool.gd",
+  "addons/cogito/Scripts/cogito_spawnzone.gd",
+  "addons/cogito/Scripts/cogito_wieldable.gd",
+  "addons/cogito/Scripts/cogito_world_state.gd",
+  "addons/cogito/Scripts/debug_line.gd",
+  "addons/cogito/Scripts/door_setter_zone.gd",
+  "addons/cogito/Scripts/hazard_zone.gd",
+  "addons/cogito/Scripts/impact_zone.gd",
+  "addons/cogito/Scripts/input_router.gd",
+  "addons/cogito/Scripts/interaction_raycast.gd",
+  "addons/cogito/Scripts/interaction_shapecast.gd",
+  "addons/cogito/Scripts/inventory_checker.gd",
+  "addons/cogito/Scripts/ladder_area.gd",
+  "addons/cogito/Scripts/object_noise.gd",
+  "addons/cogito/Scripts/particle_controller.gd",
+  "addons/cogito/Scripts/player_animation_tree.gd",
+  "addons/cogito/Scripts/player_hud_manager.gd",
+  "addons/cogito/Scripts/scene_transition_zone.gd",
+  "addons/cogito/Scripts/ui_wieldable_hud.gd",
+  "addons/cogito/Scripts/water_area.gd",
+  "addons/cogito/Scripts/wieldables_sway.gd",
+  "addons/cogito/Theme/CogitoUiButton.gd",
+  "addons/cogito/Wieldables/npc_wieldable.gd",
+  "addons/cogito/Wieldables/wieldable_consumable.gd",
+  "addons/cogito/Wieldables/wieldable_flashlight.gd",
+  "addons/cogito/Wieldables/wieldable_laser_rifle.gd",
+  "addons/cogito/Wieldables/wieldable_pickaxe.gd",
+  "addons/cogito/Wieldables/wieldable_throwable.gd",
+  "addons/cogito/Wieldables/wieldable_toy_pistol.gd",
+  "addons/cogito/cogito_globals.gd",
+  "addons/cogito/cogito_plugin.gd",
+  "addons/cogito/cogito_settings.gd"
+ ]
+}

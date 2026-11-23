@@ -1,0 +1,276 @@
+{
+ "addons/cogito/Assets/VFX/Explosion_01/explosion.gd": {
+  "SHADOWED_VARIABLE_BASE_CLASS": 2
+ },
+ "addons/cogito/CogitoNPC/cogito_body_drag.gd": {
+  "UNUSED_SIGNAL": 1
+ },
+ "addons/cogito/CogitoNPC/cogito_npc.gd": {
+  "SHADOWED_VARIABLE": 2,
+  "UNUSED_SIGNAL": 2
+ },
+ "addons/cogito/CogitoNPC/cogito_npc_posture.gd": {
+  "UNUSED_PARAMETER": 3
+ },
+ "addons/cogito/CogitoNPC/cogito_patrol_path.gd": {
+  "INCOMPATIBLE_TERNARY": 1
+ },
+ "addons/cogito/CogitoNPC/detection/hearing_detection.gd": {
+  "INT_AS_ENUM_WITHOUT_CAST": 2,
+  "INT_AS_ENUM_WITHOUT_MATCH": 2,
+  "SHADOWED_VARIABLE_BASE_CLASS": 1
+ },
+ "addons/cogito/CogitoNPC/detection/sight_detection.gd": {
+  "INT_AS_ENUM_WITHOUT_CAST": 2,
+  "INT_AS_ENUM_WITHOUT_MATCH": 2,
+  "SHADOWED_VARIABLE_BASE_CLASS": 2,
+  "UNREACHABLE_CODE": 1
+ },
+ "addons/cogito/CogitoNPC/npc_states/npc_state_attack.gd": {
+  "SHADOWED_VARIABLE": 1,
+  "UNUSED_VARIABLE": 1
+ },
+ "addons/cogito/CogitoNPC/npc_states/npc_state_chase.gd": {
+  "NARROWING_CONVERSION": 1,
+  "UNUSED_VARIABLE": 1
+ },
+ "addons/cogito/CogitoNPC/npc_states/npc_state_machine.gd": {
+  "UNSAFE_VOID_RETURN": 1,
+  "UNUSED_VARIABLE": 1
+ },
+ "addons/cogito/CogitoNPC/npc_states/npc_state_move_to_random_pos.gd": {
+  "NARROWING_CONVERSION": 1,
+  "UNUSED_VARIABLE": 2
+ },
+ "addons/cogito/CogitoNPC/npc_states/npc_state_patrol_on_path.gd": {
+  "UNUSED_VARIABLE": 1
+ },
+ "addons/cogito/CogitoObjects/cogito_button.gd": {
+  "UNUSED_SIGNAL": 1
+ },
+ "addons/cogito/CogitoObjects/cogito_door.gd": {
+  "UNUSED_SIGNAL": 1
+ },
+ "addons/cogito/CogitoObjects/cogito_loot_drop_container.gd": {
+  "SHADOWED_VARIABLE_BASE_CLASS": 1
+ },
+ "addons/cogito/CogitoObjects/cogito_lootable_container.gd": {
+  "INTEGER_DIVISION": 2
+ },
+ "addons/cogito/CogitoObjects/cogito_object.gd": {
+  "SHADOWED_VARIABLE": 1,
+  "SHADOWED_VARIABLE_BASE_CLASS": 1,
+  "UNUSED_VARIABLE": 1
+ },
+ "addons/cogito/CogitoObjects/cogito_player.gd": {
+  "SHADOWED_VARIABLE": 1,
+  "UNUSED_SIGNAL": 3
+ },
+ "addons/cogito/CogitoObjects/cogito_player_advanced.gd": {
+  "SHADOWED_VARIABLE": 3,
+  "UNUSED_PARAMETER": 10,
+  "UNUSED_VARIABLE": 2
+ },
+ "addons/cogito/CogitoObjects/cogito_player_simple.gd": {
+  "SHADOWED_VARIABLE": 2,
+  "UNUSED_PARAMETER": 3,
+  "UNUSED_VARIABLE": 2
+ },
+ "addons/cogito/CogitoObjects/cogito_pressure_plate.gd": {
+  "UNUSED_SIGNAL": 2
+ },
+ "addons/cogito/CogitoObjects/cogito_projectile.gd": {
+  "MISSING_TOOL": 1
+ },
+ "addons/cogito/CogitoObjects/cogito_static_interactable.gd": {
+  "UNUSED_SIGNAL": 1
+ },
+ "addons/cogito/CogitoObjects/cogito_switch.gd": {
+  "UNUSED_SIGNAL": 1
+ },
+ "addons/cogito/CogitoObjects/cogito_turnwheel.gd": {
+  "UNUSED_SIGNAL": 1
+ },
+ "addons/cogito/CogitoObjects/cogito_vehicle.gd": {
+  "UNUSED_PARAMETER": 1
+ },
+ "addons/cogito/Components/Attributes/cogito_oxygen_attribute.gd": {
+  "UNUSED_SIGNAL": 1
+ },
+ "addons/cogito/Components/Interactions/Addons/DialogueManagerInteraction.gd": {
+  "EMPTY_FILE": 1
+ },
+ "addons/cogito/Components/Interactions/ExtendedPickupInteraction.gd": {
+  "UNUSED_SIGNAL": 2
+ },
+ "addons/cogito/Components/Interactions/HoldInteraction.gd": {
+  "UNUSED_SIGNAL": 1
+ },
+ "addons/cogito/Components/Interactions/InteractionComponent.gd": {
+  "UNUSED_SIGNAL": 1
+ },
+ "addons/cogito/Components/Interactions/PickupComponent.gd": {
+  "UNUSED_VARIABLE": 1
+ },
+ "addons/cogito/Components/Interactions/SpinnerInteraction.gd": {
+  "UNUSED_SIGNAL": 1
+ },
+ "addons/cogito/Components/LootComponent.gd": {
+  "INTEGER_DIVISION": 1,
+  "UNUSED_VARIABLE": 1
+ },
+ "addons/cogito/Components/LootTables/LootDropEntry.gd": {
+  "INT_AS_ENUM_WITHOUT_CAST": 1
+ },
+ "addons/cogito/Components/PlayerInteraction/CarryHandler.gd": {
+  "SHADOWED_VARIABLE": 1
+ },
+ "addons/cogito/Components/PlayerInteractionComponent.gd": {
+  "SHADOWED_VARIABLE": 1,
+  "UNUSED_SIGNAL": 7
+ },
+ "addons/cogito/Components/Properties/cogito_properties.gd": {
+  "REDUNDANT_AWAIT": 1
+ },
+ "addons/cogito/DynamicFootstepSystem/Scripts/footstep_surface_detector.gd": {
+  "INTEGER_DIVISION": 1
+ },
+ "addons/cogito/EasyMenus/Components/gamepad_bind_button.gd": {
+  "SHADOWED_VARIABLE_BASE_CLASS": 1
+ },
+ "addons/cogito/EasyMenus/Components/kbm_bind_button.gd": {
+  "SHADOWED_VARIABLE_BASE_CLASS": 1
+ },
+ "addons/cogito/EasyMenus/Scripts/OptionsTabMenu.gd": {
+  "SHADOWED_VARIABLE_BASE_CLASS": 2
+ },
+ "addons/cogito/EasyMenus/Scripts/cogito_death_screen.gd": {
+  "UNUSED_PARAMETER": 1,
+  "UNUSED_SIGNAL": 1
+ },
+ "addons/cogito/EasyMenus/Scripts/follow_focus_center.gd": {
+  "NARROWING_CONVERSION": 2,
+  "UNUSED_PARAMETER": 1
+ },
+ "addons/cogito/EasyMenus/Scripts/menu_template_manager.gd": {
+  "SHADOWED_GLOBAL_IDENTIFIER": 1
+ },
+ "addons/cogito/EasyMenus/Scripts/pause_menu_controller.gd": {
+  "UNUSED_PARAMETER": 1
+ },
+ "addons/cogito/InventoryPD/CogitoQuickSlots.gd": {
+  "SHADOWED_GLOBAL_IDENTIFIER": 1
+ },
+ "addons/cogito/InventoryPD/CustomResources/InventoryItemPD.gd": {
+  "INTEGER_DIVISION": 2
+ },
+ "addons/cogito/InventoryPD/CustomResources/InventorySlotPD.gd": {
+  "SHADOWED_VARIABLE": 1
+ },
+ "addons/cogito/InventoryPD/CustomResources/cogito_currency.gd": {
+  "UNUSED_SIGNAL": 1
+ },
+ "addons/cogito/InventoryPD/Quickslots/cogito_quickslot_set.gd": {
+  "SHADOWED_GLOBAL_IDENTIFIER": 3
+ },
+ "addons/cogito/InventoryPD/UiScenes/Slot.gd": {
+  "SHADOWED_VARIABLE": 1,
+  "UNUSED_SIGNAL": 1
+ },
+ "addons/cogito/InventoryPD/UiScenes/SlotPanel.gd": {
+  "UNUSED_PARAMETER": 4
+ },
+ "addons/cogito/InventoryPD/UiScenes/inventory_interface.gd": {
+  "INTEGER_DIVISION": 2,
+  "INT_AS_ENUM_WITHOUT_CAST": 4,
+  "INT_AS_ENUM_WITHOUT_MATCH": 4
+ },
+ "addons/cogito/InventoryPD/cogito_inventory.gd": {
+  "INTEGER_DIVISION": 2
+ },
+ "addons/cogito/InventoryPD/cogito_loot_generator.gd": {
+  "UNASSIGNED_VARIABLE_OP_ASSIGN": 1,
+  "UNUSED_PARAMETER": 1
+ },
+ "addons/cogito/Localization/scripts/language_select.gd": {
+  "SHADOWED_VARIABLE": 2,
+  "SHADOWED_VARIABLE_BASE_CLASS": 4,
+  "UNUSED_PARAMETER": 1
+ },
+ "addons/cogito/PackedScenes/cogito_lockpick_minigame.gd": {
+  "UNUSED_PARAMETER": 1
+ },
+ "addons/cogito/QuestSystem/FlagInspector/flag_inspector_plugin.gd": {
+  "UNUSED_VARIABLE": 1
+ },
+ "addons/cogito/QuestSystem/Flags/inventory_flag.gd": {
+  "MISSING_TOOL": 1
+ },
+ "addons/cogito/QuestSystem/Flags/multi_flag_group.gd": {
+  "UNUSED_VARIABLE": 1
+ },
+ "addons/cogito/SceneManagement/cogito_scene_manager.gd": {
+  "UNUSED_PRIVATE_CLASS_VARIABLE": 2,
+  "UNUSED_SIGNAL": 4,
+  "UNUSED_VARIABLE": 1
+ },
+ "addons/cogito/SceneManagement/loading_screen.gd": {
+  "UNUSED_VARIABLE": 1
+ },
+ "addons/cogito/Scripts/cogito_attribute_zone.gd": {
+  "INCOMPATIBLE_TERNARY": 1,
+  "UNUSED_SIGNAL": 1
+ },
+ "addons/cogito/Scripts/cogito_audio.gd": {
+  "CONFUSABLE_LOCAL_DECLARATION": 1
+ },
+ "addons/cogito/Scripts/cogito_credits.gd": {
+  "UNUSED_PARAMETER": 1,
+  "UNUSED_SIGNAL": 1
+ },
+ "addons/cogito/Scripts/cogito_game_config.gd": {
+  "INTEGER_DIVISION": 2,
+  "SHADOWED_VARIABLE": 1,
+  "UNUSED_SIGNAL": 1
+ },
+ "addons/cogito/Scripts/cogito_hud.gd": {
+  "SHADOWED_VARIABLE_BASE_CLASS": 1,
+  "UNUSED_SIGNAL": 2
+ },
+ "addons/cogito/Scripts/cogito_prompt_ui.gd": {
+  "INTEGER_DIVISION": 1,
+  "UNUSED_PARAMETER": 1,
+  "UNUSED_VARIABLE": 1
+ },
+ "addons/cogito/Scripts/cogito_ragdoll_skeleton_modifier.gd": {
+  "UNUSED_PARAMETER": 1
+ },
+ "addons/cogito/Scripts/cogito_rotator_tool.gd": {
+  "REDUNDANT_AWAIT": 1
+ },
+ "addons/cogito/Scripts/cogito_wieldable.gd": {
+  "UNUSED_PARAMETER": 1
+ },
+ "addons/cogito/Scripts/debug_line.gd": {
+  "SHADOWED_VARIABLE": 4
+ },
+ "addons/cogito/Scripts/hazard_zone.gd": {
+  "UNUSED_SIGNAL": 1
+ },
+ "addons/cogito/Scripts/impact_zone.gd": {
+  "UNUSED_PARAMETER": 1
+ },
+ "addons/cogito/Scripts/object_noise.gd": {
+  "SHADOWED_VARIABLE": 3
+ },
+ "addons/cogito/Scripts/player_hud_manager.gd": {
+  "SHADOWED_VARIABLE_BASE_CLASS": 2,
+  "UNUSED_PARAMETER": 1
+ },
+ "addons/cogito/Wieldables/npc_wieldable.gd": {
+  "UNUSED_PARAMETER": 1
+ },
+ "addons/cogito/cogito_globals.gd": {
+  "UNUSED_PARAMETER": 1
+ }
+}
