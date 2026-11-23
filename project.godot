@@ -35,6 +35,13 @@ InputRouter="*uid://byboexsy6hrjq"
 
 settings/settings_file="res://addons/cogito/DemoScenes/DemoCogitoSettings.tres"
 
+[debug]
+
+gdscript/warnings/directory_rules={
+"res://addons": 0,
+"res://addons/cogito": 1
+}
+
 [display]
 
 window/size/viewport_width=1920
@@ -54,7 +61,7 @@ export/convert_text_resources_to_binary=false
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/cogito/plugin.cfg", "res://addons/godot_state_charts/plugin.cfg", "res://addons/input_helper/plugin.cfg")
+enabled=PackedStringArray("res://addons/cogito/plugin.cfg", "res://addons/gdUnit4/plugin.cfg", "res://addons/godot_state_charts/plugin.cfg", "res://addons/input_helper/plugin.cfg")
 
 [file_customization]
 

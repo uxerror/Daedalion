@@ -7,7 +7,7 @@ const MARGIN = 8
 
 @onready var camera := get_viewport().get_camera_3d()
 @onready var parent := get_parent()
-@onready var is_physics_interpolation_enabled := ProjectSettings.get_setting("physics/common/physics_interpolation")
+@onready var is_physics_interpolation_enabled : bool = ProjectSettings.get_setting("physics/common/physics_interpolation")
 
 var previous_interactable = null
 

@@ -1,0 +1,8 @@
+# gdlint config (gdtoolkit 4.5). Defaults, with third-party addons excluded.
+# The CI check is tools/lint.py: it uses this file and a baseline for old code.
+excluded_directories: !!set
+  .git: null
+  .godot: null
+  addons/gdUnit4: null
+  addons/godot_state_charts: null
+  addons/input_helper: null

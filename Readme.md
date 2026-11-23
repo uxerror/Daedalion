@@ -100,6 +100,32 @@ fetch new commits. The script refuses to
 update `upstream` if the filtered result does not continue the existing branch (for example
 after a history rewrite on the Cogito side).
 
+## Checks
+
+Every push runs [`.github/workflows/checks.yml`](.github/workflows/checks.yml); locally the same
+checks run with:
+
+```sh
+tools/check.sh                 # all: lint, warnings, tests, smoke
+tools/check.sh tests           # only some steps: lint | warnings | tests | smoke
+```
+
+- **lint**: `gdlint` + `gdformat` (gdtoolkit 4.5.0, config in `gdlintrc`) via `tools/lint.py`.
+  The code inherited from Cogito is not reformatted (that would conflict with every upstream
+  merge); its existing problems are recorded in `tools/lint_baseline.json`, and the check fails
+  only on problems a file did not have before. New files must be formatted
+  (`tools/lint.py --format <file>`).
+- **warnings**: Godot's own static warnings (unused variables, shadowing, unsafe calls...),
+  collected from the editor's language server by `tools/gd_warnings.py`, with a baseline in
+  `tools/gd_warnings_baseline.json`. `addons/cogito` is included in the warning checks
+  (`debug/gdscript/warnings/directory_rules`), so the editor shows them too.
+- **tests**: [gdUnit4](https://github.com/godot-gdunit-labs/gdUnit4) suites in `tests/`
+  (also runnable from the editor's gdUnit panel).
+- **smoke**: the demo scenes run for 400 frames headless without script errors.
+
+After fixing old problems, lower the baselines with `tools/lint.py --update` and
+`tools/gd_warnings.py --update`. Never update them to hide problems in new code.
+
 ## License and credits
 
 MIT, same as Cogito; see [LICENSE](LICENSE). Cogito is © 2023 Phazorknight; see the
