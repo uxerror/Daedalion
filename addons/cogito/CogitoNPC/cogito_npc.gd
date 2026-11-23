@@ -292,8 +292,7 @@ func save():
 	if patrol_path:
 		patrol_path_nodepath = patrol_path.get_path()
 		patrol_path_id = CogitoPersistentId.of(patrol_path)
-	if attention_target and "uid" in attention_target:
-		attention_target_uid = attention_target.uid
+	attention_target_uid = attention_target.uid if attention_target and "uid" in attention_target else 0
 	attention_target_id = CogitoPersistentId.of(attention_target) if attention_target else ""
 	
 	var node_data = {
@@ -347,10 +346,12 @@ func load_attention_target():
 	elif attention_target_uid:
 		# Do a fast check for uid matching player before scanning the tree
 		var player = CogitoSceneManager.get_player()
-		if attention_target_uid == player.uid:
+		if player and attention_target_uid == player.uid:
 			attention_target = player
 		else:
 			attention_target = CogitoSceneManager.find_object_from_uid(attention_target_uid)
+	else:
+		attention_target = null
 
 
 func _on_hitbox_component_got_hit(object) -> void:
