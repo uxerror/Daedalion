@@ -30,7 +30,8 @@ func _enter_tree() -> void:
 	CogitoGlobals.debug_log(true, "CogitoScene.gd", "Current scene root node set to " + CogitoSceneManager._current_scene_root_node.name )
 	
 	CogitoAudio.set_scene_music_state(music_state, combat_music_state)
-	if save_temp_on_enter:
+	# Managed transitions take the snapshot after restore and connector placement.
+	if save_temp_on_enter and not CogitoSceneManager.is_currently_loading:
 		save_temp.call_deferred()
 
 
@@ -42,7 +43,4 @@ func _notification(what: int) -> void:
 
 
 func save_temp() -> void:
-	var current_scene_statename = get_tree().get_current_scene().get_name()
-	CogitoSceneManager.save_scene_state(current_scene_statename,"temp")
-	CogitoSceneManager.save_player_state(CogitoSceneManager.get_player(), "temp")
-
+	CogitoSceneManager.save_temp_game()

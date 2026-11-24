@@ -35,7 +35,6 @@ func find_cogito_properties():
 
 # Future method to set object state when a scene state file is loaded.
 func set_state():	
-	#TODO: Find a way to possibly save health of health attribute.
 	find_cogito_properties()
 	pass
 

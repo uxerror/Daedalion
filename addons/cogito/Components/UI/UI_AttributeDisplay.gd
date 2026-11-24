@@ -32,6 +32,7 @@ func initiate_interface_ui(_player_attribute: CogitoAttribute):
 	attribute_bar.init_values(assigned_player_attribute.value_current, assigned_player_attribute.value_max)
 	
 	_player_attribute.attribute_changed.connect(on_attribute_changed)
+	_player_attribute.attribute_restored.connect(on_attribute_changed.bind(true))
 	
 	
 	

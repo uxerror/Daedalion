@@ -394,11 +394,6 @@ func _on_player_death():
 	$DeathScreen.open_death_screen()
 
 
-# Button appears on player death. TODO change to load latest save?
-func _on_restart_button_pressed():
-	get_tree().reload_current_scene()
-
-
 # On Inventory UI Item Drop
 func _on_inventory_interface_drop_slot_data(slot_data: InventorySlotPD):
 	pass

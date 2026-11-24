@@ -33,6 +33,8 @@ var visibility_attribute : CogitoAttribute
 
 ### CURRENCIES
 var player_currencies: Dictionary
+## Progression from older quest implementations, retained across load/save.
+var saved_quest_progression: Dictionary
 
 var is_mouselook_active: bool = true
 ## @deprecated: Use [code]CogitoPersistentId.of()[/code] to identify the player in save data.

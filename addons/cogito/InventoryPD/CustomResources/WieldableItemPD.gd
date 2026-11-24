@@ -248,6 +248,13 @@ func save():
 	return saved_item_data
 
 
+## Restoring a magazine must not unload it, consume ammunition or send a switch hint.
+func restore_charges(entry: Dictionary) -> void:
+	charge_current = entry.get("charge_current", charge_current)
+	var index: int = entry.get("current_ammo_type", current_ammo_type)
+	current_ammo_type = index if index >= 0 and index < ammo_types.size() else 0
+
+
 func build_wieldable_scene():
 	var scene = wieldable_scene.instantiate()
 	scene.item_reference = self

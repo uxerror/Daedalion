@@ -52,6 +52,7 @@ enum QuestState {
 # Starts the quest
 # Parameter _mute: if true, doesn't play start audio
 func start(_mute: bool = false) -> void:
+	CogitoQuestManager.remember_defaults(self)
 	# Play start audio if available and not muted
 	if audio_on_start and not _mute:
 		CogitoAudio.play_sound(audio_on_start)
@@ -66,6 +67,7 @@ func start(_mute: bool = false) -> void:
 
 # Updates the quest by updating each associated objective against the world state
 func update() -> QuestState:
+	CogitoQuestManager.remember_defaults(self)
 	var world_state = CogitoSceneManager._current_world_dict
 	# Do not update the quest if the state is completed or inactive
 	if quest_state == QuestState.Completed or quest_state == QuestState.NotStarted:
@@ -98,23 +100,62 @@ func update() -> QuestState:
 # Completes the quest
 # Parameter _mute: if true, doesn't play completion audio
 func complete(_mute: bool = false) -> void:
+	CogitoQuestManager.remember_defaults(self)
 	# Play completion audio if available and not muted
 	if audio_on_complete and not _mute:
 		CogitoAudio.play_sound(audio_on_complete)
 	
 	# Update description to completed state
+	quest_state = QuestState.Completed
 	quest_description = quest_description_completed
 
 # Marks the quest as failed
 # Parameter _mute: if true, doesn't play failure audio
 func failed(_mute: bool = false) -> void:
+	CogitoQuestManager.remember_defaults(self)
 	# Play failure audio if available and not muted
 	if audio_on_fail and not _mute:
 		CogitoAudio.play_sound(audio_on_fail)
 	
 	# Update description to failed state
+	quest_state = QuestState.Failed
 	quest_description = quest_description_failed
 	
+# Standalone objective assets have stable resource references. Built-in objectives use
+# their authored ID, with occurrence order disambiguating duplicate IDs within a quest.
+func _objective_key(objective: CogitoQuestObjective, occurrences: Dictionary) -> Variant:
+	if not objective.is_built_in():
+		return objective
+	var id := objective.objective_id
+	var occurrence: int = occurrences.get(id, 0)
+	occurrences[id] = occurrence + 1
+	return Vector2i(id, occurrence)
+
+
+func capture_objectives() -> Dictionary:
+	var states := {}
+	var occurrences := {}
+	for objective in quest_objectives:
+		if objective:
+			states[_objective_key(objective, occurrences)] = objective.objective_state
+	return states
+
+
+func restore_objectives(states: Dictionary, flags: Dictionary) -> void:
+	var occurrences := {}
+	var previous_completed := false
+	for objective in quest_objectives:
+		if not objective:
+			continue
+		var key: Variant = _objective_key(objective, occurrences)
+		if states.has(key):
+			objective.objective_state = states[key]
+		else:
+			# Legacy snapshot or newly added objective. Only refresh the objective.
+			objective.update(flags, previous_completed)
+		previous_completed = objective.objective_state == CogitoQuestObjective.ObjectiveState.Completed
+
+
 func get_all_flag_names() -> Array[String]:
 	var flag_names: Array[String] = []
 	for objective in quest_objectives:

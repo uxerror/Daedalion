@@ -14,12 +14,11 @@ extends Resource
 @export var player_currencies : Dictionary
 @export var world_dictionary : Dictionary
 @export var interaction_component_state : Array
+@export var quest_objective_states: Dictionary = {}
 @export var player_active_quests : Array[CogitoQuest]
 @export var player_active_quest_progression : Dictionary
 @export var player_completed_quests : Array[CogitoQuest]
 @export var player_failed_quests : Array[CogitoQuest]
-
-var player_state_dir : String = CogitoSceneManager.cogito_state_dir + CogitoSceneManager.cogito_player_state_prefix
 
 @export var player_current_scene : String
 @export var player_current_scene_path : String
@@ -30,29 +29,8 @@ var player_state_dir : String = CogitoSceneManager.cogito_state_dir + CogitoScen
 @export var player_state_slot_name : String
 
 
-func write_state(state_slot : String) -> void:
-	var dir = DirAccess.open("user://")
-	dir.make_dir(CogitoSceneManager.cogito_state_dir)
-	dir = DirAccess.open(CogitoSceneManager.cogito_state_dir)
-	dir.make_dir(str(state_slot))
-	var player_state_file = str(CogitoSceneManager.cogito_state_dir + state_slot + "/" + CogitoSceneManager.cogito_player_state_prefix + ".res")
-	#var player_state_file = str(player_state_dir + state_slot + ".res")
-	ResourceSaver.save(self, player_state_file, ResourceSaver.FLAG_CHANGE_PATH)
-	CogitoGlobals.debug_log(true, "CogitoPlayerState", "Player state saved as " + str(player_state_file) )
-
-
-func state_exists(state_slot : String) -> bool:
-	#var player_state_file = str(player_state_dir + state_slot + ".res")
-	var player_state_file = str(CogitoSceneManager.cogito_state_dir + state_slot + "/" + CogitoSceneManager.cogito_player_state_prefix + ".res")
-	#return ResourceLoader.exists(player_state_file)
-	return FileAccess.file_exists(player_state_file)
- 
-
-func load_state(state_slot : String) -> Resource:
-	#var player_state_file = str(player_state_dir + state_slot + ".res")
-	var player_state_file = str(CogitoSceneManager.cogito_state_dir + state_slot + "/" + CogitoSceneManager.cogito_player_state_prefix + ".res")
-	return ResourceLoader.load(player_state_file, "", ResourceLoader.CACHE_MODE_IGNORE)
-	
+func write_state(slot: String) -> Error:
+	return CogitoSceneManager.write_state_resource(self, CogitoSceneManager.player_file(slot))
 
 
 ## Saves what every player has: inventory, quick slots, quests, wieldable charges, attributes, currencies,
@@ -63,18 +41,14 @@ func save_common_data(player, slot) -> void:
 	self.player_quickslots = player.inventory_data.assigned_quickslots # Saving assigned quickslots
 	
 	# Saving current quests to player state.
-	self.player_active_quests.clear()
-	for quest in CogitoQuestManager.active.quests:
-		self.player_active_quests.append(quest)
-		
-	self.player_completed_quests.clear()
-	for quest in CogitoQuestManager.completed.quests:
-		self.player_completed_quests.append(quest)
-		
-	self.player_failed_quests.clear()
-	for quest in CogitoQuestManager.failed.quests:
-		self.player_failed_quests.append(quest)  # FIXED: Save failed quests to correct list
-	
+	self.player_active_quest_progression = player.saved_quest_progression.duplicate(true)
+	player_active_quests = CogitoQuestManager.active.quests.duplicate()
+	player_completed_quests = CogitoQuestManager.completed.quests.duplicate()
+	player_failed_quests = CogitoQuestManager.failed.quests.duplicate()
+	quest_objective_states.clear()
+	for quest: CogitoQuest in player_active_quests + player_completed_quests + player_failed_quests:
+		quest_objective_states[quest] = quest.capture_objectives()
+
 	self.clear_saved_wieldable_charges()
 	for item_slot in player.inventory_data.inventory_slots:
 		if item_slot and item_slot.inventory_item and item_slot.inventory_item.has_method("update_wieldable_data"): # Checking for wieldables.
@@ -118,16 +92,6 @@ func save_common_data(player, slot) -> void:
 		CogitoGlobals.debug_log(true,"CSM", "World Dict: attemtping to save key: " + str(entry) )
 		self.add_to_world_dictionary(entry, local_dict_copy[entry])
 
-	## Adding a screenshot
-	var screenshot_path : String = str(self.player_state_dir + slot + ".png")
-	
-	if CogitoSceneManager._screenshot_to_save:
-		if slot != "temp":
-			CogitoSceneManager._screenshot_to_save.save_png(screenshot_path)
-			self.player_state_screenshot_file = screenshot_path
-	else:
-		CogitoGlobals.debug_log(true,"CSM","No screenshot to save was passed.")
-	
 	## Getting time of saving
 	self.player_state_savetime = int(Time.get_unix_time_from_system())
 	self.player_state_slot_name = slot
@@ -140,78 +104,69 @@ func save_common_data(player, slot) -> void:
 
 ## Counterpart of save_common_data(). Call it first in populate_player_data().
 func load_common_data(player) -> void:
-	player.inventory_data = self.player_inventory # Loading inventory data from saved player state to current player inventory.
-	player.inventory_data.assigned_quickslots = self.player_quickslots
-	
-	# Loading quests from player state with proper initialization:
-	CogitoQuestManager.active.clear_group()
-	for quest in self.player_active_quests:
-		quest.start(true)  # Initialize active quests (mute audio)
-		CogitoQuestManager.active.add_quest(quest)
-	
-	var _temp_active_quest_dir = self.player_active_quest_progression
-	for entry in _temp_active_quest_dir:
-		for quest in CogitoQuestManager.active.quests:
-			if quest.quest_name == entry:
-				quest.quest_counter = _temp_active_quest_dir[entry]
-				CogitoGlobals.debug_log(true,"CSM", "Loading active quests. Quest " + quest.quest_name + " found. Setting progression to " + str(_temp_active_quest_dir[entry]) )
-	
-	CogitoQuestManager.completed.clear_group()
-	for quest in self.player_completed_quests:
-		quest.complete(true)  # Initialize completed quests (mute audio)
-		CogitoQuestManager.completed.add_quest(quest)
-	
-	CogitoQuestManager.failed.clear_group()
-	for quest in self.player_failed_quests:
-		quest.failed(true)  # Initialize failed quests (mute audio)
-		CogitoQuestManager.failed.add_quest(quest)
-	
-	# Loading saved charges of wieldables
-	var array_of_wieldable_charges = self.saved_wieldable_charges
-	for data in array_of_wieldable_charges:
-		if data == null:
+	if player_inventory:
+		player.inventory_data = player_inventory
+	var inventory: CogitoInventory = player.inventory_data
+	var items := _restore_inventory(inventory) if inventory else {}
+
+	player.saved_quest_progression = player_active_quest_progression.duplicate(true)
+	CogitoQuestManager.restore_quests(self)
+
+	for key: String in player_attributes:
+		var attribute: CogitoAttribute = player.player_attributes.get(key)
+		if attribute:
+			var values: Vector2 = player_attributes[key]
+			attribute.restore_attribute(values.x, values.y)
+	var health: CogitoAttribute = player.player_attributes.get("health")
+	player.is_dead = health != null and health.value_current <= 0.0
+	for key: String in player_currencies:
+		var currency: CogitoCurrency = player.player_currencies.get(key)
+		if currency:
+			var values: Vector2 = player_currencies[key]
+			currency.set_currency(values.x, values.y)
+
+	player.global_position = player_position
+	player.body.global_rotation = player_rotation
+	if inventory:
+		inventory.force_inventory_update()
+	if player.player_interaction_component:
+		_restore_interaction(player.player_interaction_component, items)
+
+
+func _restore_interaction(interaction: PlayerInteractionComponent, items: Dictionary) -> void:
+	for entry: Variant in interaction_component_state:
+		if not entry is Dictionary:
 			continue
+		for key: String in entry:
+			if key != "equipped_wieldable_item" and key != "is_wielding":
+				interaction.set(key, entry[key])
+		var item := entry.get("equipped_wieldable_item") as WieldableItemPD
+		if not items.has(item) or not item.wieldable_scene or not entry.get("is_wielding", true):
+			item = null
+		interaction.equipped_wieldable_item = item
+		interaction.set_state.call_deferred()
+
+
+func _restore_inventory(inventory: CogitoInventory) -> Dictionary:
+	var items := {}
+	for i in inventory.inventory_slots.size():
+		var stack := inventory.inventory_slots[i]
+		if stack and stack.inventory_item:
+			items[stack.inventory_item] = true
 		else:
-			for slot in player.inventory_data.inventory_slots:
-				if slot and slot.inventory_item and slot.inventory_item == data["resource"]:
-					CogitoGlobals.debug_log(true,"CSM","Match found: " + str(slot.inventory_item))
-					slot.inventory_item.charge_current = data["charge_current"]
-					
-	player.inventory_data.force_inventory_update()
-	
-	# New way of loading player attributes:
-	var loaded_attribute_data = self.player_attributes
-	for attribute in loaded_attribute_data:
-		var attribute_data: Vector2 = loaded_attribute_data[attribute]
-		var cur_value = attribute_data.x
-		var max_value = attribute_data.y
-		player.player_attributes[attribute].set_attribute(cur_value, max_value)
-	
-	# Loading player currencies
-	var loaded_currency_data = self.player_currencies
-	for currency in loaded_currency_data:
-		var currency_data: Vector2 = loaded_currency_data[currency]
-		var cur_value = currency_data.x
-		var max_value = currency_data.y
-		player.player_currencies[currency].set_currency(cur_value, max_value)
-	
-	# Loading world dictionary
-	var local_dict_copy : Dictionary = self.world_dictionary.duplicate(true)
-	CogitoSceneManager._current_world_dict.clear()
-	for entry in local_dict_copy:
-		CogitoSceneManager._current_world_dict.get_or_add(entry, local_dict_copy[entry])
-	
-	player.global_position = self.player_position
-	player.body.global_rotation = self.player_rotation
-	
-	# Loading player interaction component state
-	var player_interaction_component_state = self.interaction_component_state
-	for state_data in player_interaction_component_state:
-		for data in state_data.keys():
-			player.player_interaction_component.set(data, state_data[data])
-		player.player_interaction_component.set_state.call_deferred() # Calling this deferred as some state calls need to make sure the scene is finished loading.
-	
-	player.is_dead = false
+			inventory.inventory_slots[i] = null
+	inventory.assigned_quickslots = player_quickslots.duplicate()
+	for i in inventory.assigned_quickslots.size():
+		var stack := inventory.assigned_quickslots[i]
+		if stack and (not stack.inventory_item or not inventory.inventory_slots.has(stack)):
+			inventory.assigned_quickslots[i] = null
+	for entry: Variant in saved_wieldable_charges:
+		if not entry is Dictionary:
+			continue
+		var item := entry.get("resource") as WieldableItemPD
+		if item and items.has(item):
+			item.restore_charges(entry)
+	return items
 
 
 func add_player_attribute_to_state_data(name: String, attribute_data:Vector2):

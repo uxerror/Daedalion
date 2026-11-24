@@ -38,6 +38,7 @@ func initiate_attribute_ui(_player_attribute: CogitoAttribute):
 	current_value = assigned_player_attribute.value_current / assigned_player_attribute.value_max
 	
 	_player_attribute.attribute_changed.connect(on_attribute_changed)
+	_player_attribute.attribute_restored.connect(on_attribute_changed.bind(true))
 	
 	
 func on_attribute_changed(_attribute_name:String,_value_current:float,_value_max:float,_has_increased:bool):

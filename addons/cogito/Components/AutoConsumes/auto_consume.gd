@@ -27,6 +27,7 @@ var attribute_name: String = ""
 var last_value_current: float
 var last_value_max: float
 var attribute: CogitoAttribute
+var _watched_inventory: CogitoInventory
 
 # Must be called from _ready in subclass
 func initialize_auto_consume() -> void:
@@ -39,10 +40,8 @@ func initialize_auto_consume() -> void:
 	attribute = player.player_attributes[attribute_name]
 	# This signal must be connected to an AutoConsume subclass
 	player.connect("player_state_loaded", Callable(self, "_on_player_state_loaded"))
-	if consume_if_increases_max:
-		var inventory: CogitoInventory = player.inventory_data as CogitoInventory
-		inventory.connect("picked_up_new_inventory_item", Callable(self, "_on_picked_up_new_inventory_item"))
-	
+	_watch_inventory(player.inventory_data)
+
 	if threshold_value == 0.0:
 		attribute.connect("attribute_reached_zero", Callable(self, "_on_attribute_reached_zero"))
 	else:
@@ -53,13 +52,21 @@ func initialize_auto_consume() -> void:
 
 # Signal must be connected to the subclass
 func _on_player_state_loaded() -> void:
-	_update_values()
-	attribute = (get_parent() as CogitoPlayer).player_attributes[attribute_name]
-	
-	if consume_if_increases_max:
-		# Inventory is rebuilt, so reconnect the signal
-		var inventory: CogitoInventory = (get_parent() as CogitoPlayer).inventory_data as CogitoInventory
-		inventory.connect("picked_up_new_inventory_item", Callable(self, "_on_picked_up_new_inventory_item"))
+	var player := get_parent() as CogitoPlayer
+	attribute = player.player_attributes.get(attribute_name)
+	if attribute:
+		_update_values()
+	_watch_inventory(player.inventory_data)
+
+
+func _watch_inventory(inventory: CogitoInventory) -> void:
+	if not consume_if_increases_max or inventory == _watched_inventory:
+		return
+	if _watched_inventory:
+		_watched_inventory.picked_up_new_inventory_item.disconnect(_on_picked_up_new_inventory_item)
+	_watched_inventory = inventory
+	if inventory:
+		inventory.picked_up_new_inventory_item.connect(_on_picked_up_new_inventory_item)
 
 
 func _on_attribute_changed(_attribute_name:String, _value_current:float, _value_max:float, has_increased:bool) -> void:

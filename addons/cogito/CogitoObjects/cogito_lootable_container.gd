@@ -315,8 +315,6 @@ func save():
 		"node_path" : self.get_path(),
 		"display_name" : display_name,
 		"inventory_data" : inventory_data,
-		"interaction_nodes" : interaction_nodes,
-		"animation_player" : animation_player,
 		"pos_x" : position.x,
 		"pos_y" : position.y,
 		"pos_z" : position.z,

@@ -19,7 +19,7 @@ func load_all_save_slots(auto_scroll=true):
 			var save_slot = save_slot_container.get_node("SaveSlot")
 			save_slot.save_slot_manager_node = %SaveSlotManager
 			save_slot.manual_save_slot_name = str(i+1)
-			save_slot.set_data_from_state(load_slot_data(save_slot.manual_save_slot_name))
+			save_slot.refresh()
 	else:
 		var save_slots = %VBoxContainer.get_children()
 		
@@ -27,7 +27,7 @@ func load_all_save_slots(auto_scroll=true):
 			var save_slot = save_slots[i].get_node("SaveSlot")
 			save_slot.save_slot_manager_node = %SaveSlotManager
 			save_slot.manual_save_slot_name = str(i+1)
-			save_slot.set_data_from_state(load_slot_data(save_slot.manual_save_slot_name))
+			save_slot.refresh()
 		
 		var max_slot_number = CogitoSceneManager.max_saved_slot_nubmer()
 		if save_slots.size() == max_slot_number and save_slots.size() < maximum_slots_count:
@@ -36,12 +36,12 @@ func load_all_save_slots(auto_scroll=true):
 			var save_slot = save_slot_container.get_node("SaveSlot")
 			save_slot.save_slot_manager_node = %SaveSlotManager
 			save_slot.manual_save_slot_name = str(save_slots.size() + 1)
-			save_slot.set_data_from_state(load_slot_data(save_slot.manual_save_slot_name))
+			save_slot.refresh()
 		elif save_slots.size() > max_slot_number + 1 and save_slots.size() > minimum_slots_count:
 			var empty_slots_count = save_slots.size() - max(minimum_slots_count, max_slot_number + 1)
 			for i in range(empty_slots_count):
 				var empty_slot = save_slots.pop_back()
-				%VBoxContainer.remove_child(empty_slot)
+				empty_slot.queue_free()
 	
 	if auto_scroll:
 		await get_tree().process_frame
@@ -75,17 +75,5 @@ func focus_slot_on_save():
 	slot.get_node("SaveSlot").grab_focus.call_deferred()
 
 
-func load_slot_data(save_slot: String) -> CogitoPlayerState:
-	return CogitoSceneManager.get_existing_player_state(save_slot)
-	
-
-func start_new_game():
-	if CogitoGlobals.cogito_settings.new_game_start_scene:
-		var path_to_scene = CogitoGlobals.cogito_settings.new_game_start_scene.resource_path
-		CogitoSceneManager.load_next_scene(path_to_scene, "", "temp", CogitoSceneManager.CogitoSceneLoadMode.RESET) #Load_mode 2 means there's no attempt to load a state.
-		#Setting new game world state:
-		CogitoSceneManager._current_world_dict = CogitoGlobals.cogito_settings.get_new_game_world_dict()
-	#if start_game_scene: 
-		#CogitoSceneManager.load_next_scene(start_game_scene, "", "temp", CogitoSceneManager.CogitoSceneLoadMode.RESET) #Load_mode 2 means there's no attempt to load a state.
-	else:
-		print("ISSUE: No start game scene set.")
+func start_new_game() -> Error:
+	return await CogitoSceneManager.start_new_game()

@@ -1,8 +1,8 @@
 class_name CogitoSceneState
 extends Resource
 
-var scene_state_dir : String = CogitoSceneManager.cogito_state_dir + CogitoSceneManager.cogito_scene_state_prefix
-
+## Set of authored Persist IDs captured at level entry. Null denotes a pre-manifest save.
+@export_storage var known_persist_ids: Variant
 @export var saved_nodes : Array
 @export var saved_states : Array
 ## Element states (CogitoProperties, CogitoElementArea, CogitoActorElements) of the scene.
@@ -11,6 +11,39 @@ var scene_state_dir : String = CogitoSceneManager.cogito_state_dir + CogitoScene
 ## Nodes destroyed during play that aren't Persist nodes (e.g. burned out with BurnOutResult.DESTROY).
 ## Entries: {"cogito_id", "path"}. They get freed again when the scene state loads.
 @export var saved_destroyed_nodes : Array
+
+
+## Current and maximum values for scene components, including those on static objects.
+@export var saved_attribute_states: Array[Dictionary] = []
+
+
+func removes_missing_node(node: Node, id: String) -> bool:
+	if known_persist_ids == null or known_persist_ids.has(id):
+		return true
+	var root := CogitoPersistentId.get_level_root(node.get_tree())
+	return not CogitoPersistentId.is_from_level(root, node)
+
+
+func capture_attributes(tree: SceneTree) -> void:
+	saved_attribute_states.clear()
+	for attribute: CogitoAttribute in tree.get_nodes_in_group(CogitoAttribute.SAVE_GROUP):
+		if (
+			CogitoPersistentId.is_disappearing(attribute)
+			or CogitoSceneManager.is_part_of_player(attribute)
+		):
+			continue
+		var entry := CogitoSceneManager.get_element_state_key(attribute)
+		entry["max"] = attribute.value_max
+		if not attribute.dont_save_current_value:
+			entry["value"] = attribute.value_current
+		saved_attribute_states.append(entry)
+
+
+func restore_attributes() -> void:
+	for entry in saved_attribute_states:
+		var attribute := CogitoSceneManager.find_element_state_node(entry) as CogitoAttribute
+		if attribute:
+			attribute.restore_attribute(entry.get("value", attribute.value_current), entry.max)
 
 
 func clear_saved_nodes():
@@ -29,23 +62,5 @@ func add_state_data_to_array(state_data):
 	saved_states.append(state_data)
 
 
-func write_state(state_slot : String, scene_name : String) -> void:
-	var dir = DirAccess.open("user://")
-	dir.make_dir(CogitoSceneManager.cogito_state_dir)
-	dir = DirAccess.open(CogitoSceneManager.cogito_state_dir)
-	dir.make_dir(str(state_slot))
-	var scene_state_file = str(CogitoSceneManager.cogito_state_dir + state_slot + "/" + CogitoSceneManager.cogito_scene_state_prefix + scene_name + ".res")
-	ResourceSaver.save(self, scene_state_file, ResourceSaver.FLAG_CHANGE_PATH)
-	CogitoGlobals.debug_log(true, "cogito_scene_state.gd", "Scene state saved as " + scene_state_file)
-
-
-func state_exists(state_slot : String, scene_name : String) -> bool:
-	var scene_state_file = str(CogitoSceneManager.cogito_state_dir + state_slot + "/" + CogitoSceneManager.cogito_scene_state_prefix + scene_name + ".res")
-	CogitoGlobals.debug_log(true, "cogito_scene_state.gd","Looking if stat exists: " + scene_state_file)
-	#return ResourceLoader.exists(scene_state_file)
-	return FileAccess.file_exists(scene_state_file)
- 
-
-func load_state(state_slot : String, scene_name : String) -> Resource:
-	var scene_state_file = str(CogitoSceneManager.cogito_state_dir + state_slot + "/" + CogitoSceneManager.cogito_scene_state_prefix + scene_name + ".res")
-	return ResourceLoader.load(scene_state_file, "", ResourceLoader.CACHE_MODE_IGNORE)
+func write_state(slot: String, level_name: String) -> Error:
+	return CogitoSceneManager.write_state_resource(self, CogitoSceneManager.scene_file(slot, level_name))

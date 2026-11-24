@@ -18,6 +18,62 @@ var failed: FailedQuests = FailedQuests.new("Failed")
 
 var quest_audio_volume_db : float = -9
 
+# Definitions can be shared by several levels. Keep authored values, including hidden objectives.
+var _quest_defaults: Dictionary[CogitoQuest, Dictionary] = {}
+var _objective_defaults: Dictionary[CogitoQuestObjective, CogitoQuestObjective.ObjectiveState] = {}
+
+
+func remember_defaults(quest: CogitoQuest) -> void:
+	if _quest_defaults.has(quest):
+		return
+	_quest_defaults[quest] = {"state": quest.quest_state, "description": quest.quest_description}
+	for objective in quest.quest_objectives:
+		if objective and not _objective_defaults.has(objective):
+			_objective_defaults[objective] = objective.objective_state
+
+
+func reset_playthrough() -> void:
+	available.clear_group()
+	_clear_progress()
+
+
+func _clear_progress() -> void:
+	for quest: CogitoQuest in _quest_defaults:
+		quest.quest_state = _quest_defaults[quest].state
+		quest.quest_description = _quest_defaults[quest].description
+	for objective: CogitoQuestObjective in _objective_defaults:
+		objective.objective_state = _objective_defaults[objective]
+	_quest_defaults.clear()
+	_objective_defaults.clear()
+	for group: CogitoQuestGroup in [active, completed, failed]:
+		group.clear_group()
+
+
+## Install all groups before objective conditions can read the world or inventory.
+func restore_quests(state: CogitoPlayerState) -> void:
+	_clear_progress()
+	for quest in state.player_active_quests:
+		if quest:
+			quest.start(true)
+			active.add_quest(quest)
+			if "quest_counter" in quest and state.player_active_quest_progression.has(quest.quest_name):
+				quest.set("quest_counter", state.player_active_quest_progression[quest.quest_name])
+	for quest in state.player_completed_quests:
+		if quest:
+			quest.complete(true)
+			completed.add_quest(quest)
+	for quest in state.player_failed_quests:
+		if quest:
+			quest.failed(true)
+			failed.add_quest(quest)
+	var flags := state.world_dictionary.duplicate(true)
+	CogitoSceneManager._current_world_dict.clear()
+	CogitoSceneManager._current_world_dict.merge(flags)
+	for quest: CogitoQuest in active.quests + completed.quests + failed.quests:
+		available.remove_quest(quest)
+		quest.restore_objectives(state.quest_objective_states.get(quest, {}), flags)
+
+
 func _init() -> void:
 	# Adding quest groups
 	add_child(available)

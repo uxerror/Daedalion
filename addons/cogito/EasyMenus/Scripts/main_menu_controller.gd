@@ -153,18 +153,9 @@ func _on_main_menu_new_game_pressed() -> void:
 	start_new_game()
 
 
-func start_new_game():
-	if CogitoGlobals.cogito_settings.new_game_start_scene:
-		CogitoSceneManager.is_loaded_from_start_new_game = true
-		CogitoSceneManager.is_starting_new_game = true
-		var path_to_scene = CogitoGlobals.cogito_settings.new_game_start_scene.resource_path
-		CogitoSceneManager.load_next_scene(path_to_scene, "", "temp", CogitoSceneManager.CogitoSceneLoadMode.RESET) #Load_mode 2 means there's no attempt to load a state.
-		#Setting new game world state:
-		CogitoSceneManager._current_world_dict = CogitoGlobals.cogito_settings.get_new_game_world_dict()
-	#if start_game_scene: 
-		#CogitoSceneManager.load_next_scene(start_game_scene, "", "temp", CogitoSceneManager.CogitoSceneLoadMode.RESET) #Load_mode 2 means there's no attempt to load a state.
-	else:
-		print("ISSUE: No start game scene set.")
+func start_new_game() -> void:
+	if await CogitoSceneManager.start_new_game() != OK:
+		%NewGame.text = CogitoSceneManager.last_slot_message
 
 
 func open_save_load_menu() -> void:
@@ -177,9 +168,5 @@ func open_save_load_menu() -> void:
 func _on_main_menu_continue_pressed() -> void:
 	var last_saved_slot: String = CogitoSceneManager.get_last_saved_slot()
 	
-	CogitoSceneManager.switch_active_slot_to(last_saved_slot)
-	CogitoSceneManager._current_scene_name = get_tree().get_current_scene().get_name()
-	CogitoSceneManager._current_scene_path = get_tree().current_scene.scene_file_path
-	CogitoSceneManager.delete_temp_saves()
-	CogitoSceneManager.copy_slot_saves_to_temp(last_saved_slot)
-	CogitoSceneManager._active_slot = last_saved_slot
+	if await CogitoSceneManager.loading_saved_game(last_saved_slot) != OK:
+		%Continue.text = CogitoSceneManager.last_slot_message

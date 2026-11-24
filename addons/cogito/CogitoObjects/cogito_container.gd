@@ -95,8 +95,6 @@ func save():
 		"node_path" : self.get_path(),
 		"display_name" : display_name,
 		"inventory_data" : inventory_data,
-		"interaction_nodes" : interaction_nodes,
-		"animation_player" : animation_player,
 		"is_filled_with_starter_items" : is_filled_with_starter_items,
 		"pos_x" : position.x,
 		"pos_y" : position.y,

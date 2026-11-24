@@ -45,7 +45,7 @@
    "enum-element-name": 9,
    "max-line-length": 14,
    "max-public-methods": 1,
-   "trailing-whitespace": 16
+   "trailing-whitespace": 15
   },
   "addons/cogito/CogitoNPC/cogito_npc_posture.gd": {
    "max-line-length": 3,
@@ -287,8 +287,8 @@
    "trailing-whitespace": 1
   },
   "addons/cogito/Components/AutoConsumes/auto_consume.gd": {
-   "max-line-length": 16,
-   "trailing-whitespace": 9
+   "max-line-length": 14,
+   "trailing-whitespace": 7
   },
   "addons/cogito/Components/AutoConsumes/health_auto_consume.gd": {
    "max-line-length": 1,
@@ -535,10 +535,9 @@
   },
   "addons/cogito/EasyMenus/Components/SaveSlotButton.gd": {
    "class-definitions-order": 5,
-   "max-line-length": 3,
+   "max-line-length": 2,
    "no-elif-return": 1,
-   "no-else-return": 1,
-   "trailing-whitespace": 17
+   "trailing-whitespace": 16
   },
   "addons/cogito/EasyMenus/Components/gamepad_bind_button.gd": {
    "class-definitions-order": 2,
@@ -562,9 +561,6 @@
   },
   "addons/cogito/EasyMenus/Scripts/cogito_death_screen.gd": {
    "class-definitions-order": 1,
-   "max-line-length": 3,
-   "no-else-return": 1,
-   "trailing-whitespace": 9,
    "unused-argument": 1
   },
   "addons/cogito/EasyMenus/Scripts/controller_echo_input_generator.gd": {
@@ -581,12 +577,11 @@
   },
   "addons/cogito/EasyMenus/Scripts/main_menu_controller.gd": {
    "class-definitions-order": 6,
-   "max-line-length": 5,
-   "trailing-whitespace": 12
+   "max-line-length": 3,
+   "trailing-whitespace": 11
   },
   "addons/cogito/EasyMenus/Scripts/main_menu_saveslot_manager.gd": {
-   "max-line-length": 2,
-   "trailing-whitespace": 8
+   "trailing-whitespace": 6
   },
   "addons/cogito/EasyMenus/Scripts/menu_template_manager.gd": {
    "class-variable-name": 1
@@ -601,9 +596,9 @@
    "trailing-whitespace": 4
   },
   "addons/cogito/EasyMenus/Scripts/pause_menu_controller.gd": {
-   "max-line-length": 7,
+   "max-line-length": 3,
    "no-else-return": 1,
-   "trailing-whitespace": 18,
+   "trailing-whitespace": 13,
    "unused-argument": 1
   },
   "addons/cogito/EasyMenus/Scripts/slider_w_labels.gd": {
@@ -893,30 +888,30 @@
   },
   "addons/cogito/SceneManagement/cogito_player_state.gd": {
    "class-definitions-order": 19,
-   "function-variable-name": 1,
-   "max-line-length": 15,
-   "trailing-whitespace": 24
+   "max-line-length": 7,
+   "trailing-whitespace": 5
   },
   "addons/cogito/SceneManagement/cogito_scene.gd": {
    "max-line-length": 7,
    "trailing-whitespace": 2
   },
   "addons/cogito/SceneManagement/cogito_scene_manager.gd": {
-   "class-definitions-order": 17,
-   "max-line-length": 49,
+   "class-definitions-order": 24,
+   "max-file-lines": 1,
+   "max-line-length": 38,
    "max-public-methods": 1,
-   "no-else-return": 3,
-   "trailing-whitespace": 52
+   "max-returns": 1,
+   "trailing-whitespace": 12
   },
   "addons/cogito/SceneManagement/cogito_scene_state.gd": {
-   "class-definitions-order": 4,
-   "max-line-length": 6,
-   "trailing-whitespace": 1
+   "max-line-length": 2
   },
   "addons/cogito/SceneManagement/loading_screen.gd": {
    "class-definitions-order": 6,
-   "max-line-length": 9,
-   "trailing-whitespace": 11
+   "max-line-length": 2
+  },
+  "addons/cogito/SceneManagement/save_codec.gd": {
+   "max-returns": 4
   },
   "addons/cogito/SceneManagement/world_property_setter.gd": {
    "class-variable-name": 2,
@@ -1064,8 +1059,8 @@
    "unused-argument": 1
   },
   "addons/cogito/Scripts/scene_transition_zone.gd": {
-   "max-line-length": 3,
-   "trailing-whitespace": 7
+   "max-line-length": 1,
+   "trailing-whitespace": 4
   },
   "addons/cogito/Scripts/ui_wieldable_hud.gd": {
    "max-line-length": 4,
