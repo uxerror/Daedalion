@@ -4,7 +4,7 @@ Based on the Cogito wiki page Credits, Contributors, License (https://codeberg.o
 
 ## Daedalion
 
-Daedalion is an independent fork of Cogito by Philip Drobar and contributors. The [Daedalion repository](https://github.com/uxerror/Daedalion) carries the fork's changes, documentation and tests. The project license is in [LICENSE](../LICENSE). The original wiki credits and its MIT notice follow. Individual asset licenses appear with the assets below.
+Daedalion is an independent fork of Cogito by Philip Drobar and contributors. The [Daedalion repository](https://github.com/uxerror/Daedalion) carries the fork's changes, documentation and tests. The project license is in [LICENSE](../LICENSE) (Copyright (c) 2023 Phazorknight, Copyright (c) 2026 uxerror for Daedalion). The original wiki credits and its MIT notice follow. Individual asset licenses appear with the assets below.
 
 Contributors
 ------------
