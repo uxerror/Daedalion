@@ -27,7 +27,9 @@ func _process(delta):
 
 func _draw():
 	var cam = get_viewport().get_camera_3d()
-	for i in range(len(lines)):
+	# No camera (dedicated server, camera-less viewport): skip drawing but
+	# still prune timed-out lines below, or they accumulate forever.
+	for i in range(len(lines) if cam else 0):
 		var screen_point_start = cam.unproject_position(lines[i].start)
 		var screen_point_end = cam.unproject_position(lines[i].end)
 		
