@@ -13,6 +13,7 @@ var reason := ""
 var _records: Array = []
 var _ids := {}
 var _instances := {}
+var _original_ammo_types := {}
 
 
 func write(state: Resource, path: String, kind: String) -> Error:
@@ -64,6 +65,11 @@ func read(path: String, kind: String) -> Resource:
 	if not reason.is_empty():
 		return null
 	if kind == "scene" and state is CogitoSceneState:
+		if state.known_persist_ids != null and not state.known_persist_ids is Dictionary:
+			return null
+		for entry in state.saved_attribute_states:
+			if not entry.get("max") is float or not entry.get("value", 0.0) is float:
+				return null
 		for group: Array in [
 			state.saved_nodes,
 			state.saved_states,
@@ -74,6 +80,13 @@ func read(path: String, kind: String) -> Resource:
 				return null
 		return state
 	if kind == "player" and state is CogitoPlayerState:
+		for entry: Variant in state.saved_wieldable_charges:
+			if entry is Dictionary and _original_ammo_types.has(entry.get("resource")):
+				var weapon: WieldableItemPD = entry.resource
+				var original: Array = _original_ammo_types[weapon]
+				var index: int = entry.get("current_ammo_type", -1)
+				if index >= 0 and index < original.size():
+					entry.current_ammo_type = maxi(0, weapon.ammo_types.find(original[index]))
 		return state
 	return null
 
@@ -388,6 +401,7 @@ func _restore(index: Variant, field: String) -> Resource:
 			and resource.current_ammo_type < resource.ammo_types.size()
 		):
 			selected = resource.ammo_types[resource.current_ammo_type]
+		_original_ammo_types[resource] = resource.ammo_types.duplicate()
 		var kept: Array = resource.ammo_types.filter(
 			func(ammo: AmmoItemPD) -> bool: return ammo != null
 		)

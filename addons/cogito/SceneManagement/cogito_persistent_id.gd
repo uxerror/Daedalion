@@ -5,6 +5,7 @@ extends RefCounted
 ## Persist nodes placed in the level keep the id of where they were when the level loaded ("level:<path>"), even if they move later.
 ## Persist nodes created during play get a generated id ("persist:<number>") that is saved with them and restored on load.
 
+const LEVEL_IDS_META := &"cogito_authored_persist_ids"
 const META_KEY := &"cogito_persistent_id"
 
 
@@ -24,6 +25,15 @@ static func of(node: Node) -> String:
 	if level_root == node:
 		return "."
 	return str(node.get_path()) # Outside the level, for example an autoload.
+
+
+## A child disappears with its queued ancestor, even during a same-frame save.
+static func is_disappearing(node: Node) -> bool:
+	while node:
+		if node.is_queued_for_deletion():
+			return true
+		node = node.get_parent()
+	return false
 
 
 ## Returns the node with this id, or null if there is none.
@@ -53,11 +63,18 @@ static func restore(node: Node, id: String) -> void:
 ## Gives every Persist node placed in the level its "level:" id. CogitoScene calls this once the level is in the tree,
 ## so the ids match the level as it was loaded, before anything moves.
 static func stamp_level(level_root: Node) -> void:
+	if level_root.has_meta(LEVEL_IDS_META):
+		return
+	var known_ids := {}
 	for node in level_root.get_tree().get_nodes_in_group("Persist"):
-		if not node.has_meta(META_KEY) and level_root.is_ancestor_of(node):
-			var id := _level_id(level_root, node)
-			if not id.is_empty():
-				node.set_meta(META_KEY, id)
+		if not is_from_level(level_root, node):
+			continue
+		if not node.has_meta(META_KEY):
+			node.set_meta(META_KEY, _level_id(level_root, node))
+		if node.has_method("save"):
+			known_ids[of(node)] = true
+	level_root.set_meta(LEVEL_IDS_META, known_ids)
+
 
 
 ## True if the node comes from the level's scene files, false if it was added during play.

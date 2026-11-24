@@ -86,3 +86,11 @@ func make_button(slot: String) -> CogitoSaveSlotButton:
 	button.manual_save_slot_name = slot
 	button.refresh()
 	return button
+
+
+func assert_no_health_effects(health: CogitoHealthAttribute) -> void:
+	for event: String in ["death", "damage_taken", "spawning_on_death"]:
+		var args := [any()] if event == "spawning_on_death" else []
+		# gdUnit's concrete assertion awaits a timer, its abstract declaration cannot.
+		@warning_ignore("redundant_await")
+		await assert_signal(health).wait_until(50).is_not_emitted(event, args)

@@ -85,3 +85,68 @@ With no loadable save, Reload starts a fresh playthrough at the current level's
 entry with the configured initial world and starter items. A level without a file
 path uses the configured first level. A failure to open or copy the selected save
 keeps the death screen paused so the player can retry.
+
+## Scene attributes and death
+
+`saved_attribute_states` stores a component key (`cogito_id`, relative `path`),
+`value` and `max`. This includes static interactables without a save method and
+attributes inside objects, NPCs and bodies. The player has its own attribute
+dictionary. An attribute opting out of saving its current value keeps its
+current value within the restored maximum. Older scenes without these entries
+start with their authored attributes.
+
+Restoration blocks the attribute's gameplay signals while setting both values,
+then emits `attribute_restored` for displays. Zero health leaves a retained
+object broken and a retained NPC dead with processing disabled. The usual NPC
+instead disappears on death. Its persistent ragdoll restores its own bone pose
+and velocities. Non-persistent death effects last for their normal lifetime.
+Destroyed children are recorded separately, and nodes awaiting deletion are
+excluded even when the save is taken in the frame of death. Loading never calls
+the damage, loot or death handlers. Living NPCs retain their existing state
+chart, patrol and attention-target restoration. Perception timers and current
+suspicion levels are transient.
+
+## Editing a visited level
+
+At level entry `CogitoScene` stamps authored, saveable `Persist` nodes and
+records their IDs in `known_persist_ids`. This set includes objects picked up
+or destroyed before the first save. During load, matching IDs receive their
+saved state. An authored ID in the set but absent from `saved_nodes` is removed.
+An authored ID outside the set keeps its level defaults, including when the old
+level had no saveable nodes. Runtime spawns continue to use their saved prefab
+and parent ID. Register custom level roots with `CogitoPersistentId.stamp_level`
+at ready time to capture the authored set.
+
+For a rename or move, set the Persist node's String metadata `cogito_persistent_id` in
+the Inspector to its old ID, e.g. `level:Storage/Crate`. Use the `level:` prefix and a unique ID
+within the level. The default ID comes from the path relative to the level
+root. Changing that path without an override creates a new identity and a
+saved prefab with the old ID may also respawn. Child component paths are
+relative to the matched object. The scene file in the slot is still keyed by
+level root name.
+
+Legacy binary and early v2 saves without a known-ID set use the previous
+removal rules. An empty snapshot removes every saveable Persist node in that
+case. Pre-ID entries retain their legacy delete-and-respawn behavior. Upgrading
+the file format alone preserves the absence of a manifest.
+
+## Restoring the player
+
+Magazine charge and selected ammo index apply to the specific wieldable in the
+inventory before equipping it. Applying the index does not run the gameplay
+ammo-switch or reload action. Empty cells and quickslots retain their indices.
+A missing wieldable leaves the player unequipped.
+
+`player_attributes` retains the legacy `Vector2(current, max)` representation
+and uses the same silent restore as scene attributes. Missing attributes and
+currencies are skipped. Zero health sets the player's dead flag silently.
+
+The saved active, completed and failed groups determine quest state and
+description. They are rebuilt with muted quest methods. The loader installs the
+saved inventory and world flags before evaluating any objective conditions.
+New snapshots store exact objective states in `quest_objective_states`, keyed
+by quest, then objective. Standalone objectives use resource identity. Embedded
+objectives use their authored ID and occurrence within that ID. For legacy
+saves or new objectives, the loader evaluates the saved flags in objective
+order and preserves the saved quest group. Legacy counters remain in
+`player_active_quest_progression`.

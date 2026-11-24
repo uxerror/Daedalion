@@ -1,6 +1,8 @@
 class_name CogitoSceneState
 extends Resource
 
+## Set of authored Persist IDs captured at level entry. Null denotes a pre-manifest save.
+@export_storage var known_persist_ids: Variant
 @export var saved_nodes : Array
 @export var saved_states : Array
 ## Element states (CogitoProperties, CogitoElementArea, CogitoActorElements) of the scene.
@@ -9,6 +11,39 @@ extends Resource
 ## Nodes destroyed during play that aren't Persist nodes (e.g. burned out with BurnOutResult.DESTROY).
 ## Entries: {"cogito_id", "path"}. They get freed again when the scene state loads.
 @export var saved_destroyed_nodes : Array
+
+
+## Current and maximum values for scene components, including those on static objects.
+@export var saved_attribute_states: Array[Dictionary] = []
+
+
+func removes_missing_node(node: Node, id: String) -> bool:
+	if known_persist_ids == null or known_persist_ids.has(id):
+		return true
+	var root := CogitoPersistentId.get_level_root(node.get_tree())
+	return not CogitoPersistentId.is_from_level(root, node)
+
+
+func capture_attributes(tree: SceneTree) -> void:
+	saved_attribute_states.clear()
+	for attribute: CogitoAttribute in tree.get_nodes_in_group(CogitoAttribute.SAVE_GROUP):
+		if (
+			CogitoPersistentId.is_disappearing(attribute)
+			or CogitoSceneManager.is_part_of_player(attribute)
+		):
+			continue
+		var entry := CogitoSceneManager.get_element_state_key(attribute)
+		entry["max"] = attribute.value_max
+		if not attribute.dont_save_current_value:
+			entry["value"] = attribute.value_current
+		saved_attribute_states.append(entry)
+
+
+func restore_attributes() -> void:
+	for entry in saved_attribute_states:
+		var attribute := CogitoSceneManager.find_element_state_node(entry) as CogitoAttribute
+		if attribute:
+			attribute.restore_attribute(entry.get("value", attribute.value_current), entry.max)
 
 
 func clear_saved_nodes():

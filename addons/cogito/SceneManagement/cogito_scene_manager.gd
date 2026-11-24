@@ -383,6 +383,7 @@ func _apply_scene_state() -> void:
 			node_to_set.set_state()
 	
 	_load_destroyed_nodes(_scene_state.saved_destroyed_nodes)
+	_scene_state.restore_attributes()
 	# Element states go last, after the deferred set_state() calls of the Persist nodes
 	# and the on-ready states of the freshly loaded level.
 	_apply_element_states.call_deferred(_scene_state.saved_element_states.duplicate(true))
@@ -401,12 +402,12 @@ func _load_persist_nodes_in_place(saved_nodes: Array) -> void:
 
 	var live_nodes := {}
 	for node in get_tree().get_nodes_in_group("Persist"):
-		if node.is_queued_for_deletion():
+		if CogitoPersistentId.is_disappearing(node):
 			continue
 		var id := CogitoPersistentId.of(node)
 		if saved_ids.has(id):
 			live_nodes[id] = node
-		elif node.has_method("save"): # Nodes without save() are never in a save, like the StateProcessors inside NPCs.
+		elif node.has_method("save") and _scene_state.removes_missing_node(node, id):
 			CogitoGlobals.debug_log(true,"CSM","Removing node that is not in the save: "+ node.name)
 			node.queue_free()
 
@@ -501,12 +502,15 @@ func save_scene_state(level_name: String, slot: String) -> Error:
 
 func _capture_scene_state() -> CogitoSceneState:
 	var state := CogitoSceneState.new()
+	var root := CogitoPersistentId.get_level_root(get_tree())
+	if root and root.has_meta(CogitoPersistentId.LEVEL_IDS_META):
+		state.known_persist_ids = root.get_meta(CogitoPersistentId.LEVEL_IDS_META).duplicate()
 	var save_nodes = get_tree().get_nodes_in_group("Persist")
 	if !save_nodes:
 		CogitoGlobals.debug_log(true,"CSM","No nodes in Persist group!")
 	else:
 		for node in save_nodes:
-			if node.is_queued_for_deletion():
+			if CogitoPersistentId.is_disappearing(node):
 				continue
 			# A node needs a scene file to be created again on load, unless it is part of the level and gets updated where it is.
 			if node.scene_file_path.is_empty() and !CogitoPersistentId.of(node).begins_with("level:"):
@@ -537,7 +541,7 @@ func _capture_scene_state() -> CogitoSceneState:
 		CogitoGlobals.debug_log(true,"CSM","No nodes in save_object_state group!")
 	else:
 		for node in state_nodes:
-			if node.is_queued_for_deletion():
+			if CogitoPersistentId.is_disappearing(node):
 				continue
 			if !node.has_method("save"): # Check the node has a save function.
 				CogitoGlobals.debug_log(true,"CSM","persistent node '%s' is missing a save() function, skipped" % node.name)
@@ -547,6 +551,7 @@ func _capture_scene_state() -> CogitoSceneState:
 			state_data["cogito_id"] = CogitoPersistentId.of(node)
 			state.add_state_data_to_array(state_data)
 	
+	state.capture_attributes(get_tree())
 	state.saved_element_states = _collect_element_states()
 	state.saved_destroyed_nodes = _get_destroyed_nodes().duplicate(true)
 			
@@ -571,7 +576,7 @@ func find_element_state_node(key: Dictionary) -> Node:
 	if !persist_node:
 		return null
 	var node := persist_node.get_node_or_null(NodePath(str(key.get("path", "."))))
-	if node and node.is_queued_for_deletion():
+	if node and CogitoPersistentId.is_disappearing(node):
 		return null
 	return node
 
@@ -579,7 +584,7 @@ func find_element_state_node(key: Dictionary) -> Node:
 ## Remembers that a node of the current level was destroyed (e.g. burned out with BurnOutResult.DESTROY),
 ## so it is freed again when the scene state loads. Persist nodes with save() don't need this, the save leaves them out.
 func register_destroyed_node(node: Node) -> void:
-	if !is_instance_valid(node) or !node.is_inside_tree():
+	if !is_instance_valid(node) or !node.is_inside_tree() or is_part_of_player(node):
 		return
 	if node.is_in_group("Persist") and node.has_method("save"):
 		return
@@ -610,9 +615,9 @@ func _load_destroyed_nodes(saved_destroyed_nodes: Array) -> void:
 func _collect_element_states() -> Array:
 	var entries : Array = []
 	for node in get_tree().get_nodes_in_group(CogitoProperties.ELEMENT_STATE_GROUP):
-		if node.is_queued_for_deletion() or !node.has_method("get_element_save_data"):
+		if CogitoPersistentId.is_disappearing(node) or !node.has_method("get_element_save_data"):
 			continue
-		if _is_part_of_player(node):
+		if is_part_of_player(node):
 			continue # Saved with the player state.
 		var entry := get_element_state_key(node)
 		entry["data"] = node.get_element_save_data()
@@ -635,7 +640,7 @@ func _apply_element_states(entries: Array) -> void:
 		actor_entry[0].apply_element_save_data(actor_entry[1])
 
 
-func _is_part_of_player(node: Node) -> bool:
+func is_part_of_player(node: Node) -> bool:
 	var parent := node
 	while parent:
 		if parent is CogitoPlayer:

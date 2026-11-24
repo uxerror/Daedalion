@@ -60,5 +60,7 @@ func on_death(_attribute_name:String, _value_current:float, _value_max:float):
 			get_tree().current_scene.add_child(spawned_object)
 	
 	for nodepath in destroy_on_death:
-		if get_node(nodepath):
-			get_node(nodepath).queue_free()
+		var target := get_node_or_null(nodepath)
+		if target:
+			CogitoSceneManager.register_destroyed_node(target)
+			target.queue_free()

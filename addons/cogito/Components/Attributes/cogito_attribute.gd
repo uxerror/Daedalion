@@ -7,6 +7,11 @@ signal attribute_changed(attribute_name:String, value_current:float, value_max:f
 ## Triggered when this attribute current value reaches 0.
 signal attribute_reached_zero(attribute_name:String, value_current:float, value_max:float)
 
+## Presentation-only notification after a saved value has been applied.
+signal attribute_restored(attribute_name: String, current: float, maximum: float)
+
+const SAVE_GROUP := &"cogito_save_attribute"
+
 ## Used for scripting / condition checks, so should not include spaces and be all lowercase.
 @export var attribute_name : String
 ## Used for UI
@@ -47,6 +52,18 @@ var value_current : float:
 		
 		if value_current > value_max:
 			value_current = value_max
+
+
+func _enter_tree() -> void:
+	add_to_group(SAVE_GROUP)
+
+
+func restore_attribute(current: float, maximum: float) -> void:
+	var was_blocked := is_blocking_signals()
+	set_block_signals(true)
+	set_attribute(value_current if dont_save_current_value else current, maximum)
+	set_block_signals(was_blocked)
+	attribute_restored.emit(attribute_name, value_current, value_max)
 
 
 func _ready() -> void:

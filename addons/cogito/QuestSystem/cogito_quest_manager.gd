@@ -33,6 +33,11 @@ func remember_defaults(quest: CogitoQuest) -> void:
 
 
 func reset_playthrough() -> void:
+	available.clear_group()
+	_clear_progress()
+
+
+func _clear_progress() -> void:
 	for quest: CogitoQuest in _quest_defaults:
 		quest.quest_state = _quest_defaults[quest].state
 		quest.quest_description = _quest_defaults[quest].description
@@ -40,8 +45,33 @@ func reset_playthrough() -> void:
 		objective.objective_state = _objective_defaults[objective]
 	_quest_defaults.clear()
 	_objective_defaults.clear()
-	for group: CogitoQuestGroup in [available, active, completed, failed]:
+	for group: CogitoQuestGroup in [active, completed, failed]:
 		group.clear_group()
+
+
+## Install all groups before objective conditions can read the world or inventory.
+func restore_quests(state: CogitoPlayerState) -> void:
+	_clear_progress()
+	for quest in state.player_active_quests:
+		if quest:
+			quest.start(true)
+			active.add_quest(quest)
+			if "quest_counter" in quest and state.player_active_quest_progression.has(quest.quest_name):
+				quest.set("quest_counter", state.player_active_quest_progression[quest.quest_name])
+	for quest in state.player_completed_quests:
+		if quest:
+			quest.complete(true)
+			completed.add_quest(quest)
+	for quest in state.player_failed_quests:
+		if quest:
+			quest.failed(true)
+			failed.add_quest(quest)
+	var flags := state.world_dictionary.duplicate(true)
+	CogitoSceneManager._current_world_dict.clear()
+	CogitoSceneManager._current_world_dict.merge(flags)
+	for quest: CogitoQuest in active.quests + completed.quests + failed.quests:
+		available.remove_quest(quest)
+		quest.restore_objectives(state.quest_objective_states.get(quest, {}), flags)
 
 
 func _init() -> void:

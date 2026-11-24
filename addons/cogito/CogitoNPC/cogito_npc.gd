@@ -98,6 +98,7 @@ var patrol_path_id : String
 var attention_target_id : String
 
 var health: CogitoHealthAttribute
+@onready var _authored_process_mode := process_mode
 
 
 enum BehaviourState {
@@ -200,7 +201,7 @@ func get_speed_multiplier() -> float:
 
 ## False while the NPC can't attack: stunned, frozen or panicking.
 func can_act() -> bool:
-	if current_behaviour == BehaviourState.Panicking:
+	if is_dead() or current_behaviour == BehaviourState.Panicking:
 		return false
 	return actor_elements == null or actor_elements.can_act()
 
@@ -335,8 +336,12 @@ func apply_knockback(direction: Vector3):
 
 
 # Method to set object state when a scene state file is loaded.
-func set_state():	
-	#TODO: Find a way to possibly save health of health attribute.
+func set_state():
+	if is_dead():
+		process_mode = Node.PROCESS_MODE_DISABLED
+		CogitoAudio.release_music_state(self)
+		return
+	process_mode = _authored_process_mode
 	find_cogito_properties()
 	load_nodepaths()
 	load_state_chart()

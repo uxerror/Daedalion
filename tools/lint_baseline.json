@@ -45,7 +45,7 @@
    "enum-element-name": 9,
    "max-line-length": 14,
    "max-public-methods": 1,
-   "trailing-whitespace": 16
+   "trailing-whitespace": 15
   },
   "addons/cogito/CogitoNPC/cogito_npc_posture.gd": {
    "max-line-length": 3,
@@ -287,8 +287,8 @@
    "trailing-whitespace": 1
   },
   "addons/cogito/Components/AutoConsumes/auto_consume.gd": {
-   "max-line-length": 16,
-   "trailing-whitespace": 9
+   "max-line-length": 14,
+   "trailing-whitespace": 7
   },
   "addons/cogito/Components/AutoConsumes/health_auto_consume.gd": {
    "max-line-length": 1,
@@ -887,10 +887,9 @@
    "trailing-whitespace": 8
   },
   "addons/cogito/SceneManagement/cogito_player_state.gd": {
-   "class-definitions-order": 18,
-   "function-variable-name": 1,
-   "max-line-length": 9,
-   "trailing-whitespace": 20
+   "class-definitions-order": 19,
+   "max-line-length": 7,
+   "trailing-whitespace": 5
   },
   "addons/cogito/SceneManagement/cogito_scene.gd": {
    "max-line-length": 7,
@@ -899,7 +898,7 @@
   "addons/cogito/SceneManagement/cogito_scene_manager.gd": {
    "class-definitions-order": 24,
    "max-file-lines": 1,
-   "max-line-length": 39,
+   "max-line-length": 38,
    "max-public-methods": 1,
    "max-returns": 1,
    "trailing-whitespace": 12

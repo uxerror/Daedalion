@@ -29,8 +29,22 @@ func _ready() -> void:
 	build_projectile_pool()
 
 
-func build_projectile_pool():
+func _notification(what: int) -> void:
+	# Freed, not just removed from the tree: a re-parented pistol keeps its reserve.
+	if what == NOTIFICATION_PREDELETE:
+		_free_unused_projectiles()
+
+
+func _free_unused_projectiles() -> void:
+	# Fired projectiles belong to the level. The pistol owns the unparented reserve.
+	for projectile: Variant in projectile_pool:
+		if is_instance_valid(projectile) and not projectile.get_parent():
+			projectile.free()
 	projectile_pool.clear()
+
+
+func build_projectile_pool():
+	_free_unused_projectiles()
 	for i in POOL_SIZE:
 		projectile_pool.append(projectile_prefab[current_ammo_type].instantiate())
 
