@@ -151,8 +151,18 @@ func fire_projectile(collision_point:Vector3):
 	projectile.damage_amount = npc_wieldable_damage
 	projectile.set_linear_velocity(direction * projectile_velocity)
 	projectile.direction = direction
+	projectile.throw_point = bullet_point.global_position
+	projectile.shooter = _wielder()
 	projectile.reparent(get_tree().get_current_scene())
 #endregion
+
+# The NPC carrying this weapon.
+func _wielder() -> Node3D:
+	var node := get_parent()
+	while node and not node is CogitoNPC:
+		node = node.get_parent()
+	return node as Node3D
+
 
 #region Hitscan Methods
 func hit_scan_collision(collision_point:Vector3):

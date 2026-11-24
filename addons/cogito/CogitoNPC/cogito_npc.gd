@@ -427,17 +427,48 @@ func load_attention_target():
 func _on_hitbox_component_got_hit(object) -> void:
 	if object == null or object == self or object is CogitoElementArea:
 		return # Damage ticks of its own element states (burning, poison) or element areas give nothing to look at.
-	if object is CogitoProjectile:
-		sight_detection.generate_attention_target(object.throw_point)
-	elif object is CogitoWieldable:
-		sight_detection.generate_attention_target(object.global_position)
-	elif object is CogitoObject:
-		look_at(object.throw_point)
-		attention_target = object
-	elif object is Node3D:
-		# Any other attacker (the player casting a spell, another NPC): look where it is.
-		sight_detection.generate_attention_target(object.global_position)
+	var attacker := attacker_of(object)
+	if attacker == self:
+		return
+	if attacker is CogitoPlayer and response_to_player == "Hostile":
+		# Shot by the player it is hostile to: fight back right away, in every behaviour.
+		attention_target = attacker
+		if not in_state([BehaviourState.Chasing, BehaviourState.Attacking, BehaviourState.Panicking]):
+			state_chart.send_event("chase")
 	else:
-		return # Nothing to look at, so no alert (alerted needs an attention target).
-	state_chart.send_event("alerted")
+		var source: Variant = _hit_source_position(object, attacker)
+		if source == null:
+			return # Nothing to look at, so no alert (alerted needs an attention target).
+		if object is CogitoObject and not attacker and not object is CogitoProjectile:
+			look_at(source)
+			attention_target = object
+		else:
+			sight_detection.generate_attention_target(source)
+		state_chart.send_event("alerted")
 	animation_tree.set("parameters/Transition/transition_request","hit")
+
+
+## Who caused a hit: the shooter of a projectile or thrown object, the wielder of a weapon,
+## or the attacking player or NPC itself. Null when unknown.
+func attacker_of(object: Node) -> Node3D:
+	if object is CogitoObject and is_instance_valid(object.shooter):
+		return object.shooter
+	if object is CogitoWieldable and object.player_interaction_component:
+		return object.player_interaction_component.player
+	if object is CogitoPlayer or object is CogitoNPC:
+		return object
+	return null
+
+
+# Where a hit came from, or null.
+func _hit_source_position(object: Node, attacker: Node3D) -> Variant:
+	if attacker:
+		return attacker.global_position
+	if object is CogitoObject:
+		if object.was_thrown or object.throw_point != Vector3.ZERO:
+			return object.throw_point
+		return object.global_position
+	if object is Node3D:
+		# Any other attacker (the player casting a spell, another NPC): look where it is.
+		return object.global_position
+	return null

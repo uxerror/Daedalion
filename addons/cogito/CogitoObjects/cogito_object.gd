@@ -64,6 +64,8 @@ enum PromptPositionMode{
 @export var show_noise_as_debug_mesh: bool = true
 ## This is the location that the object was thrown from. If an NPC is hit by the object then they will navigate to this point.
 var throw_point: Vector3
+## Who threw or fired this object (a player or an NPC). NPCs hit by it react to the shooter.
+var shooter: Node3D
 var was_thrown: bool = false
 var physics_frame_velocity_scalar: float = 0.0
 

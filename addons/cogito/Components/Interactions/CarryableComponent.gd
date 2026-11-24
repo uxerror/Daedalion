@@ -178,5 +178,6 @@ func throw(power):
 	if parent_object is CogitoObject:
 		parent_object.was_thrown = true
 		parent_object.throw_point = parent_object.global_position
+		parent_object.shooter = player_interaction_component.player
 	parent_object.apply_central_impulse(impulse)
 	thrown.emit(impulse)
