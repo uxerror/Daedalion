@@ -163,7 +163,7 @@
    "trailing-whitespace": 34
   },
   "addons/cogito/CogitoObjects/cogito_object.gd": {
-   "class-definitions-order": 18,
+   "class-definitions-order": 19,
    "max-line-length": 10,
    "trailing-whitespace": 21,
    "unnecessary-pass": 1
@@ -420,7 +420,7 @@
   },
   "addons/cogito/Components/PlayerInteractionComponent.gd": {
    "class-definitions-order": 24,
-   "max-line-length": 22,
+   "max-line-length": 21,
    "max-public-methods": 1,
    "no-else-return": 1
   },

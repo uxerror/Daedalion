@@ -1,3 +1,13 @@
+# Daedalion 1.3.1
+
+Bug fixes for NPC combat. No breaking changes; the save format is unchanged.
+
+## Fixed
+
+- An NPC hit by a projectile was sent towards the level origin: projectiles fired by the pistol, the NPC blaster and throwables had no origin. Projectiles and thrown objects now record where they came from and who fired them (`CogitoObject.shooter`).
+- Hits were ignored while an NPC was Alerted, Investigating or Searching. A hostile NPC shot by the player now chases that player from any calm state (including Idle); other hits alert it again towards the attacker. Use `CogitoNPC.attacker_of()` to find who caused a hit.
+- An NPC that started a chase without investigating first fired from its holstered weapon, so shots came out of its body. A chase now draws the weapon, and an attack never fires a holstered weapon.
+
 # Daedalion 1.3.0
 
 Changes are relative to Cogito 1.2.0. Projects moving to this release should follow the [migration guide](migration-1.2-to-1.3.md).

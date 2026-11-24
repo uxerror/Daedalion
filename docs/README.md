@@ -4,7 +4,7 @@ Based on the Cogito wiki page Home (https://codeberg.org/Phazorknight/Cogito/wik
 
 Daedalion is a first-person immersive-sim template for Godot 4.7.2. It is an independent fork of [Cogito](https://codeberg.org/Phazorknight/Cogito) by Philip Drobar and contributors. The demo brings together a player controller, interactive objects, inventory, quests and persistent levels.
 
-Documentation for Daedalion 1.3.0; docs for other versions: browse the docs/ folder at that git tag.
+Documentation for Daedalion 1.3.1; docs for other versions: browse the docs/ folder at that git tag.
 
 ![Cogito first-person demo with interactive objects](img/COGITO_assetstore_202504_01.jpg)
 
@@ -12,7 +12,7 @@ Documentation for Daedalion 1.3.0; docs for other versions: browse the docs/ fol
 
 - [Getting started](getting-started.md) — run the demo and create a playable level.
 - [Migration from Cogito 1.2](migration-1.2-to-1.3.md) — update a project and transfer its saves.
-- [1.3.0 changelog](changelog.md) — review breaking changes and included upstream work.
+- [1.3 changelog](changelog.md) — review breaking changes and included upstream work.
 
 ## Build a game
 
