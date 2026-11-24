@@ -22,7 +22,7 @@ func _ready():
 
 func _physics_process(delta):
 
-	if player_node and player_node.is_sitting and CogitoSceneManager._current_sittable_node == self:
+	if player_node and player_node.is_sitting and player_node.current_seat == self:
 		handle_input(delta)
 		apply_momentum(delta)
 
@@ -35,16 +35,21 @@ func _physics_process(delta):
 
 func handle_input(delta):
 
+	var held: int
+	if player_node is CogitoPlayerAdvanced:
+		held = player_node.current_command.held
+	elif player_node.is_local_presentation:
+		held = CogitoLocalInputSource.sample_buttons()
 	var input_vector = Vector3.ZERO
-	if Input.is_action_pressed("forward"):
+	if held & (1 << CogitoPlayerCommand.Action.FORWARD):
 		input_vector.z += 1
-	elif Input.is_action_pressed("back"):
+	elif held & (1 << CogitoPlayerCommand.Action.BACK):
 		input_vector.z -= 1
 
 	var rotation_input = 0.0
-	if Input.is_action_pressed("left"):
+	if held & (1 << CogitoPlayerCommand.Action.LEFT):
 		rotation_input += 1
-	elif Input.is_action_pressed("right"):
+	elif held & (1 << CogitoPlayerCommand.Action.RIGHT):
 		rotation_input -= 1
 
 	if vehicle_node:

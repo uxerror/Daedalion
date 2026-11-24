@@ -10,15 +10,13 @@ extends Control
 
 var hold_interaction: HoldInteraction
 var is_holding : bool = false
-var player_interaction_component
+var player_interaction_component: PlayerInteractionComponent
 
 
 func _ready() -> void:
 	hide()
 	progress_wheel.current_value = 0.0
 	hold_timer.timeout.connect(_on_hold_complete)
-	await get_tree().process_frame
-	player_interaction_component = CogitoSceneManager.get_player().player_interaction_component
 
 
 func _process(_delta: float) -> void:
@@ -36,7 +34,15 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if player_interaction_component and player_interaction_component.player is CogitoPlayerAdvanced:
+		return # Advanced delivers releases in command order, including very short taps.
 	if is_holding and event.is_action_released(hold_interaction.input_map_action):
+		release_action(hold_interaction.input_map_action)
+
+
+## Accept a routed release as well, including a tap completed between physics ticks.
+func release_action(action: StringName) -> void:
+	if is_holding and hold_interaction.input_map_action == action:
 		hold_interaction.perform_quick_action(player_interaction_component)
 		stop_holding()
 

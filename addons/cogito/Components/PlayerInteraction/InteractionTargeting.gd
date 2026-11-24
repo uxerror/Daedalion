@@ -38,7 +38,7 @@ func get_reach() -> float:
 ## Helper function to always get raycast destination point
 func get_interaction_raycast_tip(distance_offset: float) -> Vector3:
 	var interaction_raycast := pic.interaction_raycast
-	var destination_point = interaction_raycast.global_position + (interaction_raycast.target_position.z - distance_offset) * get_viewport().get_camera_3d().get_global_transform().basis.z
+	var destination_point = interaction_raycast.global_position + (interaction_raycast.target_position.z - distance_offset) * pic.player.get_aim_transform().basis.z
 	if interaction_raycast.is_colliding():
 		#if destination_point == interaction_raycast.get_collision_point():
 		return interaction_raycast.get_collision_point()
@@ -48,9 +48,7 @@ func get_interaction_raycast_tip(distance_offset: float) -> Vector3:
 
 # Function to get a normalised vector3 in direction the player is looking.
 func get_look_direction() -> Vector3:
-	var viewport = get_viewport().get_visible_rect().size
-	var camera = get_viewport().get_camera_3d()
-	return camera.project_ray_normal(viewport/2)
+	return -pic.player.get_aim_transform().basis.z.normalized()
 
 
 func rebuild_interaction_prompts() -> void:

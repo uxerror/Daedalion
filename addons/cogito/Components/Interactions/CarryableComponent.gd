@@ -25,7 +25,6 @@ signal thrown(impulse)
 ## Extra rotation speed multiplier for gamepad joysticks
 @export var gamepad_sensitivity : float = 20
 
-var camera : Camera3D
 var parent_object
 var is_being_carried : bool
 var is_being_rotated : bool = false
@@ -84,13 +83,13 @@ func _physics_process(_delta):
 		carry_position = player_interaction_component.carrying.get_carryable_destination_point(carry_distance_offset)
 		parent_object.set_linear_velocity((carry_position - parent_object.global_position) * carrying_velocity_multiplier)
 		
-		if Input.is_action_pressed("action_secondary") and enable_manual_rotating:
+		if player_interaction_component.wieldables.secondary_action_held and enable_manual_rotating:
 			player_interaction_component.set_mouselook_enabled(false)
 			is_being_rotated = true
 		
 		# Resume player movement when input action is released
 		if is_being_rotated:
-			if Input.is_action_just_released("action_secondary"):
+			if not player_interaction_component.wieldables.secondary_action_held:
 				player_interaction_component.set_mouselook_enabled(true)
 				is_being_rotated = false
 				
@@ -102,7 +101,8 @@ func _physics_process(_delta):
 
 
 func _input(event: InputEvent) -> void:
-	if !is_being_rotated: return
+	if !is_being_rotated or not is_being_carried: return
+	if not carrier.is_local_presentation or not InputRouter.is_input_active(carrier): return
 	
 	if event is InputEventMouseMotion:
 		rotate_object(event.relative)
@@ -117,10 +117,8 @@ func _input(event: InputEvent) -> void:
 
 func rotate_object(input_dir: Vector2):	
 	if input_dir.length() > 0:
-		if not camera:
-			camera = get_viewport().get_camera_3d()
-		
-		var rotation_basis: Basis = camera.global_basis.rotated(camera.global_basis.x, -camera.global_rotation.x)
+		var aim := player_interaction_component.player.get_aim_transform().basis
+		var rotation_basis: Basis = aim.rotated(aim.x, -aim.get_euler().x)
 		var rotation_vector: Vector3 = rotation_basis * Vector3(input_dir.y, input_dir.x, 0).normalized()
 		parent_object.global_rotate(rotation_vector, deg_to_rad(rotation_speed * input_dir.length() * get_process_delta_time()) )
 
@@ -165,6 +163,8 @@ func leave():
 		player_interaction_component.wieldables.auto_equip_last_wieldable()
 		player_interaction_component.targeting.remove_exception(parent_object)
 	is_being_carried = false
+	is_being_rotated = false
+	gamepad_rotation = Vector2.ZERO
 	carrier = null
 	carry_state_changed.emit(is_being_carried)
 

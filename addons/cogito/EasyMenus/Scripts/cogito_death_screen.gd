@@ -10,6 +10,7 @@ signal back_to_main_pressed
 @export var empty_slot_texture : Texture
 
 var playback : AudioStreamPlaybackPolyphonic
+var _pauses_world: bool
 
 @onready var label_active_slot: Label = %Label_ActiveSlot
 @onready var load_button: Button = %ReloadButton
@@ -57,7 +58,9 @@ func on_input(event : InputEvent) -> void:
 
 
 func open_death_screen() -> void:
-	get_tree().paused = true
+	_pauses_world = not CogitoNet.is_online()
+	if _pauses_world:
+		get_tree().paused = true
 	InputRouter.push(on_input)
 	if InputHelper.device_index == -1:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -80,7 +83,8 @@ func open_death_screen() -> void:
 func _exit_tree() -> void:
 	if InputRouter.input_stack.has(on_input):
 		InputRouter.remove(on_input)
-		get_tree().paused = false
+		if _pauses_world:
+			get_tree().paused = false
 
 
 func _on_quit_button_pressed() -> void:

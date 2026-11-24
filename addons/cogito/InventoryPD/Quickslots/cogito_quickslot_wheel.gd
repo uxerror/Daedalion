@@ -108,7 +108,7 @@ var _shown_set : CogitoQuickslotSet
 # Selection of every set shown while open, from before it got shown (or after an activation). Restored on leaving / closing.
 var _selection_before : Dictionary = {}
 var _hover_started_msec : int = 0
-var _time_scale_before_open : float = 1.0
+var _time_scale_before_open : float = -1.0
 var _icons : Array[TextureRect] = []
 var _counters : Array[Label] = []
 var _name_label : Label
@@ -200,8 +200,8 @@ func open() -> bool:
 	_joy_needs_recentre = false
 	_selection_before.clear()
 	_show_set(current_set)
-	_time_scale_before_open = Engine.time_scale
-	if time_scale_while_open < 1.0:
+	if time_scale_while_open < 1.0 and not CogitoNet.is_online():
+		_time_scale_before_open = Engine.time_scale
 		Engine.time_scale = time_scale_while_open
 	InputRouter.push(_on_router_input)
 	set_process(true)
@@ -463,8 +463,9 @@ func _show_set(new_set: CogitoQuickslotSet) -> void:
 
 
 func _restore_time_scale() -> void:
-	if time_scale_while_open < 1.0:
+	if _time_scale_before_open >= 0.0:
 		Engine.time_scale = _time_scale_before_open
+		_time_scale_before_open = -1.0
 
 
 # The look stick was ours while the wheel was open. Pass its current state on,

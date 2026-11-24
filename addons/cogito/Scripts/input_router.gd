@@ -4,6 +4,8 @@
 ## input(event: InputEvent) method here instead of using the
 ## built-in _input(event: InputEvent) method!
 extends Node
+## Emitted after the active callback changes, including while the tree is paused.
+signal active_changed()
 signal on_input(event: InputEvent)
 
 ## Holds all subscribed input methods. The last method in this list
@@ -44,6 +46,7 @@ func push(method: Callable) -> void:
 	Input.flush_buffered_events()
 	input_stack.push_back(method)
 	on_input.connect(method)
+	active_changed.emit()
 
 ## Remove the method at the top of the stack and return it. The next top
 ## method becomes the one that's in control.
@@ -61,6 +64,7 @@ func pop() -> Callable:
 		CogitoGlobals.debug_log(true, "InputRouter", "  - Connecting to previous object on stack")
 		on_input.connect(input_stack.back())
 		
+	active_changed.emit()
 	return callable
 	
 ## Remove the given method, no matter where it is in the queue. If it was on
@@ -77,6 +81,8 @@ func remove(method: Callable) -> void:
 			CogitoGlobals.debug_log(true, "InputRouter", "  - Connecting to previous object on stack")
 			Input.flush_buffered_events()
 			on_input.connect(input_stack.back())
+		if was_top:
+			active_changed.emit()
 
 ## Get whether the given node owns the input method that's currently
 ## on the top of the method stack.

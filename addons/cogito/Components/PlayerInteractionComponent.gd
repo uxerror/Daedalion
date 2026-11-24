@@ -74,6 +74,22 @@ func _process(_delta):
 
 
 func on_input(event: InputEvent) -> void:
+	if handles_action_event(event):
+		get_viewport().set_input_as_handled()
+	on_action_input(event, InputHelper.device_index != -1)
+
+
+## Whether this real input event should stop at the player before GUI propagation.
+func handles_action_event(event: InputEvent) -> bool:
+	if event.is_action_pressed("action_primary"):
+		return wieldables.is_wielding or is_instance_valid(carrying.carried_object)
+	if event.is_action_released("action_primary"):
+		return wieldables.is_wielding and not carrying.is_carrying
+	return wieldables.is_wielding and event.is_action("action_secondary")
+
+
+## Handles a decoded action for this actor. Local sources resolve shared gamepad bindings.
+func on_action_input(event: InputEvent, gamepad: bool = false) -> void:
 	if event.is_action_pressed("interact") or event.is_action_pressed("interact2"):
 		var action: String = "interact" if event.is_action_pressed("interact") else "interact2"
 		start_interaction(action)
@@ -82,40 +98,59 @@ func on_input(event: InputEvent) -> void:
 		wieldables.primary_action_held = true
 		if carrying.is_carrying and is_instance_valid(carrying.carried_object):
 			carrying.attempt_throw()
-			get_viewport().set_input_as_handled()
 		elif wieldables.is_wielding:
 			wieldables.attempt_action_primary(false)
-			get_viewport().set_input_as_handled()
 
 	elif event.is_action_released("action_primary"):
 		wieldables.primary_action_held = false
 		if wieldables.is_wielding and !carrying.is_carrying:
 			wieldables.attempt_action_primary(true)
-			get_viewport().set_input_as_handled()
 
 	if event.is_action_pressed("action_secondary"):
+		wieldables.secondary_action_held = true
 		if wieldables.is_wielding:
 			wieldables.attempt_action_secondary(false)
-			get_viewport().set_input_as_handled()
 	elif event.is_action_released("action_secondary"):
+		wieldables.secondary_action_held = false
 		if wieldables.is_wielding:
 			wieldables.attempt_action_secondary(true)
-			get_viewport().set_input_as_handled()
 
 	if event.is_action_pressed("change_ammo_type") and wieldables.is_wielding:
 		wieldables.attempt_change_ammo()
 
 	if event.is_action_pressed("reload") and wieldables.is_wielding:
 		# The below is a fix to avoid triggering reload when player attempts to interact and both actions are bound to same (gamepad) button
-		if InputHelper.device_index == -1: # If mouse/keyboard
+		if not gamepad:
 			wieldables.attempt_reload()
 		else:
 			if targeting.interactable == null:
 				wieldables.attempt_reload()
 
+
+## End latched fire and aim when a menu takes over, even if physics has just been paused.
+func release_held_actions() -> void:
+	if wieldables.primary_action_held:
+		wieldables.primary_action_held = false
+		if wieldables.is_wielding and not carrying.is_carrying:
+			wieldables.attempt_action_primary(true)
+	if wieldables.secondary_action_held:
+		wieldables.secondary_action_held = false
+		if wieldables.is_wielding:
+			wieldables.attempt_action_secondary(true)
+
+
 ## Interacts with the current target (targeting.interactable) using the given input action, like pressing that action does.
 ## Lets other controllers trigger interactions, for example after walking to an object that was clicked.
 func start_interaction(action: String) -> void:
+	# Seat entry/exit is part of locomotion. Other legacy world interactions may open
+	# process-wide interfaces and will get explicit recipients in MP2.
+	if not player.is_local_presentation:
+		var seat := targeting.interactable as CogitoSittable
+		if seat and not carrying.is_carrying:
+			var sit: InteractionComponent = seat.BasicInteraction
+			if sit.input_map_action == action and not sit.is_disabled and not _is_interaction_blocked(sit):
+				sit.interact(self)
+		return
 	# if carrying an object, drop it.
 	if carrying.is_carrying:
 		if is_instance_valid(carrying.carried_object):

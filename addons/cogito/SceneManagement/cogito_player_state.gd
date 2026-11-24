@@ -107,6 +107,8 @@ func load_common_data(player) -> void:
 	if player_inventory:
 		player.inventory_data = player_inventory
 	var inventory: CogitoInventory = player.inventory_data
+	if inventory:
+		inventory.owner = player
 	var items := _restore_inventory(inventory) if inventory else {}
 
 	player.saved_quest_progression = player_active_quest_progression.duplicate(true)

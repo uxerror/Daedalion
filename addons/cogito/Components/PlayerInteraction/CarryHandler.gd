@@ -26,8 +26,7 @@ func get_carryable_destination_point(distance_offset: float) -> Vector3:
 		print("PIC: Error, no carryable position reference set!")
 		return pic.global_position
 
-	var camera = get_viewport().get_camera_3d()
-	var looking_vector = -camera.global_transform.basis.z.normalized()
+	var looking_vector = pic.targeting.get_look_direction()
 	var pitch = atan2(looking_vector.y, Vector2(looking_vector.x, looking_vector.z).length())
 	var look_down_factor = clamp(pitch, -PI / 2.0, 0.0) / (-PI / 2.0)
 	var safe_distance_offset = look_down_factor

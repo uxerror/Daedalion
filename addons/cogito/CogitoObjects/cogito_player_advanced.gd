@@ -3,6 +3,7 @@
 class_name CogitoPlayerAdvanced
 extends CogitoPlayer
 
+const ACTION := CogitoPlayerCommand.Action
 
 signal mouse_movement(relative_mouse_movement:Vector2)
 
@@ -157,8 +158,14 @@ var is_jumping_started : bool = false
 var is_in_air : bool = false
 
 var input_direction : Vector2 = Vector2.ZERO
-var joystick_h_event
-var joystick_v_event
+
+## Assign an independent source before adding this actor to the tree.
+var input_source: CogitoPlayerInputSource
+## Intent sampled before this tick's state chart callbacks.
+var current_command := CogitoPlayerCommand.new()
+## Acknowledgement hook for the last accepted sequence.
+var last_consumed_sequence: int = -1
+var _input_suspended := false
  
 var initial_carryable_height #DEPRECATED Used to change carryable position based if player is standing or crouching
 
@@ -187,10 +194,11 @@ var ledge_climbing_shapecast_initial_position : Vector3
 # Node caching
 @onready var neck: Node3D = $Body/Neck
 @onready var eyes: Node3D = $Body/Neck/Head/Eyes
-@onready var camera: Camera3D = $Body/Neck/Head/Eyes/Camera
+@onready var _aim: Node3D = $Body/Neck/Head/Eyes/Camera
+@onready var camera: Camera3D = _aim as Camera3D
 @onready var animationPlayer: AnimationPlayer = $Body/Neck/Head/Eyes/AnimationPlayer
 @onready var swimming_head_shapecast: ShapeCast3D = $Body/Neck/Head/Eyes/Camera/SwimmingHeadShapeCast
-@onready var under_water_effect: ColorRect = $GUI/Panel/AspectRatioContainer/UnderWaterEffect
+@onready var under_water_effect: ColorRect = get_node_or_null("GUI/Panel/AspectRatioContainer/UnderWaterEffect")
 @onready var crouch_shapecast: ShapeCast3D = $CrouchShapeCast
 
 @onready var standing_collision_shape: CollisionShape3D = $StandingCollisionShape
@@ -220,18 +228,47 @@ var ledge_climbing_shapecast_initial_position : Vector3
 #endregion
 
 
+func _enter_tree() -> void:
+	if is_local_presentation:
+		return
+	# Remove local-only subtrees before their input, HUD and device callbacks register.
+	if has_node("GUI"):
+		player_hud = null
+		$GUI.free()
+	var view := get_node("Body/Neck/Head/Eyes/Camera") as Camera3D
+	if view:
+		# A viewport automatically selects its first Camera3D even with current = false.
+		# Retain the animated aim transform, its casts and the legacy save path.
+		var aim := Node3D.new()
+		aim.transform = view.transform
+		view.replace_by(aim)
+		aim.name = "Camera"
+		view.free()
+	# Dedicated roll completion follows physics time even without rendering.
+	$Body/Neck/Head/Eyes/AnimationPlayer.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_PHYSICS
+
+
 func _ready():
 	#Some Setup steps
 	if uid == -1:
 		uid = get_instance_id()
 	
 	initial_collision_mask = collision_mask
+	if inventory_data:
+		if not is_local_presentation:
+			inventory_data = inventory_data.duplicate_deep(Resource.DEEP_DUPLICATE_ALL)
+		inventory_data.owner = self
 	
-	CogitoSceneManager.register_player(self)
+	if is_local_presentation:
+		CogitoSceneManager.register_player(self)
+		$GUI/Panel/AspectRatioContainer/StateChartDebugger.enabled = CogitoGlobals.cogito_settings.is_state_chart_debugger_enabled
+		if not input_source:
+			input_source = CogitoLocalInputSource.new()
+	elif not input_source or input_source is CogitoLocalInputSource:
+		input_source = CogitoPlayerInputSource.new()
 	player_interaction_component.interaction_raycast = $Body/Neck/Head/Eyes/Camera/InteractionRaycast
 	player_interaction_component.exclude_player(get_rid())
 	
-	$GUI/Panel/AspectRatioContainer/StateChartDebugger.enabled = CogitoGlobals.cogito_settings.is_state_chart_debugger_enabled
 	
 	randomize() 
 	
@@ -264,20 +301,53 @@ func _ready():
 		actor_elements.stunned.connect(_on_element_stunned)
 	
 	_initialize_state_chart()
-	_reload_options()
-	
-	#Sittable Signals setup
-	CogitoSceneManager.connect("sit_requested", Callable(self, "_on_sit_requested"))
-	CogitoSceneManager.connect("stand_requested", Callable(self, "_on_stand_requested"))
-	CogitoSceneManager.connect("seat_move_requested", Callable(self, "_on_seat_move_requested"))
-	
+	if is_local_presentation:
+		_reload_options()
+		CogitoSceneManager.sit_requested.connect(_on_sit_requested)
+		CogitoSceneManager.stand_requested.connect(_on_stand_requested)
+		CogitoSceneManager.seat_move_requested.connect(_on_seat_move_requested)
+
 	CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Player has no reference to pause menu.")
 
 	call_deferred("slide_audio_init")
 	call_deferred("swim_audio_init")
 	
-	Input.mouse_mode = gameplay_mouse_mode
-	InputRouter.push(on_input)
+	if is_local_presentation:
+		Input.mouse_mode = gameplay_mouse_mode
+		InputRouter.active_changed.connect(_on_input_owner_changed)
+		InputRouter.push(on_input)
+
+
+func _exit_tree() -> void:
+	if is_local_presentation:
+		InputRouter.active_changed.disconnect(_on_input_owner_changed)
+		InputRouter.remove(on_input)
+
+
+func neutral_command(sequence: int) -> CogitoPlayerCommand:
+	var command := super.neutral_command(sequence)
+	command.neck_yaw = neck.rotation.y
+	command.toggle_crouch = TOGGLE_CROUCH
+	return command
+
+
+## The animated eye transform is also available on an avatar without a viewport camera.
+func get_aim_transform() -> Transform3D:
+	return _aim.global_transform
+
+
+func _on_input_owner_changed() -> void:
+	_input_suspended = not InputRouter.is_input_active(self)
+	if not _input_suspended or not is_node_ready():
+		return
+	if input_source is CogitoLocalInputSource:
+		input_source.clear()
+	current_command = neutral_command(last_consumed_sequence)
+	current_command.has_control = false
+	player_interaction_component.release_held_actions()
+	var hud := player_hud as CogitoPlayerHudManager
+	if hud and hud.hold_ui and hud.hold_ui.is_holding:
+		hud.hold_ui.stop_holding()
 
 
 func create_new_state() -> CogitoPlayerState:
@@ -317,11 +387,13 @@ func _reload_options():
 # Signal from Pause Menu
 func _on_pause_menu_resume() -> void:
 	_reload_options()
-	resume()
+	if not CogitoNet.is_online():
+		resume()
 
 
 func _on_pause_menu_pause() -> void:
-	pause()
+	if not CogitoNet.is_online():
+		pause()
 
 
 func pause() -> void:
@@ -334,83 +406,40 @@ func resume() -> void:
 	state_chart.send_event("resume")
 
 
-func on_input(event):
-	if event is InputEventMouseMotion and is_mouselook_active:
-		var look_movement: Vector2 = Vector2(0.0,0.0)
-		
-		#If players sitting & look marker is present, use sittable look handling
-		if is_sitting and CogitoSceneManager._current_sittable_node.look_marker_node:
-			handle_sitting_look(event)
+## Compatibility entry point for InputRouter and custom local input callers.
+func on_input(event: InputEvent) -> void:
+	if is_local_presentation and input_source is CogitoLocalInputSource:
+		input_source.on_input(self, event)
+
+
+func _handle_menu() -> void:
+	if CogitoSceneManager.is_currently_loading: return
+	
+	if is_showing_ui: #Behaviour when pressing ESC/menu while external UI is open (Readables, Keypad, etc)
+		menu_pressed.emit(player_interaction_component)
+	elif !is_in_unpausable_state and !is_dead:
+		if !currently_tweening:
+			if pause_menu:
+				var current_pause_menu = pause_menu.instantiate()
+				current_pause_menu.pause_menu_closed.connect(_on_pause_menu_resume)
+				current_pause_menu.pause_menu_opened.connect(_on_pause_menu_pause)
+				add_child(current_pause_menu)
+			else:
+				CogitoGlobals.debug_log(true, "cogito_player_advanced", "Unable to open Pause Menu! Player has no reference to a Pause Menu PackedScene!")
 		else:
-			if is_free_looking:
-				neck.rotate_y(deg_to_rad(-event.relative.x * MOUSE_SENS))
-				neck.rotation.y = clamp(neck.rotation.y, deg_to_rad(-120), deg_to_rad(120))
-			else:
-				body.rotate_y(deg_to_rad(-event.relative.x * MOUSE_SENS))
-				look_movement.x = -event.relative.x
-			
-			if INVERT_Y_AXIS:
-				head.rotate_x(-deg_to_rad(-event.relative.y * MOUSE_SENS))
-				look_movement.y = -event.relative.y
-			else:
-				head.rotate_x(deg_to_rad(-event.relative.y * MOUSE_SENS))
-				look_movement.y = event.relative.y
-			head.rotation.x = clamp(head.rotation.x, deg_to_rad(-90), deg_to_rad(90))
-			
-		mouse_movement.emit(look_movement)
+			player_interaction_component.send_hint(null, "Wait until I’m seated or standing")
 
-	# Checking Analog stick input for mouse look
-	if event is InputEventJoypadMotion and is_mouselook_active:
-		if event.get_axis() == 2:
-			joystick_v_event = event
-		if event.get_axis() == 3:
-			joystick_h_event = event
-	
-	# Struggling against a freeze: every new movement key press breaks some of the ice.
-	if actor_elements and actor_elements.is_frozen() and _is_new_move_press(event):
-		actor_elements.struggle()
-	
-	# Element states (stunned, frozen) block interacting and using wieldables. Releases still pass, so held actions end.
-	if can_act() or !event.is_pressed():
-		player_interaction_component.on_input(event)
-	
-	# Opens Pause Menu if Menu button is proessed.
-	if event.is_action_pressed("menu"):
-		if CogitoSceneManager.is_currently_loading: return
-		
-		if is_showing_ui: #Behaviour when pressing ESC/menu while external UI is open (Readables, Keypad, etc)
-			menu_pressed.emit(player_interaction_component)
-			if player_hud.is_inventory_visible(): #Behaviour when pressing ESC/menu while Inventory is open
-				pass
-		elif !is_in_unpausable_state and !is_dead:
-			if !currently_tweening:
-				if pause_menu:
-					var current_pause_menu = pause_menu.instantiate()
-					current_pause_menu.pause_menu_closed.connect(_on_pause_menu_resume)
-					current_pause_menu.pause_menu_opened.connect(_on_pause_menu_pause)
-					add_child(current_pause_menu)
-				else:
-					CogitoGlobals.debug_log(true, "cogito_player_advanced", "Unable to open Pause Menu! Player has no reference to a Pause Menu PackedScene!")
-			else:
-				player_interaction_component.send_hint(null, "Wait until I’m seated or standing")
 
-	# Open/closes Inventory if Inventory button is pressed
-	if event.is_action_pressed("inventory") and !is_dead:
-		player_hud.set_inventory_visibility(true)
-		
-	# Quick slots are part of the first person HUD.
+## Notifies first-person wieldables of immediate look motion.
+func report_mouse_movement(movement: Vector2) -> void:
+	mouse_movement.emit(movement)
+
+
+## Passes a local presentation event to the configured quickslot views.
+func handle_quickslot_input(event: InputEvent) -> void:
 	var fp_hud : CogitoPlayerHudManager = player_hud as CogitoPlayerHudManager
 	if fp_hud and fp_hud.inventory_interface and fp_hud.inventory_interface.quick_slots and can_act():
 		fp_hud.inventory_interface.quick_slots.on_input(event)
-
-
-func _is_new_move_press(event: InputEvent) -> bool:
-	if !event.is_pressed() or event.is_echo():
-		return false
-	for action in [&"forward", &"back", &"left", &"right"]:
-		if event.is_action_pressed(action):
-			return true
-	return false
 
 
 ## A stun ends held wieldable actions (e.g. automatic fire).
@@ -439,25 +468,13 @@ func test_motion(transform3d: Transform3D, motion: Vector3) -> bool:
 	return PhysicsServer3D.body_test_motion(self_rid, get_params(transform3d, motion), test_motion_result)	
 
 
-func _process_analog_stick_mouselook():
-	if !InputRouter.is_input_active(self): return
-	
-	if joystick_h_event:
-			if abs(joystick_h_event.get_axis_value()) > JOY_DEADZONE:
-				if INVERT_Y_AXIS:
-					head.rotate_x(deg_to_rad(joystick_h_event.get_axis_value() * JOY_H_SENS))
-				else:
-					head.rotate_x(-deg_to_rad(joystick_h_event.get_axis_value() * JOY_H_SENS))
-				head.rotation.x = clamp(head.rotation.x, deg_to_rad(-90), deg_to_rad(90))
-				
-	if joystick_v_event:
-		if abs(joystick_v_event.get_axis_value()) > JOY_DEADZONE:
-			neck.rotate_y(deg_to_rad(-joystick_v_event.get_axis_value() * JOY_V_SENS))
-			neck.rotation.y = clamp(neck.rotation.y, deg_to_rad(-120), deg_to_rad(120))	
+## The local sampler uses the same free-look rule as the animation.
+func free_look_requested(command: CogitoPlayerCommand) -> bool:
+	return command.is_held(ACTION.FREE_LOOK) or !sliding_timer.is_stopped() or current_moving_state == MovingState.Rolling
 
 
 func _free_look(delta):
-	if Input.is_action_pressed("free_look") or !sliding_timer.is_stopped() or current_moving_state == MovingState.Rolling:
+	if free_look_requested(current_command):
 		is_free_looking = true
 		if sliding_timer.is_stopped():
 			eyes.rotation.z = -deg_to_rad(
@@ -471,8 +488,6 @@ func _free_look(delta):
 			)
 	else:
 		is_free_looking = false
-		body.rotation.y += neck.rotation.y
-		neck.rotation.y = 0
 		eyes.rotation.z = lerp(
 			eyes.rotation.z,
 			0.0,
@@ -666,8 +681,55 @@ func _on_player_state_loaded():
 
 
 func _physics_process(delta):
-	_process_analog_stick_mouselook()
+	var next_sequence := last_consumed_sequence + 1
+	var command: CogitoPlayerCommand
+	if _input_suspended:
+		command = neutral_command(next_sequence)
+		command.has_control = false
+	else:
+		command = input_source.sample(self, next_sequence)
+	if command and command.sequence > last_consumed_sequence:
+		current_command = command
+		last_consumed_sequence = command.sequence
+		body.rotation.y = command.yaw
+		head.rotation.x = clampf(command.pitch, -PI / 2.0, PI / 2.0)
+		neck.rotation.y = command.neck_yaw
+		for index in command.edges.size():
+			_handle_command_edge(command.edges[index], index)
+			if current_command != command:
+				break # Opening a menu transferred input while consuming this frame.
 	_free_look(delta)
+
+
+func _handle_command_edge(edge: int, index: int) -> void:
+	var action := edge & ~CogitoPlayerCommand.RELEASE
+	var pressed := (edge & CogitoPlayerCommand.RELEASE) == 0
+	if action <= ACTION.BACK and pressed and actor_elements and actor_elements.is_frozen():
+		actor_elements.struggle()
+	if action == ACTION.CROUCH and pressed and current_command.toggle_crouch and not is_movement_locked_by_elements():
+		if current_moving_state not in [MovingState.Swimming, MovingState.LedgeClimbing]:
+			try_crouch = not try_crouch
+	var event := InputEventAction.new()
+	event.action = CogitoPlayerCommand.ACTIONS[action]
+	event.pressed = pressed
+	if can_act() or not pressed:
+		player_interaction_component.on_action_input(event)
+	if not is_local_presentation:
+		return
+	if pressed and action == ACTION.MENU:
+		_handle_menu()
+	elif pressed and action == ACTION.INVENTORY and not is_dead:
+		player_hud.set_inventory_visibility(true)
+	var view_event := event as InputEvent
+	if input_source is CogitoLocalInputSource:
+		view_event = input_source.view_event(index)
+	if view_event:
+		handle_quickslot_input(view_event)
+	if not pressed and player_hud is CogitoPlayerHudManager:
+		var hud := player_hud as CogitoPlayerHudManager
+		if hud.hold_ui:
+			hud.hold_ui.release_action(event.action)
+
 
 #region State Chart
 enum MovingState {
@@ -886,7 +948,7 @@ func _handle_jump_on_platform():
 func _jump(_jump_target_speed) -> void:
 	jump_target_speed = _jump_target_speed
 	
-	if Input.is_action_pressed("sprint"):
+	if current_command.is_held(ACTION.SPRINT):
 		was_sprinting = true
 	else:
 		was_sprinting = false
@@ -903,7 +965,8 @@ func _jump(_jump_target_speed) -> void:
 		decrease_attribute("stamina",stamina_attribute.jump_exhaustion)
 	
 	animationPlayer.play("jump")
-	CogitoAudio.play_sound(jump_sound)
+	if is_local_presentation:
+		CogitoAudio.play_sound(jump_sound)
 	
 	if current_moving_state != MovingState.LadderClimbing:
 		main_velocity.y = jump_vel
@@ -931,7 +994,8 @@ func _sliding_jump(_jump_target_speed) -> void:
 		decrease_attribute("stamina",stamina_attribute.jump_exhaustion)
 	
 	animationPlayer.play("jump")
-	CogitoAudio.play_sound(jump_sound)
+	if is_local_presentation:
+		CogitoAudio.play_sound(jump_sound)
 
 	main_velocity.y = JUMP_VELOCITY * SLIDE_JUMP_MOD
 	
@@ -948,13 +1012,12 @@ func _sliding_jump(_jump_target_speed) -> void:
 
 
 func _input_handling_and_movement(delta):
-	var active = InputRouter.is_input_active(self)
-	input_direction = Input.get_vector("left", "right", "forward", "back")
+	input_direction = current_command.move
 	current_speed = clamp(current_speed, MIN_SPEED, MAX_SPEED)
 	# Element states (chilled, frozen, stunned) slow the player down.
 	var target_speed : float = current_speed * get_element_speed_multiplier()
 	
-	if direction and active:
+	if direction and current_command.has_control:
 		main_velocity.x = lerp(main_velocity.x, direction.x * target_speed, delta * current_lerp_speed)
 		main_velocity.z = lerp(main_velocity.z, direction.z * target_speed, delta * current_lerp_speed)
 	else:
@@ -975,6 +1038,11 @@ func _input_handling_and_movement(delta):
 	velocity = main_velocity_before_stair_stepping
 	
 	move_and_slide()
+
+
+func _show_underwater_effect(show_effect: bool) -> void:
+	if under_water_effect:
+		under_water_effect.visible = show_effect
 
 
 func _handle_swim_under_water_sounds():
@@ -1032,9 +1100,9 @@ func _on_grounded_state_physics_processing(delta: float) -> void:
 	_input_handling_and_movement(delta)
 	
 	if not is_head_in_water():
-		under_water_effect.visible = false
+		_show_underwater_effect(false)
 	else:
-		under_water_effect.visible = true
+		_show_underwater_effect(true)
 	
 	_handle_swim_under_water_sounds()
 	
@@ -1073,7 +1141,6 @@ func _on_grounded_state_physics_processing(delta: float) -> void:
 		state_chart.send_event("slide")
 		return
 	
-	if !InputRouter.is_input_active(self): return
 	
 	if current_moving_state != MovingState.Sliding and input_direction != Vector2.ZERO:
 		wiggle_vector.y = sin(wiggle_index)
@@ -1096,7 +1163,7 @@ func _on_grounded_state_physics_processing(delta: float) -> void:
 	
 	_footstep_sounds_system()
 	
-	if was_jumping and not jumped_from_slide and Input.is_action_pressed("sprint") and is_sprinting_in_airborne:
+	if was_jumping and not jumped_from_slide and current_command.is_held(ACTION.SPRINT) and is_sprinting_in_airborne:
 		if current_body_posture_state == BodyPostureState.Crouching and not jumped_from_crouch:
 			was_sprinting = false
 			state_chart.send_event("slide")
@@ -1149,7 +1216,7 @@ func _on_idle_state_physics_processing(delta: float) -> void:
 			state_chart.send_event("walk")
 			return
 	
-	if Input.is_action_pressed("jump") and InputRouter.is_input_active(self) and jump_timer.is_stopped():
+	if current_command.is_held(ACTION.JUMP) and jump_timer.is_stopped():
 		if not _can_jump():
 			return
 		
@@ -1167,13 +1234,12 @@ func _on_walking_state_exited() -> void:
 
 
 func _on_walking_state_physics_processing(delta: float) -> void:
-	if !InputRouter.is_input_active(self): return
 	
 	if current_body_posture_state == BodyPostureState.Crouching:
 		state_chart.send_event("sneak")
 		return
 
-	if not on_ladder and Input.is_action_pressed("sprint") and stamina_attribute and stamina_attribute.value_current > 5:
+	if not on_ladder and current_command.is_held(ACTION.SPRINT) and stamina_attribute and stamina_attribute.value_current > 5:
 		state_chart.send_event("sprint")
 		return
 		
@@ -1184,7 +1250,7 @@ func _on_walking_state_physics_processing(delta: float) -> void:
 	if main_velocity.is_equal_approx(Vector3.ZERO):
 		state_chart.send_event("idle")
 	
-	if Input.is_action_pressed("jump") and jump_timer.is_stopped():
+	if current_command.is_held(ACTION.JUMP) and jump_timer.is_stopped():
 		if not _can_jump():
 			return
 
@@ -1203,16 +1269,15 @@ func _on_sprinting_state_exited() -> void:
 
 
 func _on_sprinting_state_physics_processing(delta: float) -> void:
-	if !InputRouter.is_input_active(self): return
 	
-	if Input.is_action_pressed("sprint"):
+	if current_command.is_held(ACTION.SPRINT):
 		if !stamina_attribute or (stamina_attribute and stamina_attribute.value_current > 0):
 			if stamina_attribute and stamina_attribute.value_current <= 0.2:
 				bunny_hop_speed = SPRINTING_SPEED
 				state_chart.send_event("walk")
 				return
 			
-			if !Input.is_action_pressed("jump"):
+			if !current_command.is_held(ACTION.JUMP):
 				if CAN_BUNNYHOP:
 					bunny_hop_speed = SPRINTING_SPEED
 					current_speed = lerp(current_speed, bunny_hop_speed, delta * LERP_SPEED)
@@ -1222,7 +1287,7 @@ func _on_sprinting_state_physics_processing(delta: float) -> void:
 			wiggle_current_intensity = WIGGLE_ON_SPRINTING_INTENSITY * HEADBOBBLE
 			wiggle_index += WIGGLE_ON_SPRINTING_SPEED * delta
 		
-		if Input.is_action_pressed("jump") and jump_timer.is_stopped():
+		if current_command.is_held(ACTION.JUMP) and jump_timer.is_stopped():
 			if current_speed < bunny_hop_speed - 0.2:
 				current_speed = lerp(current_speed, bunny_hop_speed, delta * LERP_SPEED)
 			else:
@@ -1266,14 +1331,13 @@ func _on_sliding_state_exited() -> void:
 
 
 func _on_sliding_state_physics_processing(delta: float) -> void:
-	if !InputRouter.is_input_active(self): return
 	
 	if input_direction == Vector2.ZERO:
 		sliding_timer.stop()
 		state_chart.send_event("idle")
 		return
 		
-	if !Input.is_action_pressed("sprint"):
+	if !current_command.is_held(ACTION.SPRINT):
 		sliding_timer.stop()
 		if current_body_posture_state == BodyPostureState.Standing:
 			state_chart.send_event("walk")
@@ -1290,7 +1354,7 @@ func _on_sliding_state_physics_processing(delta: float) -> void:
 		direction = (body.global_transform.basis * Vector3(slide_vector.x, 0.0, slide_vector.y)).normalized()
 		current_speed = (sliding_timer.time_left / sliding_timer.wait_time + 0.5) * SLIDING_SPEED
 		
-		if Input.is_action_pressed("jump") and jump_timer.is_stopped():
+		if current_command.is_held(ACTION.JUMP) and jump_timer.is_stopped():
 			if not _can_jump():
 				return
 				
@@ -1308,7 +1372,6 @@ func _on_sneaking_state_exited() -> void:
 
 
 func _on_sneaking_state_physics_processing(delta: float) -> void:
-	if !InputRouter.is_input_active(self): return
 	
 	wiggle_index += WIGGLE_ON_CROUCHING_SPEED * delta
 	eyes.position.y = lerp(eyes.position.y, 0.0, delta * LERP_SPEED)
@@ -1319,7 +1382,7 @@ func _on_sneaking_state_physics_processing(delta: float) -> void:
 	if main_velocity.is_equal_approx(Vector3.ZERO):
 		state_chart.send_event("idle")
 	
-	if Input.is_action_pressed("jump") and jump_timer.is_stopped():
+	if current_command.is_held(ACTION.JUMP) and jump_timer.is_stopped():
 		if not _can_jump():
 			return
 
@@ -1357,21 +1420,7 @@ func _on_sitting_state_physics_processing(delta: float) -> void:
 
 
 func _process_on_sittable(delta):
-	var sittable = CogitoSceneManager._current_sittable_node
-	# Processing analog stick mouselook  TODO Rewrite for Look angle marker support
-	if joystick_h_event:
-		if abs(joystick_h_event.get_axis_value()) > JOY_DEADZONE:
-			if INVERT_Y_AXIS:
-				head.rotate_x(deg_to_rad(joystick_h_event.get_axis_value() * JOY_H_SENS))
-			else:
-				head.rotate_x(-deg_to_rad(joystick_h_event.get_axis_value() * JOY_H_SENS))
-			head.rotation.x = clamp(head.rotation.x, deg_to_rad(-sittable.horizontal_look_angle), deg_to_rad(sittable.horizontal_look_angle))
-				
-	if joystick_v_event:
-		if abs(joystick_v_event.get_axis_value()) > JOY_DEADZONE:
-			neck.rotate_y(deg_to_rad(-joystick_v_event.get_axis_value() * JOY_V_SENS))
-			neck.rotation.y = clamp(neck.rotation.y, deg_to_rad(-180), deg_to_rad(180))
-
+	var sittable = current_seat
 	#avoids instantly moving to seat before tween is finished
 	if not currently_tweening:
 		self.global_transform = sittable.sit_position_node.global_transform
@@ -1384,7 +1433,7 @@ func _process_on_sittable(delta):
 		# If the angle is greater than a threshold of 45 degrees, the chair has fallen over
 		if angle_to_up > sittable.eject_angle:
 			is_ejected = true  # Set the flag to avoid repeated ejections
-			CogitoSceneManager._current_sittable_node.interact(player_interaction_component) #Interact with sittable to reset state and eject
+			current_seat.interact(player_interaction_component) #Interact with sittable to reset state and eject
 
 
 func toggle_sitting():
@@ -1409,53 +1458,15 @@ func _on_seat_move_requested(sittable: Node):
 	_sit_down()
 
 
-func handle_sitting_look(event):
-	#TODO - Fix for vehicles by handling dynamic look marker, Fix for controller support
-	var neck_position = neck.global_transform.origin
-	var look_marker_position = sittable_look_marker
-	var target_direction = Vector2(look_marker_position.x - neck_position.x, look_marker_position.z - neck_position.z).normalized()
-
-	# Get the current neck forward direction
-	var neck_forward = neck.global_transform.basis.z
-	var neck_direction = Vector2(neck_forward.x, neck_forward.z).normalized()
-
-	# Angle between neck direction and look marker direction
-	var angle_to_marker = rad_to_deg(neck_direction.angle_to(target_direction))
-
-	# Apply mouse input to rotate neck
-	neck.rotate_y(deg_to_rad(-event.relative.x * MOUSE_SENS))
-
-	# Updated neck direction after rotation
-	neck_forward = neck.global_transform.basis.z
-	neck_direction = Vector2(neck_forward.x, neck_forward.z).normalized()
-
-	# New angle after rotation
-	var new_angle_to_marker = rad_to_deg(neck_direction.angle_to(target_direction))
-	new_angle_to_marker = wrapf(new_angle_to_marker, 0, 360)
-	
-	# Check if the new angle is within the limits
-	if not (new_angle_to_marker > 180-sittable_look_angle and new_angle_to_marker < (180 + sittable_look_angle)):
-		neck.rotation.y -= deg_to_rad(-event.relative.x * MOUSE_SENS)
-	
-	if INVERT_Y_AXIS:
-		head.rotate_x(-deg_to_rad(-event.relative.y * MOUSE_SENS))
-	else:
-		head.rotate_x(deg_to_rad(-event.relative.y * MOUSE_SENS))
-	
-	var sittable = CogitoSceneManager._current_sittable_node
-	
-	if sittable.physics_sittable == false:
-		#static sittables are fine to be clamped this way
-		head.rotation.x = clamp(head.rotation.x, deg_to_rad(-sittable.vertical_look_angle), deg_to_rad(sittable.vertical_look_angle))
-	else:
-		# TODO replace with dynamic vertical look range based on look marker
-		head.rotation.x = clamp(head.rotation.x, deg_to_rad(-sittable.vertical_look_angle), deg_to_rad(sittable.vertical_look_angle))
+func handle_sitting_look(event: InputEventMouseMotion) -> void:
+	if is_local_presentation and input_source is CogitoLocalInputSource:
+		input_source.apply_seated_look(self, event.relative)
 
 
 func _sit_down():
 	is_ejected = false 
 	
-	var sittable = CogitoSceneManager._current_sittable_node
+	var sittable = current_seat
 	if sittable:
 		is_sitting = true
 		collision_mask = CogitoPhysics.CollisionMask.NONE
@@ -1491,7 +1502,7 @@ func _sit_down_finished():
 	is_sitting = true
 	crouch_shapecast.enabled = false
 	collision_mask = initial_collision_mask
-	var sittable = CogitoSceneManager._current_sittable_node
+	var sittable = current_seat
 	currently_tweening = false
 	if sittable_look_marker:
 		var tween = create_tween()
@@ -1500,7 +1511,7 @@ func _sit_down_finished():
 
 
 func _stand_up():
-	var sittable = CogitoSceneManager._current_sittable_node
+	var sittable = current_seat
 	if sittable:
 		collision_mask = CogitoPhysics.CollisionMask.NONE
 		state_chart.send_event("grounded")
@@ -1658,7 +1669,7 @@ func _on_airborne_state_physics_processing(delta: float) -> void:
 	
 	gravity_vec = gravity_vector * gravity * delta
 
-	if was_sprinting and Input.is_action_pressed("sprint"):
+	if was_sprinting and current_command.is_held(ACTION.SPRINT):
 		is_sprinting_in_airborne = true
 	else:
 		bunny_hop_speed = SPRINTING_SPEED
@@ -1758,7 +1769,7 @@ func _on_ladder_climbing_state_exited() -> void:
 
 func _on_ladder_climbing_state_physics_processing(delta: float) -> void:
 	if not is_head_in_water():
-		under_water_effect.visible = false
+		_show_underwater_effect(false)
 	
 		if was_in_swimming_state:
 			was_in_swimming_state = false
@@ -1766,42 +1777,28 @@ func _on_ladder_climbing_state_physics_processing(delta: float) -> void:
 				try_crouch = false
 				state_chart.send_event("stand_up")
 	else:
-		under_water_effect.visible = true
+		_show_underwater_effect(true)
 		
 	_process_on_ladder(delta)
 
 
 func _process_on_ladder(_delta):
-	var input_dir = Input.get_vector("left", "right", "forward", "back")
+	var input_dir = current_command.move
 	
 	_handle_swim_under_water_sounds()
 	
 	var ladder_speed = LADDER_SPEED
 	
-	if CAN_SPRINT_ON_LADDER and Input.is_action_pressed("sprint") and input_dir.length_squared() > 0.1:
+	if CAN_SPRINT_ON_LADDER and current_command.is_held(ACTION.SPRINT) and input_dir.length_squared() > 0.1:
 		#is_sprinting = true
 		if stamina_attribute.value_current > 0:
 			ladder_speed = LADDER_SPRINT_SPEED
 	#else:
 		#is_sprinting = false
 		
-	var jump = Input.is_action_pressed("jump")
+	var jump = current_command.is_held(ACTION.JUMP)
 
-	# Processing analog stick mouselook
-	if joystick_h_event:
-			if abs(joystick_h_event.get_axis_value()) > JOY_DEADZONE:
-				if INVERT_Y_AXIS:
-					head.rotate_x(deg_to_rad(joystick_h_event.get_axis_value() * JOY_H_SENS))
-				else:
-					head.rotate_x(-deg_to_rad(joystick_h_event.get_axis_value() * JOY_H_SENS))
-				head.rotation.x = clamp(head.rotation.x, deg_to_rad(-90), deg_to_rad(90))
-				
-	if joystick_v_event:
-		if abs(joystick_v_event.get_axis_value()) > JOY_DEADZONE:
-			neck.rotate_y(deg_to_rad(-joystick_v_event.get_axis_value() * JOY_V_SENS))
-			neck.rotation.y = clamp(neck.rotation.y, deg_to_rad(-120), deg_to_rad(120))
-
-	var look_vector = camera.get_camera_transform().basis
+	var look_vector = get_aim_transform().basis
 	var looking_down = look_vector.z.dot(Vector3.UP) > 0.5
 
 	# Applying ladder input_dir to direction
@@ -1837,7 +1834,7 @@ func enter_ladder(ladder: CollisionShape3D, ladderDir: Vector3):
 	# called by ladder_area.gd
 	ladder_direction = ladderDir
 	# try and capture player's intent based on where they're looking
-	var look_vector = camera.get_camera_transform().basis
+	var look_vector = get_aim_transform().basis
 	var looking_away = look_vector.z.dot(ladderDir) < 0.33
 	var looking_down = look_vector.z.dot(Vector3.UP) > 0.5
 	if looking_down or not looking_away:
@@ -1870,7 +1867,7 @@ func exit_ladder():
 				is_still_on_ladder = true
 				break
 	
-	remove_child(ladder_check_shapecast)
+	ladder_check_shapecast.free()
 	
 	if is_still_on_ladder:
 		on_ladder = true
@@ -1905,16 +1902,15 @@ func is_head_in_water() -> bool:
 
 
 func _handle_water_physics(delta) -> void:
-	if !InputRouter.is_input_active(self): return
 	
-	input_direction = Input.get_vector("left", "right", "forward", "back")
+	input_direction = current_command.move
 	
-	var look_vector = camera.get_camera_transform().basis
+	var look_vector = get_aim_transform().basis
 	var direction = look_vector * Vector3(input_direction.x, 0, input_direction.y).normalized()
 	
-	if Input.is_action_pressed("jump"):
+	if current_command.is_held(ACTION.JUMP):
 		direction.y = 1
-	elif Input.is_action_pressed("crouch"):
+	elif current_command.is_held(ACTION.CROUCH):
 		if not is_on_floor():
 			direction.y = -1
 	
@@ -1927,7 +1923,7 @@ func _handle_water_physics(delta) -> void:
 	
 	var is_moving: bool = false
 	
-	if input_direction or Input.is_action_pressed("jump") or Input.is_action_pressed("crouch"):
+	if input_direction or current_command.is_held(ACTION.JUMP) or current_command.is_held(ACTION.CROUCH):
 		is_moving = true
 		main_velocity = lerp(main_velocity, direction * current_speed * get_element_speed_multiplier(), delta * LERP_SPEED)
 	else:
@@ -1975,7 +1971,7 @@ func _on_swimming_state_physics_processing(delta: float) -> void:
 	wiggle_vector.x = sin(wiggle_index / 2) + 0.5
 	
 	if not is_head_in_water():
-		under_water_effect.visible = false
+		_show_underwater_effect(false)
 		if is_on_floor():
 			state_chart.send_event("grounded")
 			
@@ -1985,11 +1981,11 @@ func _on_swimming_state_physics_processing(delta: float) -> void:
 			
 			return
 	else:
-		under_water_effect.visible = true
+		_show_underwater_effect(true)
 	
 	_handle_water_physics(delta)
 	
-	if Input.is_action_pressed("jump") and _is_ledge_climbable():
+	if current_command.is_held(ACTION.JUMP) and _is_ledge_climbable():
 		state_chart.send_event("ledge_climb")
 #endregion
 
@@ -2014,13 +2010,13 @@ func _on_ledge_climbing_state_exited() -> void:
 
 func _on_ledge_climbing_state_physics_processing(delta: float) -> void:
 	if not is_head_in_water():
-		under_water_effect.visible = false
+		_show_underwater_effect(false)
 	else:
-		under_water_effect.visible = true
+		_show_underwater_effect(true)
 	
 	_handle_swim_under_water_sounds()
 	
-	if not Input.is_action_pressed("jump") and not is_in_ledge_climbing_middle_stage:
+	if not current_command.is_held(ACTION.JUMP) and not is_in_ledge_climbing_middle_stage:
 		state_chart.send_event("idle")
 		try_crouch = false
 		state_chart.send_event("stand_up")
@@ -2090,10 +2086,8 @@ func _on_crouching_state_physics_processing(delta: float) -> void:
 	state_chart.set_expression_property("is_crouch_shapecast_colliding", crouch_shapecast.is_colliding())
 
 	if current_moving_state != MovingState.Swimming and current_moving_state != MovingState.LedgeClimbing and !is_movement_locked_by_elements():
-		if TOGGLE_CROUCH and Input.is_action_just_pressed("crouch"):
-			try_crouch = !try_crouch
-		elif !TOGGLE_CROUCH:
-			try_crouch = Input.is_action_pressed("crouch")
+		if !current_command.toggle_crouch:
+			try_crouch = current_command.is_held(ACTION.CROUCH)
 		
 		if not try_crouch and not crouch_shapecast.is_colliding():
 			state_chart.send_event("stand_up")
@@ -2111,16 +2105,10 @@ func _on_standing_state_exited() -> void:
 	current_body_posture_state = BodyPostureState.Undefined
 	crouch_shapecast.enabled = true
 
-func _on_standing_state_input(event: InputEvent) -> void:
-	if !InputRouter.is_input_active(self): return
-	if is_movement_locked_by_elements(): return
-	
-	if event.is_action_pressed("crouch") and TOGGLE_CROUCH:
-		try_crouch = !try_crouch
-	elif !TOGGLE_CROUCH:
-		try_crouch = event.is_action("crouch")
 
 func _on_standing_state_physics_processing(delta: float) -> void:
+	if not current_command.toggle_crouch and not is_movement_locked_by_elements() and current_moving_state != MovingState.Rolling:
+		try_crouch = current_command.is_held(ACTION.CROUCH)
 	if current_moving_state != MovingState.LedgeClimbing:
 		if try_crouch or crouch_shapecast.is_colliding():
 			state_chart.send_event("crouch")

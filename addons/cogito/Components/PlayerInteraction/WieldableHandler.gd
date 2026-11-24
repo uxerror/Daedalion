@@ -21,6 +21,7 @@ var is_wielding: bool:
 var wieldable_item_to_auto_equip: WieldableItemPD = null
 var auto_equip_wieldable_after_carrying: bool = false
 var primary_action_held: bool = false
+var secondary_action_held: bool = false
 
 
 func equip_wieldable(wieldable_item: WieldableItemPD):
@@ -69,7 +70,7 @@ func attempt_action_primary(is_released: bool):
 
 
 func _apply_held_primary_action() -> void:
-	if primary_action_held and Input.is_action_pressed("action_primary") and is_wielding and !pic.carrying.is_carrying:
+	if primary_action_held and is_wielding and !pic.carrying.is_carrying:
 		attempt_action_primary(false)
 
 
@@ -93,11 +94,9 @@ func attempt_reload():
 
 # This gets a world space collision point of whatever the camera is pointed at, depending on the equipped wieldable range.
 func get_camera_collision() -> Vector3:
-	var viewport = get_viewport().get_visible_rect().size
-	var camera = get_viewport().get_camera_3d()
-
-	var ray_origin = camera.project_ray_origin(viewport/2)
-	var ray_end = ray_origin + camera.project_ray_normal(viewport/2)*equipped_wieldable_item.wieldable_range
+	var aim := pic.player.get_aim_transform()
+	var ray_origin := aim.origin
+	var ray_end := ray_origin - aim.basis.z.normalized() * equipped_wieldable_item.wieldable_range
 
 	var new_intersection = PhysicsRayQueryParameters3D.create(ray_origin, ray_end)
 	new_intersection.exclude = [pic.player_rid]

@@ -10,9 +10,57 @@ Godot State Charts runs three parallel branches in the packed scene. Moving hand
 
 Use `no_pause_menu_states` to restrict the pause menu in specific states. Entering a state in `no_interaction_states` (Rolling and FreeFall by default) clears `is_in_interaction_state`, and the interaction component rejects input interactions and direct actions while it is false. A custom controller can expose the same `is_in_interaction_state` property to get this behaviour. The camera's InteractionRaycast sets the player's reach. Carry and wieldable placement are assigned on the player interaction component. See [Interactions](interactions.md) for the child nodes and public API.
 
+## Per-actor input and presentation
+
+Advanced samples one `CogitoPlayerInputSource` at the start of each physics tick, before its child
+state chart runs. The default local source reads the Input Map through the player's existing
+`InputRouter` callback. Mouse look updates on the routed motion event. The stick uses the configured
+deadzone, sensitivity and per-physics-tick rotation. Each actor owns its own source and frame.
+
+Set `is_local_presentation` and, optionally, `input_source` **before adding the instance to the tree**.
+The demo uses the default local role. Only that role registers with the scene manager, captures the
+mouse and creates an active first-person view and HUD. The current camera supplies the viewport's
+default audio listener. A non-local instance retains the animated eye transform, casts, spatial audio
+and chart. Its default source emits stationary commands. An injected source can drive it headless.
+Use `get_aim_transform()` to aim from the acting player. Use `CogitoSceneManager.get_player()` to find
+the local presentation owner.
+
+`CogitoPlayerCommand` contains a sequence, movement inside the unit disc, body yaw, head pitch and
+neck yaw in radians. These absolute local angles allow a later receiver to recover aim from a single
+frame after a lost update. Neck yaw preserves the difference between looking and walking during
+free look. The held mask supplies continuous actions such as jump, sprint and swim descent.
+Ordered byte edges retain every press and release, including a complete tap between ticks.
+`last_consumed_sequence` advances when the controller accepts a newer command. Repeated sequences
+cannot replay an edge.
+
+`encode()` and `decode()` use a 28-byte header plus one byte per edge. The header contains a uint32
+sequence, five float32 values and a uint32 button word. Bits 30 and 31 encode the actor’s crouch
+preference and suppressed input respectively.
+Edge IDs follow `CogitoPlayerCommand.Action`, with bit 7 set for a release. Simulation uses full
+precision locally. The codec and sequence are available for MP1b. They are independent of save slots.
+
+A scripted source can use the same controller as the demo. For example, this source walks forward
+along the actor's current facing.
+
+```gdscript
+extends CogitoPlayerInputSource
+
+
+func sample(actor: CogitoPlayer, sequence: int) -> CogitoPlayerCommand:
+	var command := super.sample(actor, sequence)
+	command.move = Vector2.UP
+	return command
+```
+
+Custom offline controllers may keep their existing input handling. To adopt this contract, keep a
+source per instance, sample it before movement, apply the frame's aim and held state, then dispatch
+its edges once per accepted sequence. Override `neutral_command()` for rig-specific look axes and
+`get_aim_transform()` for the actor's eye origin. The bundled local sampler uses Advanced's first-person
+rig. A different rig can provide its own device sampler.
+
 ## What other scripts can rely on
 
-`CogitoPlayer` is the abstract base. An area that receives a body can test `body is CogitoPlayer`. For code outside the scene, `CogitoSceneManager.get_player()` returns the registered player or null. Advanced calls `CogitoSceneManager.register_player(self)` when it becomes ready.
+`CogitoPlayer` is the abstract base. An area that receives a body can test `body is CogitoPlayer`. For code outside the scene, `CogitoSceneManager.get_player()` returns the registered player or null. Advanced registers the local presentation owner when it becomes ready.
 
 - Set `player_interaction_component_path`, `body_path` and `head_path` relative to the player root. Keep the interaction component a direct child. The head anchors objects such as the lockpick minigame. The body supplies orientation for saves and scene connectors.
 - Assign `player_hud` to a `CogitoHud` implementation. The supplied `CogitoPlayerHudManager` handles hold progress and inventory visibility. Interfaces restore the player's `gameplay_mouse_mode` on close.

@@ -95,7 +95,8 @@ func populate_player_data(player):
 	player.jump_target_speed = jump_target_speed
 	
 	player.swimming_head_shapecast.global_position = swimming_head_shapecast_position
-	player.under_water_effect.visible = is_under_water_effect_visible
+	if player.under_water_effect:
+		player.under_water_effect.visible = is_under_water_effect_visible
 	
 	_load_element_state(player)
 	
@@ -124,7 +125,8 @@ func populate_save_data(player, slot):
 	jump_target_speed = player.jump_target_speed
 	
 	swimming_head_shapecast_position = player.swimming_head_shapecast.global_position
-	is_under_water_effect_visible = player.under_water_effect.visible
+	var effect: ColorRect = player.under_water_effect
+	is_under_water_effect_visible = effect != null and effect.visible
 	
 	_save_state_chart(player)
 	_save_element_state(player)
@@ -197,8 +199,8 @@ func save_sitting_state(player):
 	is_ejected = player.is_ejected
 	currently_tweening = player.currently_tweening
 	if is_sitting:
-		current_sittable_path = CogitoSceneManager._current_sittable_node.get_path()
-		current_sittable_id = CogitoPersistentId.of(CogitoSceneManager._current_sittable_node)
+		current_sittable_path = player.current_seat.get_path()
+		current_sittable_id = CogitoPersistentId.of(player.current_seat)
 
 
 func load_sitting_state(player):
@@ -212,11 +214,11 @@ func load_sitting_state(player):
 	player.is_ejected = is_ejected
 	player.currently_tweening = currently_tweening
 	if is_sitting and !current_sittable_id.is_empty():
-		CogitoSceneManager._current_sittable_node = CogitoPersistentId.find_in_level(
+		player.current_seat = CogitoPersistentId.find_in_level(
 			player, current_sittable_id
 		)
 	elif is_sitting and current_sittable_path != null:
-		CogitoSceneManager._current_sittable_node = CogitoPersistentId.resolve_path(
+		player.current_seat = CogitoPersistentId.resolve_path(
 			player, current_sittable_path, CogitoSceneManager
 		)
 

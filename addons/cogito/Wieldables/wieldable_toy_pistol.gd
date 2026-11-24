@@ -96,6 +96,8 @@ func action_primary(_passed_item_reference : InventoryItemPD, _is_released: bool
 
 
 func action_secondary(is_released:bool):
+	if not player_interaction_component.player.is_local_presentation:
+		return
 	var camera = get_viewport().get_camera_3d()
 	if is_released:
 		# ADS Camera Zoom OUT

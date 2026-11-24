@@ -469,12 +469,15 @@ func test_player_movement_and_struggle(_timeout := 12000) -> void:
 	assert_bool(!player._can_jump()).override_failure_message("frozen player can't jump").is_true()
 	assert_bool(!player.can_act()).override_failure_message("frozen player can't act").is_true()
 	Input.action_release("forward")
+	# Isolate command edges from passive thaw during the physics ticks below.
+	props.freeze_time = 0.0
 	# Struggle: new movement presses
 	var cold := props.get_element_level(E.COLD)
 	var press_event := InputEventAction.new()
 	press_event.action = &"left"
 	press_event.pressed = true
 	player.on_input(press_event)
+	await _physics_frames(2)
 	(
 		assert_bool(props.get_element_level(E.COLD) < cold - 0.1)
 		. override_failure_message("movement press while frozen struggles")
@@ -485,6 +488,7 @@ func test_player_movement_and_struggle(_timeout := 12000) -> void:
 	release_event.action = &"left"
 	release_event.pressed = false
 	player.on_input(release_event)
+	await _physics_frames(2)
 	(
 		assert_bool(is_equal_approx(props.get_element_level(E.COLD), held))
 		. override_failure_message("key release doesn't struggle")
@@ -493,6 +497,7 @@ func test_player_movement_and_struggle(_timeout := 12000) -> void:
 	var n := 1
 	while props.is_frozen and n < 20:
 		player.on_input(press_event)
+		await _physics_frames(2)
 		n += 1
 	(
 		assert_bool(!props.is_frozen and props.is_wet)

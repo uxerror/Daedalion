@@ -168,7 +168,7 @@ func _ready():
 	if disable_carry:
 		carryable_components = get_child_carryable_components()
 		
-	if is_sat_on_start:
+	if is_sat_on_start and player_node:
 		interact(player_node.player_interaction_component)
 		BasicInteraction.is_disabled = false
 	
@@ -289,7 +289,8 @@ func set_state():
 
 
 func _on_sit_area_body_entered(body):
-	if body == player_node:
+	if body is CogitoPlayer and (not is_occupied or body == player_node):
+		player_node = body
 		player_in_sit_area = true
 		
 		match sit_area_behaviour:
@@ -329,6 +330,10 @@ var interact_cooldown = 0.0
 
 func interact(player_interaction_component):
 	
+	var actor: CogitoPlayer = player_interaction_component.player
+	if not actor or (is_occupied and is_instance_valid(player_node) and actor != player_node):
+		return
+	player_node = actor
 	#Prevent entering fallen chair
 	if !is_occupied and _is_fallen():
 		player_interaction_component.send_hint(null, "I can't sit there!")
@@ -355,25 +360,34 @@ func interact(player_interaction_component):
 			return
 	
 	# If the player is already sitting in a seat, and interacts with that seat then stand
-	if player_node.is_sitting and CogitoSceneManager._current_sittable_node == self:
-		CogitoSceneManager.emit_signal("stand_requested")
+	if player_node.is_sitting and player_node.current_seat == self:
+		if player_node.is_local_presentation:
+			CogitoSceneManager.emit_signal("stand_requested")
+		else:
+			player_node._on_stand_requested()
 		_stand_up()
 
 	# If the player is already sitting in a seat, and interacts with a different seat then move seat
-	elif player_node.is_sitting and CogitoSceneManager._current_sittable_node != self :
-		var previous_seat = CogitoSceneManager._current_sittable_node
+	elif player_node.is_sitting and player_node.current_seat != self :
+		var previous_seat = player_node.current_seat
 		previous_seat._stand_up()
-		CogitoSceneManager._current_sittable_node = self
-		CogitoSceneManager.emit_signal("seat_move_requested", self)
+		player_node.current_seat = self
+		if player_node.is_local_presentation:
+			CogitoSceneManager.emit_signal("seat_move_requested", self)
+		else:
+			player_node._on_seat_move_requested(self)
 		_sit_down()
 
 	# If the player is not in any seat, then sit down
 	elif not player_node.is_sitting:
-		CogitoSceneManager._current_sittable_node = self
-		CogitoSceneManager.emit_signal("sit_requested", self)
+		player_node.current_seat = self
+		if player_node.is_local_presentation:
+			CogitoSceneManager.emit_signal("sit_requested", self)
+		else:
+			player_node._on_sit_requested(self)
 		_sit_down()
 
-	if !objects_call_interact:
+	if !objects_call_interact or not actor.is_local_presentation:
 		return
 	for nodepath in objects_call_interact:
 		await get_tree().create_timer(objects_call_delay).timeout

@@ -42,8 +42,6 @@ func _ready():
 	super._ready()
 	wieldable_mesh.hide()
 	firing_cooldown = 0
-	var player := CogitoLevel.local_player(self)
-	wielding_rid = player.get_rid() if player else RID()
 
 
 func _physics_process(_delta: float) -> void:
@@ -51,7 +49,7 @@ func _physics_process(_delta: float) -> void:
 		firing_cooldown -= _delta
 		
 	if is_firing:
-		if !Input.is_action_pressed("action_primary"):
+		if !player_interaction_component.wieldables.primary_action_held:
 			is_firing = false
 		elif firing_cooldown <= 0:
 			if animation_player.is_playing():
@@ -91,6 +89,8 @@ func action_primary(_passed_item_reference : InventoryItemPD, _is_released: bool
 
 
 func action_secondary(is_released:bool):
+	if not player_interaction_component.player.is_local_presentation:
+		return
 	var camera = get_viewport().get_camera_3d()
 	if is_released:
 		# ADS Camera Zoom OUT
@@ -158,6 +158,7 @@ func reload() -> bool:
 
 # Function called when wieldable is equipped.
 func equip(_player_interaction_component: PlayerInteractionComponent):
+	wielding_rid = _player_interaction_component.player.get_rid()
 	spawn_node = CogitoLevel.spawn_parent(self)
 	animation_player.play(anim_equip)
 	player_interaction_component = _player_interaction_component

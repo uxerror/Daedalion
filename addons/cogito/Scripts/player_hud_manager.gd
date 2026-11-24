@@ -88,6 +88,7 @@ func setup_player(new_player : Node):
 
 
 func _setup_player():
+	hold_ui.player_interaction_component = player.player_interaction_component
 	#prevent stuck prompts when changing players
 	delete_interaction_prompts()
 

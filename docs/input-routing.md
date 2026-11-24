@@ -22,7 +22,15 @@ func _exit_tree() -> void:
     InputRouter.remove(on_panel_input)
 ```
 
-The player forwards interaction events to `PlayerInteractionComponent`. Use the router for an interface that owns gameplay input. `InputHelper` is a separate autoload from [addons/input_helper](../addons/input_helper). It tracks devices and supplies rebinding and input-icon data. Define action names in Project Settings' Input Map and list the rebindable actions in `rebind_entries` on the active settings resource. The [quickslot wheel](quickslots.md) uses the same routing stack.
+Advanced queues gameplay edges from its routed events for the next physics tick. A change of
+router owner immediately clears queued events, latched stick motion and held wieldable actions.
+While another callback owns input, the actor receives neutral movement and buttons. New events
+go to the top callback, including releases that close a wheel. Raw quickslot bindings remain
+available to custom local views. The standalone pause menu still pauses an offline game and the
+wheel still uses its configured offline time scale. In an online session both leave world time
+running.
+
+The player dispatches interaction actions to `PlayerInteractionComponent`. Use the router for an interface that owns gameplay input. `InputHelper` is a separate autoload from [addons/input_helper](../addons/input_helper). It tracks devices and supplies rebinding and input-icon data. Define action names in Project Settings' Input Map and list the rebindable actions in `rebind_entries` on the active settings resource. The [quickslot wheel](quickslots.md) uses the same routing stack.
 
 ## Turn a spinner
 

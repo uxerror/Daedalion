@@ -168,22 +168,23 @@
    "unnecessary-pass": 1
   },
   "addons/cogito/CogitoObjects/cogito_player.gd": {
-   "class-definitions-order": 7,
+   "class-definitions-order": 8,
    "max-line-length": 26,
    "no-elif-return": 1,
    "no-else-return": 1,
    "trailing-whitespace": 20
   },
   "addons/cogito/CogitoObjects/cogito_player_advanced.gd": {
-   "class-definitions-order": 100,
+   "class-definitions-order": 132,
    "class-variable-name": 55,
    "enum-element-name": 20,
    "function-argument-name": 2,
    "max-file-lines": 1,
-   "max-line-length": 80,
-   "max-returns": 2,
+   "max-line-length": 79,
+   "max-public-methods": 1,
+   "max-returns": 1,
    "no-else-return": 3,
-   "trailing-whitespace": 258,
+   "trailing-whitespace": 239,
    "unused-argument": 10
   },
   "addons/cogito/CogitoObjects/cogito_pressure_plate.gd": {
@@ -331,8 +332,8 @@
   },
   "addons/cogito/Components/Interactions/CarryableComponent.gd": {
    "class-definitions-order": 1,
-   "max-line-length": 9,
-   "trailing-whitespace": 14
+   "max-line-length": 8,
+   "trailing-whitespace": 13
   },
   "addons/cogito/Components/Interactions/CustomInteraction.gd": {
    "max-line-length": 1,
@@ -413,8 +414,8 @@
    "no-else-return": 2
   },
   "addons/cogito/Components/PlayerInteraction/WieldableHandler.gd": {
-   "class-definitions-order": 9,
-   "max-line-length": 15,
+   "class-definitions-order": 10,
+   "max-line-length": 13,
    "no-else-return": 2
   },
   "addons/cogito/Components/PlayerInteractionComponent.gd": {

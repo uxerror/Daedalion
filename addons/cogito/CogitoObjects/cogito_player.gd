@@ -12,6 +12,18 @@ signal toggled_interface(is_showing_ui:bool)
 ## Emitted when elemental damage (fire, cold, poison, shock...) was dealt to the player, see CogitoProperties.deal_elemental_damage().
 signal elemental_damage_received(amount: float, element: CogitoProperties.Element, source: Node)
 
+## Set before tree entry. Only the local avatar presents UI and owns viewport input.
+@export var is_local_presentation: bool = true
+
+## Seat driving this actor. The facade retains the local seat for legacy callers and saves.
+var current_seat: CogitoSittable:
+	get:
+		return CogitoSceneManager._current_sittable_node if is_local_presentation else current_seat
+	set(value):
+		current_seat = value
+		if is_local_presentation:
+			CogitoSceneManager._current_sittable_node = value
+
 ## Refereence to Player HUD node
 @export var player_hud : CogitoHud
 # Used for handling input when UI is open/displayed
@@ -203,13 +215,29 @@ func apply_external_force(force_vector: Vector3):
 		move_and_slide()
 
 
+## A stationary input frame retaining the current look, including after a load or teleport.
+func neutral_command(sequence: int) -> CogitoPlayerCommand:
+	var command := CogitoPlayerCommand.new()
+	command.sequence = sequence
+	command.yaw = body.rotation.y
+	command.pitch = head.rotation.x
+	return command
+
+
+## Aim origin and orientation for interaction, carrying and wieldables.
+## Custom offline controllers default to the viewport camera.
+func get_aim_transform() -> Transform3D:
+	var view := get_viewport().get_camera_3d()
+	return view.global_transform if view else head.global_transform
+
+
 ## Drops the item in the slot into the world in front of the camera, where item_drop_shapecast finds room for it.
 ## Returns false if there is no room. Override it for a different way of dropping items.
 func drop_item(slot_data: InventorySlotPD) -> bool:
 	var player_radius = radius
 	var shape_cast = item_drop_shapecast
-	var item_drop_distance_offset = player_hud.item_drop_distance_offset
-	var camera_basis_z = get_viewport().get_camera_3d().get_global_transform().basis.z
+	var item_drop_distance_offset = player_hud.item_drop_distance_offset if player_hud else 0.0
+	var camera_basis_z = get_aim_transform().basis.z
 	
 	var drop_distance = abs(shape_cast.target_position.z - item_drop_distance_offset)
 	
@@ -256,7 +284,8 @@ func drop_item(slot_data: InventorySlotPD) -> bool:
 	dropped_item.global_rotation = body.global_rotation
 	dropped_item.position = shape_cast.global_position + (safe_drop_distance - item_length / 2) * -camera_basis_z
 		
-	CogitoAudio.play_sound(slot_data.inventory_item.sound_drop)
+	if is_local_presentation:
+		CogitoAudio.play_sound(slot_data.inventory_item.sound_drop)
 	
 	if item_length < player_radius:
 		dropped_item.position = shape_cast.global_position + (safe_drop_distance - item_length / 2) * -camera_basis_z

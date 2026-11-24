@@ -17,6 +17,7 @@ signal pause_menu_opened
 
 var playback : AudioStreamPlaybackPolyphonic
 var temp_screenshot : Image
+var _pauses_world: bool
 
 @onready var resume_game_button: Button = %ResumeGameButton
 @onready var save_button: CogitoUiButton = %SaveButton
@@ -64,7 +65,9 @@ func _play_pressed() -> void:
 
 func _ready() -> void:
 	#Stops game and shows pause menu
-	get_tree().paused = true
+	_pauses_world = not CogitoNet.is_online()
+	if _pauses_world:
+		get_tree().paused = true
 	pause_menu_opened.emit()
 	
 	InputHelper.device_changed.connect(_on_input_device_changed)
@@ -185,7 +188,8 @@ func load_current_slot_data() -> bool:
 
 
 func close_pause_menu():
-	get_tree().paused = false
+	if _pauses_world:
+		get_tree().paused = false
 	InputRouter.pop()
 	CogitoSceneManager.restore_gameplay_mouse_mode()
 	pause_menu_closed.emit()
@@ -256,7 +260,8 @@ func _on_back_to_main_menu_pressed() -> void:
 	if error == OK:
 		CogitoSceneManager.delete_temp_saves()
 		InputRouter.remove(on_input)
-		get_tree().paused = false
+		if _pauses_world:
+			get_tree().paused = false
 
 
 func _on_input_device_changed(device: String, device_index: int) -> void:
