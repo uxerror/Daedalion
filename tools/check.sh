@@ -48,8 +48,8 @@ step_warnings() {
 
 step_tests() {
 	echo "== gdUnit4 tests"
-	# Daedalion shares user:// (app_userdata/Cogito) with Cogito projects, including real
-	# saves: run the tests against a throwaway user data dir.
+	# user:// (app_userdata/Daedalion) holds the real playtest saves:
+	# run the tests against a throwaway user data dir.
 	local data_home
 	data_home=$(mktemp -d)
 	XDG_DATA_HOME="$data_home" $NICE timeout 1200 bash addons/gdUnit4/runtest.sh --headless --ignoreHeadlessMode -a res://tests 2>&1 \
