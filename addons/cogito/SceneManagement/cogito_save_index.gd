@@ -26,6 +26,9 @@ func _load_index(config: ConfigFile) -> Error:
 
 
 func _update_index(slot: String, promote: bool) -> Error:
+	# A name the loader rejects would make the whole history unreadable.
+	if not _manager.storage.valid_slot(slot):
+		return _manager.storage.check(ERR_INVALID_PARAMETER, "slot name '%s'" % slot)
 	var config := ConfigFile.new()
 	var error := _load_index(config)
 	if error != OK:

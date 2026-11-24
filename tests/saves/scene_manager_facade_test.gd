@@ -130,6 +130,19 @@ func test_index_promotes_existing_slots_and_deletes_from_history() -> void:
 	assert_bool(manager.is_saved_slots_empty()).is_true()
 
 
+func test_index_rejects_invalid_slot_names_and_stays_readable() -> void:
+	assert_int(manager.save_last_saved_slot("1")).is_equal(OK)
+	for slot: String in ["../invalid", "", ".hidden", "saves.data", "a/b"]:
+		assert_int(manager.save_last_saved_slot(slot)).override_failure_message(slot).is_equal(
+			ERR_INVALID_PARAMETER
+		)
+		assert_int(manager.delete_from_saved_slots(slot)).override_failure_message(slot).is_equal(
+			ERR_INVALID_PARAMETER
+		)
+	assert_str(manager.get_last_saved_slot()).is_equal("1")
+	assert_int(manager.saved_slots_count()).is_equal(1)
+
+
 func test_delete_temp_and_named_slot_preserves_other_slots_and_history() -> void:
 	make_slot("temp")
 	make_slot("1")
