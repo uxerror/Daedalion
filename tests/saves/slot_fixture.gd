@@ -1,13 +1,29 @@
 extends GdUnitTestSuite
 
-const LEVEL := "res://addons/cogito/PackedScenes/cogito_player_simple.tscn"
+const LEVEL := "res://addons/cogito/PackedScenes/cogito_player_advanced.tscn"
 const BUTTON := preload("res://addons/cogito/EasyMenus/Components/SaveSlotButton.tscn")
 
 var manager := CogitoSceneManager
+var _default_chart: SerializedStateChart
 var _previous: Dictionary
 var _previous_world: Dictionary
 var _original_level: Node
 var _original_mouse: Input.MouseMode
+
+
+func before() -> void:
+	var previous_player: Node = manager._current_player_node
+	var previous_mouse := Input.mouse_mode
+	var player: CogitoPlayerAdvanced = (load(LEVEL) as PackedScene).instantiate()
+	player.inventory_data = player.inventory_data.duplicate(true)
+	player.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(player)
+	await get_tree().process_frame
+	_default_chart = StateChartSerializer.serialize(player.state_chart)
+	InputRouter.remove(player.on_input)
+	player.free()
+	manager._current_player_node = previous_player
+	Input.mouse_mode = previous_mouse
 
 
 func before_test() -> void:
@@ -50,7 +66,7 @@ func before_test() -> void:
 func after_test() -> void:
 	var level := get_tree().current_scene
 	var player := manager.get_player()
-	if player is CogitoPlayerSimple:
+	if player is CogitoPlayerAdvanced:
 		InputRouter.remove(player.on_input)
 	get_tree().current_scene = _original_level
 	level.free()
@@ -60,10 +76,11 @@ func after_test() -> void:
 	Input.mouse_mode = _original_mouse
 
 
-func make_slot(slot: String) -> CogitoPlayerSimpleState:
+func make_slot(slot: String) -> CogitPlayerAdvancedState:
 	var directory := manager.cogito_state_dir.path_join(slot)
 	assert_int(DirAccess.make_dir_recursive_absolute(directory)).is_equal(OK)
-	var state := CogitoPlayerSimpleState.new()
+	var state := CogitPlayerAdvancedState.new()
+	state.state_chart = _default_chart.duplicate_deep()
 	state.player_current_scene = "CogitoPlayer"
 	state.player_current_scene_path = LEVEL
 	state.player_state_slot_name = slot

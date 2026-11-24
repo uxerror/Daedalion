@@ -1,7 +1,7 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://addons/cogito/SceneManagement/cogito_scene.gd" id="1"]
-[ext_resource type="PackedScene" path="res://addons/cogito/PackedScenes/cogito_player_simple.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://addons/cogito/PackedScenes/cogito_player_advanced.tscn" id="2"]
 
 [node name="Destination" type="Node3D" node_paths=PackedStringArray("connectors")]
 script = ExtResource("1")

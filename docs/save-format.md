@@ -52,6 +52,11 @@ previously visited legacy scenes in staging, then publishes the generation.
 An error during conversion aborts publication. Old binary files depend on the
 historical paths that the original writer stored.
 
+Daedalion 1.3.0 removed `CogitoPlayerSimple` and its state script. Saves made
+with that controller are marked broken in the slot menu with the message
+`Cannot read player state.`. This applies to both v2 JSON and legacy `.res`
+saves. These slots cannot be loaded or upgraded.
+
 A newer header version fails preparation with `Save from a newer version.`.
 Future data migrations can register one document-to-document callable per
 source version in `MIGRATIONS`. Both formats validate the destination level

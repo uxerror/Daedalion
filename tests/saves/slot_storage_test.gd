@@ -6,7 +6,7 @@ const TARGET := "1"
 func start_level() -> void:
 	get_tree().current_scene.free()
 	var packed: PackedScene = load(LEVEL)
-	var player: CogitoPlayerSimple = packed.instantiate()
+	var player: CogitoPlayerAdvanced = packed.instantiate()
 	player.name = "A"
 	get_tree().root.add_child(player)
 	get_tree().current_scene = player

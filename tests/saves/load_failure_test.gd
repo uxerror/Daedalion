@@ -1,5 +1,9 @@
 extends "res://tests/saves/slot_fixture.gd"
 
+const SIMPLE_STATE_SCRIPT := "res://addons/cogito/SceneManagement/cogito_player_simple_state.gd"
+const SIMPLE_STATE_UID := "uid://j6wrecbyfem0"
+const RETIRED_STATE_FIXTURE := "res://tests/saves/retired_player_state.res"
+
 var _signals: Array[String] = []
 
 
@@ -35,6 +39,50 @@ func test_wrong_player_resource_class() -> void:
 	var path := manager.legacy_player_file("B")
 	assert_int(ResourceSaver.save(CogitoSceneState.new(), path)).is_equal(OK)
 	assert_int(manager.prepare_slot("B").status).is_equal(manager.SlotStatus.BROKEN)
+
+
+func test_removed_simple_player_state_v2_shows_broken_slot() -> void:
+	make_slot("B")
+	var path := manager.player_file("B")
+	var doc := {
+		"format": "daedalion-save",
+		"version": 2,
+		"kind": "player",
+		"engine": "4.7",
+		"root": {"$local": 0},
+		"resources":
+		[
+			{
+				"class": "Resource",
+				"script": {"$res": SIMPLE_STATE_UID, "path": SIMPLE_STATE_SCRIPT},
+				"properties": {"player_current_scene": "CogitoPlayer"},
+			},
+		],
+	}
+	write_text(path, JSON.stringify(doc))
+	var slot := manager.prepare_slot("B")
+	assert_array(slot.warnings).contains_exactly(
+		[{"path": SIMPLE_STATE_SCRIPT, "uid": SIMPLE_STATE_UID, "field": "player.script"}]
+	)
+	_assert_unreadable_player_slot(slot)
+
+
+func test_removed_simple_player_state_legacy_shows_broken_slot() -> void:
+	var path := manager.legacy_player_file("B")
+	assert_int(DirAccess.make_dir_recursive_absolute(path.get_base_dir())).is_equal(OK)
+	# Godot ResourceSaver wrote this CogitoPlayerSimpleState before the script was removed.
+	assert_int(FileAccess.get_file_as_bytes(RETIRED_STATE_FIXTURE).size()).is_greater(0)
+	assert_int(DirAccess.copy_absolute(RETIRED_STATE_FIXTURE, path)).is_equal(OK)
+	_assert_unreadable_player_slot(manager.prepare_slot("B"))
+
+
+func _assert_unreadable_player_slot(slot: CogitoSceneManager.PreparedSlot) -> void:
+	assert_int(slot.status).is_equal(manager.SlotStatus.BROKEN)
+	assert_str(slot.reason).is_equal("Cannot read player state.")
+	var button := make_button(slot.slot)
+	assert_int(button.slot_status).is_equal(manager.SlotStatus.BROKEN)
+	assert_str(button.slot_name_label.text).is_not_equal(tr("TXT_EMPTY_SLOT"))
+	assert_str(button.save_time_label.text).is_equal(slot.reason)
 
 
 func test_unavailable_target_level(
