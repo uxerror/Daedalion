@@ -52,10 +52,10 @@ previously visited legacy scenes in staging, then publishes the generation.
 An error during conversion aborts publication. Old binary files depend on the
 historical paths that the original writer stored.
 
-Daedalion 1.3.0 removed `CogitoPlayerSimple` and its state script. Saves made
+Daedalion 1.3.0 removed the Simple controller and its state script. Saves made
 with that controller are marked broken in the slot menu with the message
 `Cannot read player state.`. This applies to both v2 JSON and legacy `.res`
-saves. These slots cannot be loaded or upgraded.
+saves. These slots cannot be loaded or upgraded. See the [migration guide](migration-1.2-to-1.3.md).
 
 A newer header version fails preparation with `Save from a newer version.`.
 Future data migrations can register one document-to-document callable per
@@ -113,7 +113,7 @@ suspicion levels are transient.
 
 ## Editing a visited level
 
-At level entry `CogitoScene` stamps authored, saveable `Persist` nodes and
+At level entry the [level root script](../addons/cogito/SceneManagement/cogito_scene.gd) stamps authored, saveable `Persist` nodes and
 records their IDs in `known_persist_ids`. This set includes objects picked up
 or destroyed before the first save. During load, matching IDs receive their
 saved state. An authored ID in the set but absent from `saved_nodes` is removed.

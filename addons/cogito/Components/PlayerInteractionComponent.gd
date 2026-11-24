@@ -150,7 +150,7 @@ func start_interaction(action: String) -> void:
 	if targeting.interactable != null and not carrying.is_carrying:
 		for node: InteractionComponent in targeting.interactable.interaction_nodes:
 			if node.input_map_action == action and not node.is_disabled:
-				if player.get("is_in_interaction_state") and !player.is_in_interaction_state or (!player.is_on_floor() and node.disable_interaction_in_air):
+				if _is_interaction_blocked(node):
 					return
 
 				if !node.ignore_open_gui and get_parent().is_showing_ui:
@@ -168,6 +168,13 @@ func start_interaction(action: String) -> void:
 				break
 
 
+# The player's no-interaction states (rolling, free fall...) and in-air components block interacting.
+func _is_interaction_blocked(node: InteractionComponent) -> bool:
+	if "is_in_interaction_state" in player and not player.is_in_interaction_state:
+		return true
+	return not player.is_on_floor() and node.disable_interaction_in_air
+
+
 ## Performs an action from InteractionComponent.get_actions(), for example one picked from a context menu.
 ## Checks the same things as start_interaction() and updates the prompts afterwards.
 func perform_action(action: CogitoInteractionAction) -> void:
@@ -178,7 +185,7 @@ func perform_action(action: CogitoInteractionAction) -> void:
 	if carrying.is_carrying:
 		if !is_instance_valid(carrying.carried_object) or node.get_parent() != carrying.carried_object.get_parent():
 			return
-	if player.get("is_in_interaction_state") and !player.is_in_interaction_state or (!player.is_on_floor() and node.disable_interaction_in_air):
+	if _is_interaction_blocked(node):
 		return
 	if !node.ignore_open_gui and get_parent().is_showing_ui:
 		return
