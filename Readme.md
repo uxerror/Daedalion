@@ -28,7 +28,7 @@ the goal is to move the template forward, not to stay mergeable with Cogito. Cha
 Cogito are still offered upstream where practical (see
 [Sending changes back to Cogito](#sending-changes-back-to-cogito)), but that is optional.
 
-[![Based on COGITO](https://img.shields.io/badge/based_on-COGITO_1.2-35A1D7?labelColor=0E887A)](https://codeberg.org/Phazorknight/Cogito) [![GodotEngine](https://img.shields.io/badge/Godot_4.7.2_stable-blue?logo=godotengine&logoColor=white)](https://godotengine.org/)
+[![Daedalion 1.3.0](https://img.shields.io/badge/Daedalion-1.3.0-0E887A)](docs/changelog.md) [![Based on COGITO](https://img.shields.io/badge/based_on-COGITO_1.2-35A1D7?labelColor=0E887A)](https://codeberg.org/Phazorknight/Cogito) [![GodotEngine](https://img.shields.io/badge/Godot_4.7.2_stable-blue?logo=godotengine&logoColor=white)](https://godotengine.org/)
 
 `main` targets **Godot 4.7.2**: its resources and `.import` files are saved in the 4.7 format.
 The `upstream`, `1.3.0-dev` and `pr/*` branches stay in Cogito's format (Godot 4.6), so that they
@@ -37,6 +37,9 @@ do not commit those changes there (`git checkout -- .`).
 
 ## What is different from Cogito
 
+See the [Daedalion 1.3.0 changelog](docs/changelog.md) and the [migration guide](docs/migration-1.2-to-1.3.md).
+
+- **Advanced is the only bundled player controller.** The Simple scene and its save state were removed. Old Simple saves appear as broken slots.
 - **1.3 refactor stack** (proposed in [issue #615](https://codeberg.org/Phazorknight/Cogito/issues/615),
   first part in [PR #634](https://codeberg.org/Phazorknight/Cogito/pulls/634)):
   PlayerInteractionComponent split into child nodes with an interaction contract and a public
@@ -140,13 +143,13 @@ Please report problems with changes that exist only in Daedalion here, not on th
 
 ![COGITO_banner](addons/cogito/COGITO_banner.jpg)
 ### COGITO
-[![GodotEngine](https://img.shields.io/badge/Godot_4.6.3_stable-blue?logo=godotengine&logoColor=white)](https://godotengine.org/) [![COGITO](https://img.shields.io/badge/version_1.2.0-35A1D7?label=COGITO&labelColor=0E887A)](https://codeberg.org/Phazorknight/Cogito)
+[![GodotEngine](https://img.shields.io/badge/Godot_4.7.2_stable-blue?logo=godotengine&logoColor=white)](https://godotengine.org/) [![Daedalion 1.3.0](https://img.shields.io/badge/Daedalion-1.3.0-0E887A)](docs/changelog.md)
 
 ## What is it?
 Cogito is a First Person Immersive Sim Template Project for Godot 4, providing a framework for creating interactable objects, various items to use and mechanics to influence the player and game environment.
 In short, with COGITO you get a quick start for a fully-featured first person game with a great variety of mechanics and a solid base to create your own.
 
-### [Online documentation + Tutorials](https://codeberg.org/Phazorknight/Cogito/wiki)
+### [Daedalion documentation and tutorials](docs/README.md)
 ### [Cogito Community Space](https://community.thresholdanomaly.com/index.php?r=space%2Fspace&cguid=f29b9340-dc21-4a3c-8883-7e33bb804c27)
 ### [Cogito in the Godot Asset Store](https://store.godotengine.org/asset/philip-drobar/cogito/)
 
@@ -177,7 +180,7 @@ In short, with COGITO you get a quick start for a fully-featured first person ga
 - Rebindable controls
 - Basic Quest System
 - Save and Load System as well as scene persistency
-- Full game pad support!
+- Gamepad bindings for movement, interaction and inventory. See the [Daedalion roadmap](docs/roadmap.md) for planned coverage.
 - Localization!
 - Support for other plugins:
   - Works with Dialogic
@@ -202,4 +205,4 @@ The structure of this template always tries to adhere to the following principle
 > [!IMPORTANT]  
 > COGITO v1.2 is not 100% bug-free. While most features are set, be aware that this open source software is offered "as is". Use at your own risk and check Issues and Discussion pages for more information.
 
-[Credits, Contributors and License](https://codeberg.org/Phazorknight/Cogito/wiki/Credits%2C-Contributors%2C-License)
+[Original Cogito credits, contributors and license](https://codeberg.org/Phazorknight/Cogito/wiki/Credits%2C-Contributors%2C-License)
