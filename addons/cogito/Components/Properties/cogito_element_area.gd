@@ -142,7 +142,7 @@ func apply_element_save_data(data: Dictionary) -> void:
 	_shock_time_left = float(data.get("shock_time_left", 0.0))
 	_charged_by_me.clear()
 	for key in data.get("charged", []):
-		var props := CogitoSceneManager.find_element_state_node(key) as CogitoProperties
+		var props := CogitoSceneManager.find_element_state_node(key, self) as CogitoProperties
 		if props:
 			_charged_by_me[props] = true
 	if is_inside_tree():

@@ -23,7 +23,7 @@ func set_collision(enabled: bool):
 	self.set_collision_layer_value(1, enabled)
 
 func play_impact_sound():
-	CogitoAudio.play_sound_3d(impact_sound, global_position)
+	CogitoAudio.play_sound_3d_in(self, impact_sound, global_position)
 
 func _outgoing_body_entered(node: Node3D):
 	if node is CogitoPlayer:

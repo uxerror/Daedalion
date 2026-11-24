@@ -37,9 +37,9 @@ func on_health_change(_health_name:String, _health_current:float, _health_max:fl
 	if !has_increased:
 		damage_taken.emit()
 		if sound_on_hit:
-			CogitoAudio.play_sound_3d(sound_on_hit, get_parent().global_position)
+			CogitoAudio.play_sound_3d_in(self, sound_on_hit, get_parent().global_position)
 		if sound_on_damage_taken and not _health_current <= 0:
-			CogitoAudio.play_sound_3d(sound_on_damage_taken, get_parent().global_position)
+			CogitoAudio.play_sound_3d_in(self, sound_on_damage_taken, get_parent().global_position)
 
 
 func on_death(_attribute_name:String, _value_current:float, _value_max:float):
@@ -49,7 +49,7 @@ func on_death(_attribute_name:String, _value_current:float, _value_max:float):
 	
 	
 	if sound_on_death:
-		CogitoAudio.play_sound_3d(sound_on_death, parent_position)
+		CogitoAudio.play_sound_3d_in(self, sound_on_death, parent_position)
 	
 	for scene in spawn_on_death:
 		if scene:
@@ -57,7 +57,7 @@ func on_death(_attribute_name:String, _value_current:float, _value_max:float):
 			spawned_object.position = parent_position
 			spawned_object.rotation = parent_rotation
 			spawning_on_death.emit(spawned_object)
-			get_tree().current_scene.add_child(spawned_object)
+			CogitoLevel.spawn_parent(self).add_child(spawned_object)
 	
 	for nodepath in destroy_on_death:
 		var target := get_node_or_null(nodepath)

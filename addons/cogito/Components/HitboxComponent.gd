@@ -30,7 +30,7 @@ func damage(damage_amount: float, object: Node3D = null, _hit_direction:= Vector
 	if spawn_at_global_collision:
 		var spawned_object = spawn_at_global_collision.instantiate()
 		spawned_object.position = _hit_position
-		get_tree().current_scene.add_child(spawned_object)
+		CogitoLevel.spawn_parent(self).add_child(spawned_object)
 		
 	if spawn_at_local_collision:
 		var local_hit_position = parent.to_local(_hit_position)

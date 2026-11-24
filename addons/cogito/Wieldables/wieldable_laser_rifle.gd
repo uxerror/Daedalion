@@ -42,7 +42,8 @@ func _ready():
 	super._ready()
 	wieldable_mesh.hide()
 	firing_cooldown = 0
-	wielding_rid = CogitoSceneManager.get_player().get_rid()
+	var player := CogitoLevel.local_player(self)
+	wielding_rid = player.get_rid() if player else RID()
 
 
 func _physics_process(_delta: float) -> void:
@@ -157,6 +158,6 @@ func reload() -> bool:
 
 # Function called when wieldable is equipped.
 func equip(_player_interaction_component: PlayerInteractionComponent):
-	spawn_node = get_tree().get_current_scene()
+	spawn_node = CogitoLevel.spawn_parent(self)
 	animation_player.play(anim_equip)
 	player_interaction_component = _player_interaction_component

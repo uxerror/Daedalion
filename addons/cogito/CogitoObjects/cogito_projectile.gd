@@ -68,11 +68,11 @@ func _on_body_entered(collider: Node):
 	if rigid_body and noise_magnitude_when_impacting > 0:
 		var noise = ObjectNoise.new(show_noise_as_debug_mesh)
 		noise.set_parameters(ObjectNoise.NoiseType.Impact, noise_magnitude_when_impacting, 0.5, noise_collision_layer)
-		get_tree().current_scene.add_child(noise)
+		CogitoLevel.spawn_parent(self).add_child(noise)
 	
 	var collision_point = global_transform.origin
 	var bullet_direction = self.linear_velocity.normalized()
-	var player = CogitoSceneManager.get_player()
+	var player := CogitoLevel.local_player(self)
 	if player:
 		bullet_direction = (collision_point - player.get_global_transform().origin).normalized() ##This is hacky TODO needs to be fixed for Multiplayer support
 	
@@ -132,10 +132,9 @@ func stick_to_object(collider: Node):
 	joint.node_a = self.get_path()
 	joint.node_b = collider.get_path()
 
-	joint.position = global_transform.origin
-
-	# Add the joint to the scene 
-	get_tree().root.add_child(joint)
+	var parent := CogitoLevel.spawn_parent(self, true)
+	joint.position = parent.to_local(global_position) if parent is Node3D else global_position
+	parent.add_child(joint)
 	#self.linear_velocity = Vector3.ZERO
 	#self.angular_velocity = Vector3.ZERO
 
@@ -150,12 +149,12 @@ func deal_damage(collider: Node,bullet_direction,bullet_position):
 
 func die():
 	if sound_on_death:
-		CogitoAudio.play_sound_3d(sound_on_death, global_position)
+		CogitoAudio.play_sound_3d_in(self, sound_on_death, global_position)
 		
 	for scene in spawn_on_death:
 		if scene:
 			var spawned_object = scene.instantiate()
 			spawned_object.position = position
-			get_tree().current_scene.add_child(spawned_object)
+			CogitoLevel.spawn_parent(self).add_child(spawned_object)
 			
 	queue_free()

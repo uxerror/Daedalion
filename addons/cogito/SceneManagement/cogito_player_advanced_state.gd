@@ -212,9 +212,13 @@ func load_sitting_state(player):
 	player.is_ejected = is_ejected
 	player.currently_tweening = currently_tweening
 	if is_sitting and !current_sittable_id.is_empty():
-		CogitoSceneManager._current_sittable_node = CogitoPersistentId.find(CogitoSceneManager.get_tree(), current_sittable_id)
+		CogitoSceneManager._current_sittable_node = CogitoPersistentId.find_in_level(
+			player, current_sittable_id
+		)
 	elif is_sitting and current_sittable_path != null:
-		CogitoSceneManager._current_sittable_node = CogitoSceneManager.get_node(current_sittable_path)
+		CogitoSceneManager._current_sittable_node = CogitoPersistentId.resolve_path(
+			player, current_sittable_path, CogitoSceneManager
+		)
 
 
 # Functions for attributes

@@ -67,7 +67,8 @@ func _ready():
 	super._ready()
 	wieldable_mesh.hide()
 	firing_cooldown = 0
-	wielding_rid = CogitoSceneManager.get_player().get_rid()
+	var player := CogitoLevel.local_player(self)
+	wielding_rid = player.get_rid() if player else RID()
 	if projectile_prefab:
 		build_projectile_pool()
 
@@ -93,7 +94,7 @@ func npc_do_attack(attacking_npc: CogitoNPC):
 	
 	# Set the spawn node point if it hasn't already been set, on player it sets on equip
 	if not spawn_node:
-		spawn_node = get_tree().get_current_scene()
+		spawn_node = CogitoLevel.spawn_parent(self)
 	# Check that the RID has been re-assigned
 	if wielding_rid != attacking_npc.get_rid():
 		wielding_rid = attacking_npc.get_rid()
@@ -125,8 +126,20 @@ func action_secondary(is_released:bool):
 
 
 #region Projectile Methods
-func build_projectile_pool():
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		_free_unused_projectiles()
+
+
+func _free_unused_projectiles() -> void:
+	for projectile: Variant in projectile_pool:
+		if is_instance_valid(projectile) and not projectile.get_parent():
+			projectile.free()
 	projectile_pool.clear()
+
+
+func build_projectile_pool():
+	_free_unused_projectiles()
 	for i in pool_size:
 		projectile_pool.append(projectile_prefab.instantiate())
 
@@ -151,7 +164,7 @@ func fire_projectile(collision_point:Vector3):
 	projectile.damage_amount = npc_wieldable_damage
 	projectile.set_linear_velocity(direction * projectile_velocity)
 	projectile.direction = direction
-	projectile.reparent(get_tree().get_current_scene())
+	projectile.reparent(CogitoLevel.spawn_parent(self))
 #endregion
 
 #region Hitscan Methods

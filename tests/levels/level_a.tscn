@@ -1,0 +1,38 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/cogito/SceneManagement/cogito_scene.gd" id="1"]
+[ext_resource type="Script" path="res://addons/cogito/CogitoObjects/cogito_object.gd" id="2"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Properties/cogito_element_area.gd" id="3"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Attributes/cogito_health_attribute.gd" id="4"]
+[ext_resource type="PackedScene" path="res://addons/cogito/CogitoNPC/cogito_npc.tscn" id="5"]
+
+[sub_resource type="BoxShape3D" id="Box"]
+
+[node name="LevelA" type="Node3D"]
+script = ExtResource("1")
+
+[node name="Crate" type="RigidBody3D" parent="." groups=["test_crates"]]
+collision_layer = 256
+collision_mask = 0
+freeze = true
+script = ExtResource("2")
+
+[node name="Shape" type="CollisionShape3D" parent="Crate"]
+shape = SubResource("Box")
+
+[node name="Health" type="Node" parent="Crate"]
+script = ExtResource("4")
+
+[node name="Element" type="Area3D" parent="."]
+collision_layer = 0
+collision_mask = 256
+script = ExtResource("3")
+enabled = false
+
+[node name="Shape" type="CollisionShape3D" parent="Element"]
+shape = SubResource("Box")
+
+[node name="Removable" type="Node3D" parent="."]
+
+[node name="NPC" parent="." instance=ExtResource("5")]
+position = Vector3(20, 0, 0)

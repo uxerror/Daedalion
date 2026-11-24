@@ -99,12 +99,12 @@ func interact(interactor: Node3D):
 
 func place_item():
 	#TODO PLACE ITEM LOGIC GOES HERE
-	CogitoAudio.play_sound_3d(object_placement_sound, self.global_position)
+	CogitoAudio.play_sound_3d_in(self, object_placement_sound, self.global_position)
 	spawned_object = preloaded_expected_item.instantiate()
 	
 	is_holding_object = true
 	
-	get_tree().current_scene.add_child(spawned_object)
+	CogitoLevel.spawn_parent(self).add_child(spawned_object)
 	if spawned_object.is_class("RigidBody3D"):
 		spawned_object.set_freeze_mode(0)
 		spawned_object.freeze = true
@@ -119,7 +119,7 @@ func place_carryable(world_carryable: Node3D):
 		CogitoGlobals.debug_log(true,"cogito_snap_slot.gd", "place_carryable(): body wasn't a RigidBody3D.")
 		return
 		
-	CogitoAudio.play_sound_3d(object_placement_sound, self.global_position)
+	CogitoAudio.play_sound_3d_in(self, object_placement_sound, self.global_position)
 	if player_interaction_component and player_interaction_component.carrying.carried_object:
 		player_interaction_component.carrying.carried_object.leave()
 	is_holding_object = true
@@ -129,7 +129,7 @@ func place_carryable(world_carryable: Node3D):
 
 
 func remove_object():
-	CogitoAudio.play_sound_3d(object_removed_sound, self.global_position)
+	CogitoAudio.play_sound_3d_in(self, object_removed_sound, self.global_position)
 	is_holding_object = false
 	if spawned_object:
 		spawned_object = null

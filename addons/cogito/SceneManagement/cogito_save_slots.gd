@@ -57,7 +57,7 @@ func activate_saved_slot(prepared: Manager.PreparedSlot) -> Error:
 func apply_saved_game(prepared: Manager.PreparedSlot) -> void:
 	_manager._scene_state = prepared.scene
 	if _manager._scene_state:
-		_manager._scene_persistence.apply()
+		_manager._scene_persistence.apply(prepared.scene)
 	_manager._player_persistence.apply(_manager.get_player(), prepared.player)
 	_manager._slot_files.show_save_warnings(prepared)
 
@@ -79,7 +79,7 @@ func save_generation(slot: String, update_history: bool) -> Error:
 	_manager._current_scene_path = level.scene_file_path
 	var state := player.create_new_state()
 	state.populate_save_data(player, slot)
-	var scene := _manager._scene_persistence.capture()
+	var scene := _manager._scene_persistence.capture(level)
 	var shot: Image = _manager._screenshot_to_save if slot != "temp" else null
 	if shot:
 		var directory := _manager.cogito_state_dir.path_join(slot)

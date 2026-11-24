@@ -26,6 +26,8 @@ func move_player_to_connector(connector_name:String):
 
 
 func _enter_tree() -> void:
+	if CogitoLevel.hosted_root(self):
+		return
 	CogitoSceneManager._current_scene_root_node = self
 	CogitoGlobals.debug_log(true, "CogitoScene.gd", "Current scene root node set to " + CogitoSceneManager._current_scene_root_node.name )
 	

@@ -74,7 +74,7 @@ func action_primary(_passed_item_reference : InventoryItemPD, _is_released: bool
 	bullet_point.add_child(projectile)
 	projectile.damage_amount = _passed_item_reference.wieldable_damage
 	projectile.set_linear_velocity(direction * projectile_velocity)
-	projectile.reparent(get_tree().get_current_scene())
+	projectile.reparent(CogitoLevel.spawn_parent(self))
 
 
 func instantiate_projectile() -> Node3D:

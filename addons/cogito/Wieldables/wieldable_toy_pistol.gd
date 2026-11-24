@@ -90,7 +90,7 @@ func action_primary(_passed_item_reference : InventoryItemPD, _is_released: bool
 	projectile.damage_amount = _passed_item_reference.wieldable_damage
 	projectile.set_linear_velocity(direction * projectile_velocity)
 	projectile.direction = direction
-	projectile.reparent(get_tree().get_current_scene())
+	projectile.reparent(CogitoLevel.spawn_parent(self))
 
 
 func action_secondary(is_released:bool):

@@ -107,7 +107,7 @@ func press():
 
 	pressed.emit()
 	pressed_ref.emit(self)
-	CogitoAudio.play_sound_3d(press_sound, global_position)
+	CogitoAudio.play_sound_3d_in(self, press_sound, global_position)
 	
 	if !allows_repeated_interaction:
 		has_been_used = true

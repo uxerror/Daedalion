@@ -437,7 +437,7 @@ func extinguish(play_sound: bool = true):
 	if audio_stream_player_3d:
 		audio_stream_player_3d.stop()
 	if play_sound:
-		CogitoAudio.play_sound_3d(audio_extinguishing, global_position)
+		CogitoAudio.play_sound_3d_in(self, audio_extinguishing, global_position)
 	clear_spawned_effects(VFX_FIRE)
 	has_been_extinguished.emit()
 

@@ -13,7 +13,7 @@ const META_KEY := &"cogito_persistent_id"
 static func of(node: Node) -> String:
 	if node.has_meta(META_KEY):
 		return node.get_meta(META_KEY)
-	var level_root := get_level_root(node.get_tree())
+	var level_root := CogitoLevel.root_of(node)
 	if node.is_in_group("Persist"):
 		var id := _level_id(level_root, node)
 		if id.is_empty():
@@ -36,22 +36,45 @@ static func is_disappearing(node: Node) -> bool:
 	return false
 
 
-## Returns the node with this id, or null if there is none.
+## Compatibility lookup in the current offline level. Game code should pass its context.
 static func find(tree: SceneTree, id: String) -> Node:
+	return find_in_level(tree.root, id)
+
+
+## Resolves a persistent ID in the level containing context.
+static func find_in_level(context: Node, id: String) -> Node:
 	if id.is_empty():
 		return null
 	if id.begins_with("persist:") or id.begins_with("level:"):
-		for node in tree.get_nodes_in_group("Persist"):
+		for node in CogitoLevel.nodes_in_group(context, &"Persist"):
 			# Skip nodes that a load is about to replace.
 			if not node.is_queued_for_deletion() and of(node) == id:
 				return node
 		return null
-	if id.begins_with("/"):
-		return tree.root.get_node_or_null(NodePath(id))
-	var level_root := get_level_root(tree)
-	if level_root == null:
-		return null
-	return level_root.get_node_or_null(NodePath(id))
+	var root := CogitoLevel.root_of(context)
+	return resolve_path(context, NodePath(id), root)
+
+
+## Resolves legacy paths within a level, including offline /root/<level>/... in a host.
+## Relative paths start at relative_to. Absolute paths into other instances are rejected.
+static func resolve_path(context: Node, path: NodePath, relative_to: Node) -> Node:
+	var root := CogitoLevel.root_of(context)
+	if path.is_absolute() and root and root.is_in_group(CogitoLevel.HOSTED_ROOT):
+		# Old snapshots could put a runtime object's parent directly under the window.
+		if path == ^"/root":
+			return root
+		if path.get_name_count() >= 2 and path.get_name(0) == &"root":
+			if path.get_name(1) == root.name:
+				relative_to = root
+				path = path.slice(2) if path.get_name_count() > 2 else ^"."
+	var tree := CogitoLevel.tree_of(context)
+	if path.is_absolute():
+		relative_to = tree.root
+	var node := relative_to.get_node_or_null(path) if relative_to else null
+	if node and tree.has_group(CogitoLevel.HOSTED_ROOT):
+		if CogitoLevel.root_of(node) != root:
+			return null
+	return node
 
 
 ## Restores a saved id on a node that was recreated from a save.
@@ -66,7 +89,7 @@ static func stamp_level(level_root: Node) -> void:
 	if level_root.has_meta(LEVEL_IDS_META):
 		return
 	var known_ids := {}
-	for node in level_root.get_tree().get_nodes_in_group("Persist"):
+	for node in CogitoLevel.nodes_in_group(level_root, &"Persist"):
 		if not is_from_level(level_root, node):
 			continue
 		if not node.has_meta(META_KEY):
@@ -74,7 +97,6 @@ static func stamp_level(level_root: Node) -> void:
 		if node.has_method("save"):
 			known_ids[of(node)] = true
 	level_root.set_meta(LEVEL_IDS_META, known_ids)
-
 
 
 ## True if the node comes from the level's scene files, false if it was added during play.
@@ -98,9 +120,4 @@ static func _level_id(level_root: Node, node: Node) -> String:
 ## The root node of the current level. During a scene change the new level is set up before it becomes current_scene,
 ## so the root that CogitoScene registers when it enters the tree comes first.
 static func get_level_root(tree: SceneTree) -> Node:
-	var scene_root : Node = CogitoSceneManager._current_scene_root_node
-	if is_instance_valid(scene_root) and scene_root.is_inside_tree() and not scene_root.is_queued_for_deletion():
-		return scene_root
-	if is_instance_valid(tree.current_scene):
-		return tree.current_scene
-	return null
+	return CogitoLevel.current_root(tree)

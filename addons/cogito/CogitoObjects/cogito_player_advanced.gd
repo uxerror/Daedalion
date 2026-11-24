@@ -1888,7 +1888,8 @@ var can_play_swim_movement : bool = true
 
 
 func is_body_in_water() -> bool:
-	if get_tree().get_nodes_in_group("water_area").all(func(area): return !area.overlaps_body(self)):
+	var water_areas := CogitoLevel.nodes_in_group(self, &"water_area")
+	if water_areas.all(func(area): return !area.overlaps_body(self)):
 		return false
 	else:
 		return true

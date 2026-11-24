@@ -7,18 +7,13 @@ const NODE_RECORD_KEYS := [
 	"filename", "parent", "pos_x", "pos_y", "pos_z", "rot_x", "rot_y", "rot_z"
 ]
 
-var _manager: Manager
 
-
-func _init(manager: Manager) -> void:
-	_manager = manager
-
-
-func capture_nodes(state: CogitoSceneState) -> void:
-	var root := CogitoPersistentId.get_level_root(_manager.get_tree())
+## Captures the saveable nodes and authored ID manifest of this instance.
+func capture_nodes(state: CogitoSceneState, context: Node) -> void:
+	var root := CogitoLevel.root_of(context)
 	if root and root.has_meta(CogitoPersistentId.LEVEL_IDS_META):
 		state.known_persist_ids = root.get_meta(CogitoPersistentId.LEVEL_IDS_META).duplicate()
-	var save_nodes := _manager.get_tree().get_nodes_in_group("Persist")
+	var save_nodes := CogitoLevel.nodes_in_group(context, "Persist")
 	if not save_nodes:
 		CogitoGlobals.debug_log(true, "CSM", "No nodes in Persist group!")
 	for node in save_nodes:
@@ -54,7 +49,7 @@ func capture_nodes(state: CogitoSceneState) -> void:
 			node_data["angular_velocity_z"] = node.angular_velocity.z
 		state.add_node_data_to_array(node_data)
 
-	var state_nodes := _manager.get_tree().get_nodes_in_group("save_object_state")
+	var state_nodes := CogitoLevel.nodes_in_group(context, "save_object_state")
 	if not state_nodes:
 		CogitoGlobals.debug_log(true, "CSM", "No nodes in save_object_state group!")
 	for node in state_nodes:
@@ -73,19 +68,20 @@ func capture_nodes(state: CogitoSceneState) -> void:
 		state.add_state_data_to_array(state_data)
 
 
-func apply_nodes() -> void:
+## Restores both persist groups in the same instance used for ID resolution.
+func apply_nodes(state: CogitoSceneState, context: Node) -> void:
 	# A saved pickup without its item cannot be interacted with or saved again.
-	_manager._scene_state.saved_nodes = _manager._scene_state.saved_nodes.filter(
+	state.saved_nodes = state.saved_nodes.filter(
 		func(entry: Dictionary) -> bool:
 			return not entry.has("slot_data") or entry.slot_data != null
 	)
-	if _manager._scene_state.saved_nodes.all(func(node_data): return node_data.has("cogito_id")):
-		_load_persist_nodes_in_place(_manager._scene_state.saved_nodes)
+	if state.saved_nodes.all(func(node_data): return node_data.has("cogito_id")):
+		_load_persist_nodes_in_place(state, context)
 	else:
-		_load_persist_nodes_legacy(_manager._scene_state.saved_nodes)
+		_load_persist_nodes_legacy(state.saved_nodes, context)
 
-	for state_data in _manager._scene_state.saved_states:
-		var node_to_set: Node = _find_saved_node(state_data, "cogito_id", "node_path")
+	for state_data in state.saved_states:
+		var node_to_set: Node = _find_saved_node(context, state_data, "cogito_id", "node_path")
 		if not node_to_set:
 			var id := str(state_data.get("cogito_id", state_data.get("node_path")))
 			CogitoGlobals.debug_log(
@@ -100,19 +96,20 @@ func apply_nodes() -> void:
 
 ## Updates matching nodes in place, respawns missing saved nodes and removes eligible live
 ## nodes omitted by the snapshot.
-func _load_persist_nodes_in_place(saved_nodes: Array) -> void:
+func _load_persist_nodes_in_place(state: CogitoSceneState, context: Node) -> void:
+	var saved_nodes := state.saved_nodes
 	var saved_ids := {}
 	for node_data in saved_nodes:
 		saved_ids[node_data["cogito_id"]] = true
 
 	var live_nodes := {}
-	for node in _manager.get_tree().get_nodes_in_group("Persist"):
+	for node in CogitoLevel.nodes_in_group(context, "Persist"):
 		if CogitoPersistentId.is_disappearing(node):
 			continue
 		var id := CogitoPersistentId.of(node)
 		if saved_ids.has(id):
 			live_nodes[id] = node
-		elif node.has_method("save") and _manager._scene_state.removes_missing_node(node, id):
+		elif node.has_method("save") and state.removes_missing_node(node, id):
 			CogitoGlobals.debug_log(
 				true, "CSM", "Removing node that is not in the save: " + node.name
 			)
@@ -121,26 +118,26 @@ func _load_persist_nodes_in_place(saved_nodes: Array) -> void:
 	for node_data in saved_nodes:
 		var node: Node = live_nodes.get(node_data["cogito_id"])
 		if not node:
-			node = _spawn_saved_node(node_data)
+			node = _spawn_saved_node(node_data, context)
 			if not node:
 				continue
 		_apply_saved_node_data(node, node_data)
 
 
 ## Saves made before persistent IDs require deleting and recreating the entire group.
-func _load_persist_nodes_legacy(saved_nodes: Array) -> void:
-	var save_nodes := _manager.get_tree().get_nodes_in_group("Persist")
+func _load_persist_nodes_legacy(saved_nodes: Array, context: Node) -> void:
+	var save_nodes := CogitoLevel.nodes_in_group(context, "Persist")
 	for node in save_nodes:
 		CogitoGlobals.debug_log(true, "CSM", "Deleting existing node: " + node.name)
 		node.queue_free()
 
 	for node_data in saved_nodes:
-		var new_object := _spawn_saved_node(node_data)
+		var new_object := _spawn_saved_node(node_data, context)
 		if new_object:
 			_apply_saved_node_data(new_object, node_data)
 
 
-func _spawn_saved_node(node_data: Dictionary) -> Node:
+func _spawn_saved_node(node_data: Dictionary, context: Node) -> Node:
 	if str(node_data.get("filename", "")).is_empty():
 		CogitoGlobals.debug_log(
 			true,
@@ -151,7 +148,7 @@ func _spawn_saved_node(node_data: Dictionary) -> Node:
 			)
 		)
 		return null
-	var parent_node: Node = _find_saved_node(node_data, "cogito_parent_id", "parent")
+	var parent_node: Node = _find_saved_node(context, node_data, "cogito_parent_id", "parent")
 	if not parent_node:
 		CogitoGlobals.debug_log(
 			true, "CSM", "Parent of saved node %s not found, skipped." % str(node_data["filename"])
@@ -216,9 +213,11 @@ func _restore_properties(node: Node, data: Dictionary, skip_item_charge: bool) -
 
 
 ## Pre-ID entries identify nodes by their absolute path.
-func _find_saved_node(data: Dictionary, id_key: String, legacy_path_key: String) -> Node:
+func _find_saved_node(
+	context: Node, data: Dictionary, id_key: String, legacy_path_key: String
+) -> Node:
 	if data.has(id_key):
-		return CogitoPersistentId.find(_manager.get_tree(), data[id_key])
+		return CogitoPersistentId.find_in_level(context, data[id_key])
 	if data.has(legacy_path_key):
-		return _manager.get_node_or_null(data[legacy_path_key])
+		return CogitoPersistentId.resolve_path(context, data[legacy_path_key], context)
 	return null

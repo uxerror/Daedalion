@@ -71,7 +71,7 @@ func attempt_attack():
 
 func punch_attack(target: Node3D):
 	var dir = npc.global_position.direction_to(target.global_position)
-	CogitoAudio.play_sound_3d(attack_sound, npc.global_position)
+	CogitoAudio.play_sound_3d_in(self, attack_sound, npc.global_position)
 	
 	# Activate the collider for the attack
 	attack_impact_zone.set_collision(true)

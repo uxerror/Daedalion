@@ -130,6 +130,6 @@ func reset():
 
 func generate_attention_target(position: Vector3):
 	var attention_point = CogitoPoint.new(attention_target_sprite_texture, show_attention_target)
-	get_tree().current_scene.add_child(attention_point)
+	CogitoLevel.spawn_parent(self).add_child(attention_point)
 	attention_point.global_position = position
 	npc.attention_target = attention_point

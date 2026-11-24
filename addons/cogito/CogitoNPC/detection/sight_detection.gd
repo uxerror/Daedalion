@@ -5,6 +5,8 @@
 extends Node3D
 class_name SightDetection
 
+const DebugLineScript := preload("res://addons/cogito/Scripts/debug_line.gd")
+
 ## References to the Area3D detection area
 @export var detection_area: Area3D
 ## Reference to the cone collider itself
@@ -43,7 +45,7 @@ class_name SightDetection
 @export var sight_range_cone: Vector3 = Vector3(10, 10, 15)
 ## Shows the raycast if the player is seen by the sight detection system
 @export var show_detection_line: bool = false
-var debug_line = preload("res://addons/cogito/Scripts/debug_line.gd").new()
+var debug_line: DebugLineScript
 
 ## Current suspicion of the player
 var current_suspicion: float = 0
@@ -77,6 +79,7 @@ static func _linear_curve() -> Curve:
 
 func _ready() -> void:
 	if show_detection_line:
+		debug_line = DebugLineScript.new()
 		add_child(debug_line)
 	connect_detection_signals()
 	#generate_sight_range_collider()
@@ -129,9 +132,9 @@ func _physics_process(delta: float) -> void:
 
 
 func check_if_player_in_los() -> bool:
-	for	node in nodes_inside_cone:
-		if node is CogitoPlayer:
-			return fire_raycast_at(node)
+	for node in nodes_inside_cone:
+		if node is CogitoPlayer and fire_raycast_at(node):
+			return true
 	return false
 
 
@@ -213,7 +216,7 @@ func fire_raycast_at(node: Node3D) -> bool:
 
 func _fire_raycast_at_player_result(position: Vector3, player: CogitoPlayer) -> bool:
 	player_sight_collision_point = position
-	if show_detection_line:
+	if show_detection_line and debug_line:
 		debug_line.draw_3d_line(npc.head.global_position, player.global_position, Color(1,0,0), 0.1)
 	ref_to_player = player
 	if ref_to_player.visibility_attribute:
@@ -246,6 +249,6 @@ func on_body_exited(body: Node3D):
 
 func generate_attention_target(position: Vector3):
 	var attention_point = CogitoPoint.new(attention_target_sprite_texture, show_debug_info)
-	get_tree().current_scene.add_child(attention_point)
+	CogitoLevel.spawn_parent(self).add_child(attention_point)
 	attention_point.global_position = position
 	npc.attention_target = attention_point

@@ -54,10 +54,7 @@ var end_time: float
 
 
 # Internal variables to player
-var _player: CogitoPlayer
 var _player_hud: CogitoHud
-var _player_inventory: CogitoInventory
-var _player_interaction_component: PlayerInteractionComponent
 
 enum InventoryRespawningLogic {
 NONE, ## Contents of the container will not respawn. It will be safe for player to put his items in and out after the initialization.
@@ -83,10 +80,8 @@ func _ready() -> void:
 
 ## Set up references to player and container in a deferred manner to avoid nulling
 func _set_up_references():
-	_player = CogitoSceneManager.get_player()
-	_player_hud = _player.player_hud
-	_player_inventory = _player.inventory_data
-	_player_interaction_component = _player.player_interaction_component
+	var player := CogitoLevel.local_player(self)
+	_player_hud = player.player_hud if player else null
 	
 	if self.inventory_data != null:
 		inventory_to_populate = self.inventory_data
@@ -105,7 +100,7 @@ func _calculate_timer_value():
 func _handle_inventory():
 	
 	var lootgen = LootGenerator.new()
-	get_tree().current_scene.add_child(lootgen)
+	CogitoLevel.spawn_parent(self).add_child(lootgen)
 	finalized_items = lootgen.generate(loot_table, amount_of_items_to_drop)
 	lootgen.call_deferred("queue_free")
 	
@@ -133,7 +128,7 @@ func _handle_respawning():
 			if !self.toggle_inventory.is_connected(_on_inventory_toggled):
 				self.toggle_inventory.connect(_on_inventory_toggled)
 				
-			if !self._player_hud.hide_inventory.is_connected(_on_inventory_hidden):
+			if _player_hud and !self._player_hud.hide_inventory.is_connected(_on_inventory_hidden):
 				self._player_hud.hide_inventory.connect(_on_inventory_hidden)
 			
 			if timer == null:
@@ -277,7 +272,7 @@ func _on_inventory_hidden():
 
 ## Pause the timer on inventory access
 func _on_inventory_toggled(external_inventory_owner: Node):
-	if self == external_inventory_owner and inventory_respawning_logic == InventoryRespawningLogic.TIMED_RESPAWN:
+	if _player_hud and self == external_inventory_owner and inventory_respawning_logic == InventoryRespawningLogic.TIMED_RESPAWN:
 		if _player_hud.is_inventory_visible():
 			_pause_timer()
 			viewing_this_container = true
@@ -332,11 +327,11 @@ func save():
 func _exit_tree() -> void:
 	if !_player_hud: return
 	
-	if self.toggle_inventory.is_connected(_player_hud.toggle_inventory_interface):
+	if _player_hud and self.toggle_inventory.is_connected(_player_hud.toggle_inventory_interface):
 		self.toggle_inventory.disconnect(_player_hud.toggle_inventory_interface)
 		
 	if self.toggle_inventory.is_connected(_on_inventory_toggled):
 		self.toggle_inventory.disconnect(_on_inventory_toggled)
 		
-	if self._player_hud.hide_inventory.is_connected(_on_inventory_hidden):
+	if _player_hud and self._player_hud.hide_inventory.is_connected(_on_inventory_hidden):
 		self._player_hud.hide_inventory.disconnect(_on_inventory_hidden)

@@ -252,7 +252,7 @@ func drop_item(slot_data: InventorySlotPD) -> bool:
 		if safe_drop_distance < item_length:
 			return false
 			
-	CogitoSceneManager._current_scene_root_node.add_child(dropped_item)
+	CogitoLevel.root_of(self).add_child(dropped_item)
 	dropped_item.global_rotation = body.global_rotation
 	dropped_item.position = shape_cast.global_position + (safe_drop_distance - item_length / 2) * -camera_basis_z
 		

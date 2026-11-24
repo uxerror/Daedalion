@@ -255,7 +255,7 @@ func spin_step(direction: int) -> void:
 	if !was_goal_met and is_goal_met():
 		spinner_goal_met.emit()
 		if sound_on_goal_met :
-			CogitoAudio.play_sound_3d(sound_on_goal_met, global_position)
+			CogitoAudio.play_sound_3d_in(self, sound_on_goal_met, global_position)
 		if destroy_on_goal_met:
 			force_exit()
 			get_parent().queue_free()

@@ -23,7 +23,7 @@ func spawn_objects():
 		
 		var spawned_object = object_to_spawn.instantiate()
 		spawned_object.position = spawn_point
-		get_tree().current_scene.add_child(spawned_object)
+		CogitoLevel.spawn_parent(self).add_child(spawned_object)
 		
 		left_to_spawn -= 1
 

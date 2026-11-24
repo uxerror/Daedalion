@@ -20,13 +20,16 @@ extends Resource
 func removes_missing_node(node: Node, id: String) -> bool:
 	if known_persist_ids == null or known_persist_ids.has(id):
 		return true
-	var root := CogitoPersistentId.get_level_root(node.get_tree())
+	var root := CogitoLevel.root_of(node)
 	return not CogitoPersistentId.is_from_level(root, node)
 
 
-func capture_attributes(tree: SceneTree) -> void:
+func capture_attributes(tree: SceneTree, context: Node = null) -> void:
 	saved_attribute_states.clear()
-	for attribute: CogitoAttribute in tree.get_nodes_in_group(CogitoAttribute.SAVE_GROUP):
+	if not context:
+		context = tree.root
+	var attributes := CogitoLevel.nodes_in_group(context, CogitoAttribute.SAVE_GROUP)
+	for attribute: CogitoAttribute in attributes:
 		if (
 			CogitoPersistentId.is_disappearing(attribute)
 			or CogitoSceneManager.is_part_of_player(attribute)
@@ -39,9 +42,9 @@ func capture_attributes(tree: SceneTree) -> void:
 		saved_attribute_states.append(entry)
 
 
-func restore_attributes() -> void:
+func restore_attributes(context: Node = null) -> void:
 	for entry in saved_attribute_states:
-		var attribute := CogitoSceneManager.find_element_state_node(entry) as CogitoAttribute
+		var attribute := CogitoSceneManager.find_element_state_node(entry, context) as CogitoAttribute
 		if attribute:
 			attribute.restore_attribute(entry.get("value", attribute.value_current), entry.max)
 

@@ -30,9 +30,7 @@ class_name LootComponent extends Node3D
 @export var health_component_to_monitor: CogitoHealthAttribute
 
 # Internal variables to player
-var _player: CogitoPlayer
 var _player_hud: CogitoHud
-var _player_inventory: CogitoInventory
 
 enum SpawningLogic {
 NONE = 0, ## Default spawning logic, will not actually spawn anything even if component is enabled.
@@ -54,9 +52,8 @@ func _ready() -> void:
 
 ## Set up references to player in a deferred manner to avoid nulling during tree operation
 func _set_up_references():
-	_player = CogitoSceneManager.get_player()
-	_player_hud = _player.player_hud
-	_player_inventory = _player.inventory_data
+	var player := CogitoLevel.local_player(self)
+	_player_hud = player.player_hud if player else null
 	
 	if spawning_logic == SpawningLogic.SPAWN_ITEM:
 		health_component_to_monitor.death.connect(_spawn_loot)
@@ -77,7 +74,7 @@ func _spawn_loot():
 	
 	if enabled and amount_of_items_to_drop > 0:
 		var lootgen = LootGenerator.new()
-		get_tree().current_scene.add_child(lootgen)
+		CogitoLevel.spawn_parent(self).add_child(lootgen)
 		items_to_spawn = lootgen.generate(loot_table, amount_of_items_to_drop)
 		lootgen.call_deferred("queue_free")
 		
@@ -86,7 +83,7 @@ func _spawn_loot():
 				var item_to_spawn = load(item.inventory_item.drop_scene)
 				var spawned_item = item_to_spawn.instantiate() as CogitoObject
 				spawned_item.position = parent_position
-				get_tree().current_scene.add_child(spawned_item)
+				CogitoLevel.spawn_parent(self).add_child(spawned_item)
 				
 				var children: Array = []
 				children = spawned_item.get_children()
@@ -132,9 +129,10 @@ func _spawn_loot_container():
 	if enabled and amount_of_items_to_drop > 0:
 		spawned_loot_bag = loot_bag_scene.instantiate()
 		spawned_loot_bag.position = parent_position
-		get_tree().current_scene.call_deferred("add_child", spawned_loot_bag)
+		CogitoLevel.spawn_parent(self).call_deferred("add_child", spawned_loot_bag)
 		
-		if !spawned_loot_bag.toggle_inventory.is_connected(_player_hud.toggle_inventory_interface):
+		var toggle: Signal = spawned_loot_bag.toggle_inventory
+		if _player_hud and !toggle.is_connected(_player_hud.toggle_inventory_interface):
 			spawned_loot_bag.toggle_inventory.connect(_player_hud.toggle_inventory_interface)
 
 		inventory_to_populate = spawned_loot_bag.inventory_data
@@ -145,7 +143,7 @@ func _spawn_loot_container():
 		CogitoGlobals.debug_log(debug_prints, "Loot Component", "Spawned Loot Bag: " + str(spawned_loot_bag) + "at these coordinates: " + str(spawned_loot_bag.position))
 		
 		var lootgen = LootGenerator.new()
-		get_tree().current_scene.add_child(lootgen)
+		CogitoLevel.spawn_parent(self).add_child(lootgen)
 		finalized_items = lootgen.generate(loot_table, amount_of_items_to_drop)
 		lootgen.call_deferred("queue_free")
 		

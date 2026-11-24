@@ -27,11 +27,19 @@ func play_sound(stream: AudioStream, volume_db := 0.0, pitch_scale := 1.0, bus: 
 	return player
 
 
-## Plays a sound at a fixed global position in the current scene.
+## Plays a sound in the current offline scene. Game code should use play_sound_3d_in().
 func play_sound_3d(stream: AudioStream, position: Vector3, volume_db := 0.0, pitch_scale := 1.0, bus: String = OptionsConstants.sfx_bus_name) -> AudioStreamPlayer3D:
+	return play_sound_3d_in(self, stream, position, volume_db, pitch_scale, bus)
+
+
+## Plays a positional one-shot in the world of the supplied emitter.
+func play_sound_3d_in(
+	context: Node, stream: AudioStream, position: Vector3, volume_db := 0.0,
+	pitch_scale := 1.0, bus: String = OptionsConstants.sfx_bus_name
+) -> AudioStreamPlayer3D:
 	if not stream:
 		return null
-	var scene := get_tree().current_scene
+	var scene := CogitoLevel.spawn_parent(context)
 	if not scene:
 		CogitoGlobals.debug_log(true, "cogito_audio.gd", "No current scene to play " + stream.resource_path + " in.")
 		return null

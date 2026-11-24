@@ -265,12 +265,14 @@ func _apply_player_state(player: CogitoPlayer, state: CogitoPlayerState) -> void
 	_player_persistence.apply(player, state)
 
 
-func load_scene_state(level_name: String, slot: String) -> void:
-	_scene_persistence.load_scene_state(level_name, slot)
+## Restores the selected level instance. Defaults to the current level.
+func load_scene_state(level_name: String, slot: String, level_root: Node = null) -> void:
+	_scene_persistence.load_scene_state(level_name, slot, level_root)
 
 
-func save_scene_state(level_name: String, slot: String) -> Error:
-	return _scene_persistence.save_scene_state(level_name, slot)
+## Writes a snapshot of the selected level instance. Defaults to the current level.
+func save_scene_state(level_name: String, slot: String, level_root: Node = null) -> Error:
+	return _scene_persistence.save_scene_state(level_name, slot, level_root)
 
 
 ## Identifies an element by its nearest saveable Persist ancestor and a relative path.
@@ -280,8 +282,8 @@ func get_element_state_key(node: Node) -> Dictionary:
 
 
 ## Returns the node of a key made by get_element_state_key(), or null.
-func find_element_state_node(key: Dictionary) -> Node:
-	return _scene_persistence.find_element_state_node(key)
+func find_element_state_node(key: Dictionary, level_root: Node = null) -> Node:
+	return _scene_persistence.find_element_state_node(key, level_root)
 
 
 ## Records a destroyed level node so loading frees it again. The Persist snapshot
@@ -290,8 +292,8 @@ func register_destroyed_node(node: Node) -> void:
 	_scene_persistence.register_destroyed_node(node)
 
 
-func _get_destroyed_nodes() -> Array:
-	return _scene_persistence.destroyed_nodes()
+func _get_destroyed_nodes(level_root: Node = null) -> Array:
+	return _scene_persistence.destroyed_nodes(level_root)
 
 
 func is_part_of_player(node: Node) -> bool:
@@ -299,8 +301,8 @@ func is_part_of_player(node: Node) -> bool:
 
 
 ## @deprecated: Use [code]CogitoPersistentId.find()[/code] instead.
-func find_object_from_uid(uid: int) -> Node3D:
-	return _scene_persistence.find_object_from_uid(uid)
+func find_object_from_uid(uid: int, level_root: Node = null) -> Node3D:
+	return _scene_persistence.find_object_from_uid(uid, level_root)
 
 
 func load_next_scene(

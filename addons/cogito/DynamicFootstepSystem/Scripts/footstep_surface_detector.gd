@@ -182,7 +182,7 @@ func _spawn_footstep_noise(noise_size):
 		return
 	var noise: ObjectNoise = ObjectNoise.new(use_debug_shape_noise)
 	noise.set_parameters(ObjectNoise.NoiseType.Footstep, noise_size/sound_reduction_divisor, footstep_noise_duration, footstep_noise_layer)
-	get_tree().current_scene.add_child(noise)
+	CogitoLevel.spawn_parent(self).add_child(noise)
 	noise.global_position = global_position
 
 func _play_footstep(profile : AudioStreamRandomizer, interaction_type: String):
@@ -194,4 +194,6 @@ func _play_footstep(profile : AudioStreamRandomizer, interaction_type: String):
 	elif interaction_type == "landing":
 		# Separate one-shot player so landing can use its own pitch/volume parameters
 		var player_node = get_parent()
-		CogitoAudio.play_sound_3d(profile, global_position, player_node.landing_volume, player_node.landing_pitch)
+		CogitoAudio.play_sound_3d_in(
+			self, profile, global_position, player_node.landing_volume, player_node.landing_pitch
+		)

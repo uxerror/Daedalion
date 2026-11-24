@@ -60,7 +60,7 @@ func _on_transaction_success() -> void:
 
 func _delayed_object_spawn() -> void:
 	if dispensing_sound:
-		CogitoAudio.play_sound_3d(dispensing_sound, spawn_point.global_position)
+		CogitoAudio.play_sound_3d_in(self, dispensing_sound, spawn_point.global_position)
 	
 	await get_tree().create_timer(spawn_delay).timeout
 	is_dispensing = false
@@ -68,7 +68,7 @@ func _delayed_object_spawn() -> void:
 	var spawned_object = object_to_spawn.instantiate()
 	spawned_object.position = spawn_point.global_position
 	spawned_object.rotation = spawn_rotation
-	get_tree().current_scene.add_child(spawned_object)
+	CogitoLevel.spawn_parent(self).add_child(spawned_object)
 
 
 func _update_vendor_state() -> void:

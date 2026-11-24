@@ -132,6 +132,8 @@ func in_state(states: Array) -> bool:
 ## Requests combat music while the NPC is in a combat behaviour and releases it otherwise.
 ## Called by StateProcessor.enter_state().
 func update_combat_music() -> void:
+	if is_inside_tree() and CogitoLevel.hosted_root(self):
+		return
 	var state: CogitoMusicState = combat_music_state if combat_music_state else CogitoAudio.get_scene_combat_music_state()
 	if state and in_state([BehaviourState.Chasing, BehaviourState.Attacking, BehaviourState.Searching]):
 		CogitoAudio.push_music_state(state, self)
@@ -377,10 +379,10 @@ func save():
 
 func load_nodepaths():
 	if !patrol_path_id.is_empty():
-		patrol_path = CogitoPersistentId.find(get_tree(), patrol_path_id)
+		patrol_path = CogitoPersistentId.find_in_level(self, patrol_path_id)
 	elif patrol_path_nodepath:
 		CogitoGlobals.debug_log(true,"CogitoNPC","Loading patrol path: " + str(patrol_path_nodepath))
-		patrol_path = get_node(patrol_path_nodepath)
+		patrol_path = CogitoPersistentId.resolve_path(self, patrol_path_nodepath, self)
 
 
 func load_state_chart():
@@ -412,14 +414,14 @@ func _restore_current_behaviour() -> void:
 
 func load_attention_target():
 	if !attention_target_id.is_empty():
-		attention_target = CogitoPersistentId.find(get_tree(), attention_target_id)
+		attention_target = CogitoPersistentId.find_in_level(self, attention_target_id)
 	elif attention_target_uid:
 		# Do a fast check for uid matching player before scanning the tree
-		var player = CogitoSceneManager.get_player()
+		var player := CogitoLevel.local_player(self)
 		if player and attention_target_uid == player.uid:
 			attention_target = player
 		else:
-			attention_target = CogitoSceneManager.find_object_from_uid(attention_target_uid)
+			attention_target = CogitoSceneManager.find_object_from_uid(attention_target_uid, self)
 	else:
 		attention_target = null
 
