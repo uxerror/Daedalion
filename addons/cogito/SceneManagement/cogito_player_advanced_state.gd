@@ -1,4 +1,4 @@
-class_name CogitPlayerAdvancedState
+class_name CogitoPlayerAdvancedState
 extends CogitoPlayerState
 
 

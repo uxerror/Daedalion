@@ -76,10 +76,10 @@ func after_test() -> void:
 	Input.mouse_mode = _original_mouse
 
 
-func make_slot(slot: String) -> CogitPlayerAdvancedState:
+func make_slot(slot: String) -> CogitoPlayerAdvancedState:
 	var directory := manager.cogito_state_dir.path_join(slot)
 	assert_int(DirAccess.make_dir_recursive_absolute(directory)).is_equal(OK)
-	var state := CogitPlayerAdvancedState.new()
+	var state := CogitoPlayerAdvancedState.new()
 	state.state_chart = _default_chart.duplicate_deep()
 	state.player_current_scene = "CogitoPlayer"
 	state.player_current_scene_path = LEVEL

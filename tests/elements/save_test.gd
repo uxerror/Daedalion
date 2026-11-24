@@ -912,7 +912,7 @@ func test_legacy_scene_and_player_state() -> void:
 		. override_failure_message("old save leaves elements at the scene defaults")
 		. is_true()
 	)
-	var player_state := CogitPlayerAdvancedState.new()
+	var player_state := CogitoPlayerAdvancedState.new()
 	var empty_player_data := assert_bool(player_state.element_state.is_empty())
 	empty_player_data.override_failure_message("old player state has no element data").is_true()
 	_free_level()
@@ -929,7 +929,7 @@ func test_player_state_updates_status_hud() -> void:
 	props.apply_element(E.WATER, 1.0)
 	props.apply_element(E.POISON, 2.0)
 	player.actor_elements.stun(3.0)
-	var state := player.create_new_state() as CogitPlayerAdvancedState
+	var state := player.create_new_state() as CogitoPlayerAdvancedState
 	state._save_element_state(player)
 	var saved_sections := assert_bool(
 		state.element_state.has("properties") and state.element_state.has("actor")

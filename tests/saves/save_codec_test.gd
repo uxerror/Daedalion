@@ -158,7 +158,7 @@ func test_player_and_scene_data_round_trip() -> void:
 	var prepared := manager.prepare_slot("B")
 	assert_int(prepared.status).is_equal(manager.SlotStatus.OK)
 	assert_array(prepared.warnings).is_empty()
-	var player := prepared.player as CogitPlayerAdvancedState
+	var player := prepared.player as CogitoPlayerAdvancedState
 	assert_vector(player.player_position).is_equal(state.player_position)
 	assert_bool(player.player_transform == state.player_transform).is_true()
 	assert_dict(player.world_dictionary).is_equal(state.world_dictionary)

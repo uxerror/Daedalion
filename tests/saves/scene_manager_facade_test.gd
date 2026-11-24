@@ -219,7 +219,7 @@ func test_destroyed_node_round_trip() -> void:
 
 func test_slot_screenshot_returns_supplied_placeholder() -> void:
 	var placeholder := GradientTexture1D.new()
-	var state := CogitPlayerAdvancedState.new()
+	var state := CogitoPlayerAdvancedState.new()
 	assert_object(manager.slot_screenshot(null, placeholder)).is_same(placeholder)
 	assert_object(manager.slot_screenshot(state, placeholder)).is_same(placeholder)
 	state.player_state_screenshot_file = manager.cogito_state_dir.path_join("missing.png")
