@@ -28,7 +28,7 @@ the goal is to move the template forward, not to stay mergeable with Cogito. Cha
 Cogito are still offered upstream where practical (see
 [Sending changes back to Cogito](#sending-changes-back-to-cogito)), but that is optional.
 
-[![Daedalion 1.3.0](https://img.shields.io/badge/Daedalion-1.3.0-0E887A)](docs/changelog.md) [![Based on COGITO](https://img.shields.io/badge/based_on-COGITO_1.2-35A1D7?labelColor=0E887A)](https://codeberg.org/Phazorknight/Cogito) [![GodotEngine](https://img.shields.io/badge/Godot_4.7.2_stable-blue?logo=godotengine&logoColor=white)](https://godotengine.org/)
+[![Daedalion 1.3.1](https://img.shields.io/badge/Daedalion-1.3.1-0E887A)](docs/changelog.md) [![Based on COGITO](https://img.shields.io/badge/based_on-COGITO_1.2-35A1D7?labelColor=0E887A)](https://codeberg.org/Phazorknight/Cogito) [![GodotEngine](https://img.shields.io/badge/Godot_4.7.2_stable-blue?logo=godotengine&logoColor=white)](https://godotengine.org/)
 
 `main` targets **Godot 4.7.2**: its resources and `.import` files are saved in the 4.7 format.
 The `upstream`, `1.3.0-dev` and `pr/*` branches stay in Cogito's format (Godot 4.6), so that they
@@ -37,7 +37,7 @@ do not commit those changes there (`git checkout -- .`).
 
 ## What is different from Cogito
 
-See the [Daedalion 1.3.0 changelog](docs/changelog.md) and the [migration guide](docs/migration-1.2-to-1.3.md).
+See the [Daedalion 1.3 changelog](docs/changelog.md) and the [migration guide](docs/migration-1.2-to-1.3.md).
 
 - **Advanced is the only bundled player controller.** The Simple scene and its save state were removed. Old Simple saves appear as broken slots.
 - **1.3 refactor stack** (proposed in [issue #615](https://codeberg.org/Phazorknight/Cogito/issues/615),
@@ -143,7 +143,7 @@ Please report problems with changes that exist only in Daedalion here, not on th
 
 ![COGITO_banner](addons/cogito/COGITO_banner.jpg)
 ### COGITO
-[![GodotEngine](https://img.shields.io/badge/Godot_4.7.2_stable-blue?logo=godotengine&logoColor=white)](https://godotengine.org/) [![Daedalion 1.3.0](https://img.shields.io/badge/Daedalion-1.3.0-0E887A)](docs/changelog.md)
+[![GodotEngine](https://img.shields.io/badge/Godot_4.7.2_stable-blue?logo=godotengine&logoColor=white)](https://godotengine.org/) [![Daedalion 1.3.1](https://img.shields.io/badge/Daedalion-1.3.1-0E887A)](docs/changelog.md)
 
 ## What is it?
 Cogito is a First Person Immersive Sim Template Project for Godot 4, providing a framework for creating interactable objects, various items to use and mechanics to influence the player and game environment.
