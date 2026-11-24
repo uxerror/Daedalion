@@ -42,6 +42,21 @@ static func hosted_root(node: Node) -> Node:
 	return null
 
 
+## Marks a network scene loaded into a normal window as its own level instance.
+static func mark_network_root(root: Node) -> bool:
+	if hosted_root(root):
+		return false
+	root.add_to_group(HOSTED_ROOT)
+	_hosted_worlds += 1
+	return true
+
+
+## Releases a mark owned by the network session when either the session or level exits.
+static func unmark_network_root(root: Node) -> void:
+	root.remove_from_group(HOSTED_ROOT)
+	_hosted_worlds -= 1
+
+
 ## Returns group members in scene-tree order. Offline uses the native group array directly.
 static func nodes_in_group(context: Node, group: StringName) -> Array[Node]:
 	var tree := context.get_tree() if context.is_inside_tree() else tree_of(context)

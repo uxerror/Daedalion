@@ -30,10 +30,11 @@ func _ready() -> void:
 		var credentials := {"display_name": _args["--name"]}
 		if _args.has("--content"):
 			credentials.content_version = _args["--content"]
-		CogitoNet.join("127.0.0.1", port, credentials)
+		CogitoNet.join(_args.get("--address", "127.0.0.1"), port, credentials)
 
 
 func _admitted_session() -> void:
+	add_child.call_deferred(preload("process_arena.tscn").instantiate())
 	_admitted = true
 	_roster_changed("")
 

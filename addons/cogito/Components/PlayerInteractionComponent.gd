@@ -90,6 +90,8 @@ func handles_action_event(event: InputEvent) -> bool:
 
 ## Handles a decoded action for this actor. Local sources resolve shared gamepad bindings.
 func on_action_input(event: InputEvent, gamepad: bool = false) -> void:
+	if player and player.network_movement_only:
+		return # TODO(MP2): route the intent to an authoritative interaction handler.
 	if event.is_action_pressed("interact") or event.is_action_pressed("interact2"):
 		var action: String = "interact" if event.is_action_pressed("interact") else "interact2"
 		start_interaction(action)
@@ -142,6 +144,8 @@ func release_held_actions() -> void:
 ## Interacts with the current target (targeting.interactable) using the given input action, like pressing that action does.
 ## Lets other controllers trigger interactions, for example after walking to an object that was clicked.
 func start_interaction(action: String) -> void:
+	if player and player.network_movement_only:
+		return # TODO(MP2): route the intent to an authoritative interaction handler.
 	# Seat entry/exit is part of locomotion. Other legacy world interactions may open
 	# process-wide interfaces and will get explicit recipients in MP2.
 	if not player.is_local_presentation:
@@ -213,6 +217,8 @@ func _is_interaction_blocked(node: InteractionComponent) -> bool:
 ## Performs an action from InteractionComponent.get_actions(), for example one picked from a context menu.
 ## Checks the same things as start_interaction() and updates the prompts afterwards.
 func perform_action(action: CogitoInteractionAction) -> void:
+	if player and player.network_movement_only:
+		return # TODO(MP2): route the intent to an authoritative interaction handler.
 	if !action.enabled:
 		return
 	var node := action.component

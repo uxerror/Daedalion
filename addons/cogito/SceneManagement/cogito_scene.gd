@@ -14,6 +14,33 @@ extends Node
 @export var combat_music_state : CogitoMusicState
 
 
+var _network_start := Transform3D.IDENTITY
+
+
+## Uses the authored controller as the online spawn marker, including when opening a
+## session in an already running level. A dedicated scene can provide just a Player marker.
+func bind_network_players() -> void:
+	var world := CogitoNet.player_world
+	if not world or world.active_level() == self:
+		return
+	var marker := get_node_or_null("Player") as Node3D
+	if not marker:
+		for child in get_children():
+			if child is CogitoPlayer:
+				marker = child
+				break
+	if marker:
+		if marker == CogitoSceneManager.get_player():
+			CogitoSceneManager.register_player(null)
+		_network_start = marker.transform
+		marker.free()
+	if is_node_ready():
+		world.bind_level(self, _network_start, scene_file_path)
+	else:
+		var bind := world.bind_level.bind(self, _network_start, scene_file_path)
+		ready.connect(bind, CONNECT_DEFERRED | CONNECT_ONE_SHOT)
+
+
 func move_player_to_connector(connector_name:String):
 	for node in connectors:
 		if node.get_name() == connector_name:
@@ -26,6 +53,9 @@ func move_player_to_connector(connector_name:String):
 
 
 func _enter_tree() -> void:
+	if CogitoNet.is_online():
+		bind_network_players()
+		return
 	if CogitoLevel.hosted_root(self):
 		return
 	CogitoSceneManager._current_scene_root_node = self

@@ -437,6 +437,8 @@ func report_mouse_movement(movement: Vector2) -> void:
 
 ## Passes a local presentation event to the configured quickslot views.
 func handle_quickslot_input(event: InputEvent) -> void:
+	if network_movement_only:
+		return
 	var fp_hud : CogitoPlayerHudManager = player_hud as CogitoPlayerHudManager
 	if fp_hud and fp_hud.inventory_interface and fp_hud.inventory_interface.quick_slots and can_act():
 		fp_hud.inventory_interface.quick_slots.on_input(event)
@@ -688,6 +690,9 @@ func _physics_process(delta):
 		command.has_control = false
 	else:
 		command = input_source.sample(self, next_sequence)
+	if not command and network_movement_only:
+		current_command = neutral_command(last_consumed_sequence)
+		current_command.has_control = false
 	if command and command.sequence > last_consumed_sequence:
 		current_command = command
 		last_consumed_sequence = command.sequence
@@ -709,6 +714,10 @@ func _handle_command_edge(edge: int, index: int) -> void:
 	if action == ACTION.CROUCH and pressed and current_command.toggle_crouch and not is_movement_locked_by_elements():
 		if current_moving_state not in [MovingState.Swimming, MovingState.LedgeClimbing]:
 			try_crouch = not try_crouch
+	if network_movement_only:
+		if action == ACTION.JUMP and pressed:
+			current_command.held |= 1 << ACTION.JUMP
+		return
 	var event := InputEventAction.new()
 	event.action = CogitoPlayerCommand.ACTIONS[action]
 	event.pressed = pressed

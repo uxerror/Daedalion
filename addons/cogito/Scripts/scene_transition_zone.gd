@@ -14,7 +14,7 @@ func _ready():
 	
 	
 func _on_body_entered(body: Node3D):
-	if body is not CogitoPlayer:
+	if body is not CogitoPlayer or body.network_movement_only:
 		return
 	
 	transition_to_next_scene()

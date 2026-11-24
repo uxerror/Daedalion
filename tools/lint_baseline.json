@@ -422,6 +422,7 @@
    "class-definitions-order": 24,
    "max-line-length": 21,
    "max-public-methods": 1,
+   "max-returns": 1,
    "no-else-return": 1
   },
   "addons/cogito/Components/Properties/cogito_actor_elements.gd": {

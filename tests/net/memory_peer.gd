@@ -6,6 +6,8 @@ var id: int
 var arrivals: Array[int] = []
 var departures: Array[int] = []
 var packets: Array[Dictionary] = []
+var drop_every_tenth_command := false
+var _command_count := 0
 var _target: int
 var _channel: int
 var _transfer := TRANSFER_MODE_RELIABLE
@@ -40,6 +42,10 @@ func _set_target_peer(peer_id: int) -> void:
 
 
 func _put_packet_script(buffer: PackedByteArray) -> Error:
+	if drop_every_tenth_command and _channel == 1 and _transfer == TRANSFER_MODE_UNRELIABLE_ORDERED:
+		_command_count += 1
+		if _command_count % 10 == 0:
+			return OK
 	for other: int in network:
 		if other != id and (_target == other or (_target <= 0 and other != -_target)):
 			network[other].packets.append({"source": id, "data": buffer.duplicate()})

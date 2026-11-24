@@ -15,6 +15,9 @@ signal elemental_damage_received(amount: float, element: CogitoProperties.Elemen
 ## Set before tree entry. Only the local avatar presents UI and owns viewport input.
 @export var is_local_presentation: bool = true
 
+## Set by the network spawner. Solo inventory and interaction commits await MP2.
+var network_movement_only := false
+
 ## Seat driving this actor. The facade retains the local seat for legacy callers and saves.
 var current_seat: CogitoSittable:
 	get:

@@ -177,9 +177,20 @@ func _peer_disconnected(peer_id: int) -> void:
 		return
 	var id: String = _by_peer[peer_id].player_id
 	for other: int in _by_peer:
-		if other != 1 and other != peer_id:
+		if other != 1 and other != peer_id and _is_connected(other):
 			_player_removed.rpc_id(other, id)
 	_player_removed(id)
+
+
+# Peers leaving at the same moment may still be listed while their transport is closing.
+func _is_connected(peer_id: int) -> bool:
+	if not peer_id in _api.get_peers():
+		return false
+	var enet := _api.multiplayer_peer as ENetMultiplayerPeer
+	if enet:
+		var packet_peer := enet.get_peer(peer_id)
+		return packet_peer != null and packet_peer.get_state() == ENetPacketPeer.STATE_CONNECTED
+	return true
 
 
 @rpc("authority", "call_remote", "reliable", 0)

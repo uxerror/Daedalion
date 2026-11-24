@@ -2,6 +2,7 @@
 """Exercise CogitoNet over loopback ENet in fresh Godot processes, after project import."""
 
 import json
+import math
 import os
 import queue
 import shlex
@@ -41,6 +42,8 @@ class Role:
         self.home = directory / "data"
         self.stop_file = directory / "stop"
         self.events = deque()
+        self.samples = deque(maxlen=600)
+        self.generation = 0
         self.tail = deque(maxlen=25)
         self.expected_failure = expected_failure
         self.stopping = False
@@ -54,7 +57,8 @@ class Role:
             "--max-fps", "60", *args,
         ]
         self.process = subprocess.Popen(
-            cmd, cwd=ROOT, env={**os.environ, "XDG_DATA_HOME": str(self.home)},
+            cmd, cwd=ROOT, env={**os.environ, "XDG_DATA_HOME": str(self.home),
+                               "COGITO_TEST_CONTROL": str(directory)},
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
             errors="replace", start_new_session=True,
         )
@@ -141,6 +145,9 @@ class Scenario:
             reason = json.loads(line.removeprefix("NET FAILED "))
             if reason != role.expected_failure and not role.bind_failed:
                 raise CheckFailed(f"{role.directory.name}: {reason}")
+        if line.startswith("NET POS "):
+            role.samples.append(json.loads(line.removeprefix("NET POS ")))
+            return
         if line.startswith("NET ") or "CogitoNet rejected peer " in line:
             role.events.append(line)
 
@@ -159,6 +166,7 @@ class Scenario:
             if dedicated:
                 self.server = self.launch("dedicated", [
                     "--", "--server", "--bind", "127.0.0.1", "--port", str(self.port),
+                    "--level", "res://tests/net/process_arena.tscn",
                     "--max-players", "4", "--save-dir", str(self.directory / "world"),
                 ])
             else:
@@ -194,18 +202,69 @@ class Scenario:
         while not role.exited:
             self.next_line()
 
+    def pose(self, role, names, after=-1):
+        while True:
+            if role.samples:
+                sample = role.samples[-1]
+                if (sample["tick"] > after and set(sample["actors"]) == set(names)
+                        and sample["count"] == len(names)):
+                    return sample
+            self.next_line()
+
+    def stationary(self, role, names):
+        first = self.pose(role, names)
+        last = self.pose(role, names, first["tick"] + 24)
+        for name in names:
+            a, b = (s["actors"][name] for s in (first, last))
+            if math.hypot(a[0] - b[0], a[2] - b[2]) > 0.03:
+                raise CheckFailed(f"{name} moved without commands: {a} -> {b}")
+        return last
+
+    def drive(self, driver, name, names, observers):
+        starts = {role: self.pose(role, names) for role in observers}
+        driver.generation += 1
+        (driver.directory / f"drive-{driver.generation}").touch()
+        while (not driver.samples or driver.samples[-1]["drive"] != driver.generation
+               or driver.samples[-1]["progress"] < 140):
+            self.next_line()
+        if driver is not self.server:
+            self.wait_line(driver, lambda line: line.startswith("NET DROPPED JUMP "))
+        positions = []
+        for role, start in starts.items():
+            # Let final snapshots cross the interpolation delay on every observing process.
+            last = self.pose(role, names, role.samples[-1]["tick"] + 16)
+            a, b = (s["actors"][name] for s in (start, last))
+            delta = (b[0] - a[0], b[2] - a[2])
+            peak = max(s["actors"][name][1] for s in role.samples
+                       if s["tick"] >= start["tick"] and name in s["actors"])
+            if not (-3.9 < delta[0] < -2.0 and -4.9 < delta[1] < -3.1 and peak - a[1] > 0.28):
+                raise CheckFailed(f"{role.directory.name}: {name} travel {delta}, jump {peak-a[1]}")
+            positions.append(b)
+        if any(math.dist(positions[0], pos) > 0.2 for pos in positions[1:]):
+            raise CheckFailed(f"{name}: peers disagree on final position {positions}")
+        return positions[0]
+
     def dedicated(self):
         self.start(dedicated=True)
         first = self.fixture("Ada", "client")
         ada, _ = self.state(first, ["Ada"])
+        self.stationary(self.server, ["Ada"])
+        settled = self.drive(first, "Ada", ["Ada"], [self.server, first])
         second = self.fixture("Ben", "client")
         ben, roster = self.state(second, ["Ada", "Ben"])
         if self.state(first, roster) != (ada, roster) or roster != {"Ada": ada, "Ben": ben}:
             raise CheckFailed("clients disagree on identities")
+        arrival = self.pose(second, roster)
+        if math.dist(arrival["actors"]["Ada"], settled) > 0.2:
+            raise CheckFailed(f"late-join pose {arrival} vs {settled}")
+        self.drive(first, "Ada", roster, [self.server, second])
+        self.drive(second, "Ben", roster, [self.server, first])
         self.expect_rejection("old", "Content version mismatch", extra=("--content", "wrong"))
         self.expect_rejection("duplicate", "Identity already connected", copy_from=first)
         self.stop(first)
         self.state(second, ["Ben"])
+        self.pose(self.server, ["Ben"])
+        self.pose(second, ["Ben"])
         again = self.fixture("Ada", "client", copy_from=first)
         if self.state(again, roster) != (ada, roster) or self.state(second, roster) != (ben, roster):
             raise CheckFailed("client restart changed identities")
@@ -220,7 +279,7 @@ class Scenario:
         if self.state(restored, ["Ada"]) != (ada, {"Ada": ada}):
             raise CheckFailed("server restart changed identity")
         self.stop(restored)
-        print("PASS dedicated + 2 clients: roster, version, duplicate, reconnect, server restart")
+        print("PASS dedicated + 2 clients: movement, lost jump packet, late join, departure, identity, restart")
 
     def listen(self):
         self.start(dedicated=False)
@@ -229,10 +288,14 @@ class Scenario:
         ada, roster = self.state(client, ["Host", "Ada"])
         if self.state(self.server, roster) != (host, roster) or roster != {"Host": host, "Ada": ada}:
             raise CheckFailed("listen roster differs")
+        self.stationary(self.server, roster)
+        self.drive(self.server, "Host", roster, [self.server, client])
+        self.drive(client, "Ada", roster, [self.server, client])
         self.stop(client)
         self.state(self.server, ["Host"])
+        self.pose(self.server, ["Host"])
         self.stop(self.server)
-        print("PASS listen host + 1 client: host identity, shared roster, departure")
+        print("PASS listen host + 1 client: movement, lost jump packet, host identity, departure")
 
 
 def main():

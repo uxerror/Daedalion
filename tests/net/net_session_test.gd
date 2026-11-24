@@ -35,6 +35,18 @@ class MemoryTransport:
 		peer = link
 
 
+class Walker:
+	extends CogitoPlayerInputSource
+	var frames := 0
+
+	func sample(actor: CogitoPlayer, sequence: int) -> CogitoPlayerCommand:
+		var command := super.sample(actor, sequence)
+		command.move = Vector2.UP if frames < 60 else Vector2.ZERO
+		command.pitch = 0.35
+		frames += 1
+		return command
+
+
 func _branch(id: int) -> Facade:
 	var branch := Facade.new()
 	branch.name = "Branch%d" % id
@@ -179,3 +191,141 @@ func test_roster_can_exceed_32_remote_players() -> void:
 	_pump()
 	for branch: Facade in _branches:
 		assert_int(branch.players().size()).is_equal(33)
+
+
+func _level(branch: Facade, key: String = "arena") -> Node:
+	var host := CogitoLevelHost.new()
+	branch.add_child(host)
+	var root := host.load_level("res://tests/player/movement_level.tscn", &"arena")
+	branch.player_world.bind_level(root, Transform3D(Basis.IDENTITY, Vector3.UP), key)
+	return root
+
+
+func _ticks(count: int) -> void:
+	for tick in count:
+		await get_tree().physics_frame
+		_pump()
+
+
+func test_avatar_late_join_move_remove_and_reconnect(_timeout := 15000) -> void:
+	var server := _branch(1)
+	var first := _branch(2)
+	var second := _branch(3)
+	assert_int(server.start_server({"save_dir": "user://net/avatars"})).is_equal(OK)
+	var world := _level(server)
+	assert_int(first.join("memory", 1401)).is_equal(OK)
+	_level(first)
+	_pump()
+	var id := first.local_player_id()
+	var avatar := server.player_world.avatar_for(id)
+	var old_name := avatar.actor.name
+	assert_object(server.local_player()).is_null()
+	assert_object(avatar.source).is_not_null()
+	assert_bool(avatar.actor.is_local_presentation).is_false()
+	assert_array(avatar.actor.find_children("*", "Camera3D", true, false)).is_empty()
+	assert_object(avatar.actor.player_hud).is_null()
+	var local_actor := first.local_player() as CogitoPlayerAdvanced
+	assert_bool(local_actor.input_source is CogitoLocalInputSource).is_true()
+	assert_object(CogitoSceneManager.get_player()).is_same(local_actor)
+	var component := local_actor.player_interaction_component
+	var event := InputEventAction.new()
+	event.action = &"action_primary"
+	event.pressed = true
+	component.on_action_input(event)
+	assert_bool(component.wieldables.primary_action_held).is_false()
+	var calls: Array[bool] = []
+	var act := func(_pic: PlayerInteractionComponent) -> void: calls.append(true)
+	await component.perform_action(CogitoInteractionAction.new("Use", null, act))
+	assert_array(calls).is_empty()
+	await _ticks(10)
+	var start := avatar.actor.position
+	_network[2].drop_every_tenth_command = true
+	local_actor.input_source = Walker.new()
+	await _ticks(88)
+	assert_float(start.z - avatar.actor.position.z).is_between(3.2, 4.6)
+	assert_float(local_actor.position.distance_to(avatar.actor.position)).is_less(0.18)
+	assert_int(first.player_world.avatar_for(id).timeline.latest().ack).is_greater(60)
+	local_actor.head.rotation.x = 0.9
+	server.player_world.avatar_for(id).actor.head.rotation.x = -0.1
+	var past := first.player_world.avatar_for(id).timeline.latest().duplicate()
+	past.tick += 1
+	past.pitch = -0.1
+	first.player_world.avatar_for(id).receive(past)
+	first.player_world.avatar_for(id).present(0.1)
+	assert_float(local_actor.head.rotation.x).is_equal_approx(0.9, 0.001)
+	assert_int(second.join("memory", 1402)).is_equal(OK)
+	_pump()
+	assert_object(second.local_player()).is_null()
+	_level(second)
+	_pump()
+	var remote := second.player_world.avatar_for(id).actor
+	assert_object(remote.input_source).is_null()
+	assert_bool(remote.is_physics_processing()).is_false()
+	assert_float(remote.position.distance_to(avatar.actor.position)).is_less(0.05)
+	assert_bool(second.local_player().name != old_name).is_true()
+	first.disconnect_session()
+	_pump()
+	assert_object(server.player_world.avatar_for(id)).is_null()
+	assert_object(second.player_world.avatar_for(id)).is_null()
+	assert_bool(world.has_node(NodePath(old_name))).is_false()
+	var again := _branch(4)
+	assert_int(again.join("memory", 1401)).is_equal(OK)
+	_level(again)
+	_pump()
+	var fresh := server.player_world.avatar_for(id)
+	assert_str(again.local_player_id()).is_equal(id)
+	assert_str(String(fresh.actor.name)).is_equal(String(old_name))
+	assert_int(fresh.lifetime).is_greater(avatar.lifetime)
+	assert_float(fresh.actor.position.z).is_zero()
+	await _ticks(2)
+
+
+func test_listen_local_role_spawn_policy_and_teleport() -> void:
+	var server := _branch(1)
+	var client := _branch(2)
+	var changes: Array[bool] = []
+	var observe := func(actor: CogitoPlayer) -> void: changes.append(actor != null)
+	server.local_player_changed.connect(observe)
+	server.spawn_policy = func(_root: Node, _id: String, origin: Transform3D) -> Transform3D:
+		origin.origin.z = 7.0
+		return origin
+	assert_int(server.host({"save_dir": "user://net/listen-avatars"})).is_equal(OK)
+	_level(server)
+	var host := server.local_player() as CogitoPlayerAdvanced
+	assert_bool(host.input_source is CogitoLocalInputSource).is_true()
+	assert_float(host.position.z).is_equal(7.0)
+	assert_int(client.join("memory", 1403)).is_equal(OK)
+	_level(client)
+	_pump()
+	var remote := client.player_world.avatar_for(server.local_player_id()).actor
+	assert_bool(remote.is_local_presentation).is_false()
+	var local_actor := client.local_player() as CogitoPlayerAdvanced
+	var authority := server.player_world.avatar_for(client.local_player_id()).actor
+	await _ticks(8)
+	authority.position.x += 1.0
+	authority.head.rotation.x = -0.7
+	server.player_world.mark_teleport(client.local_player_id())
+	await _ticks(4)
+	assert_float(absf(local_actor.position.x - authority.position.x)).is_less(0.01)
+	assert_float(local_actor.head.rotation.x).is_equal_approx(-0.7, 0.001)
+	server.disconnect_session()
+	_pump()
+	assert_array(changes).contains_exactly([true, false])
+
+
+func test_wrong_level_receives_no_actors_and_silent_peer_stays_still() -> void:
+	var server := _branch(1)
+	var client := _branch(2)
+	assert_int(server.start_server({"save_dir": "user://net/interest"})).is_equal(OK)
+	_level(server)
+	assert_int(client.join("memory", 1404)).is_equal(OK)
+	_level(client, "other")
+	_pump()
+	var id := client.local_player_id()
+	assert_str(id).is_not_empty()
+	var actor := server.player_world.avatar_for(id).actor
+	await _ticks(26)
+	assert_float(Vector2(actor.position.x, actor.position.z).length()).is_zero()
+	assert_int(actor.last_consumed_sequence).is_equal(-1)
+	assert_object(client.local_player()).is_null()
+	assert_object(client.player_world.avatar_for(id)).is_null()

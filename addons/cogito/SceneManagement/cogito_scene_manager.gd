@@ -124,6 +124,8 @@ func _exit_tree() -> void:
 
 ## Returns the registered player, or null before registration and after the player is freed.
 func get_player() -> CogitoPlayer:
+	if CogitoNet.is_dedicated():
+		return null
 	if is_instance_valid(_current_player_node):
 		return _current_player_node
 	return null

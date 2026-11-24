@@ -9,6 +9,8 @@ signal session_failed(reason: String)
 signal player_joined(player_id: String)
 ## A record left the local roster.
 signal player_left(player_id: String)
+## Emitted after local avatar creation and with null on removal.
+signal local_player_changed(actor: CogitoPlayer)
 ## The authority refused this connection.
 signal peer_rejected(peer_id: int, reason: String)
 
@@ -18,6 +20,7 @@ const NetConfig := preload("net_config.gd")
 const Identity := preload("net_identity.gd")
 const Transport := preload("enet_transport.gd")
 const Session := preload("net_session.gd")
+const NET_PLAYERS := preload("net_players.gd")
 const DEDICATED_SCENE := "res://addons/cogito/Networking/dedicated_server.tscn"
 
 ## Optional replacement for the built-in client and server identity provider.
@@ -26,6 +29,21 @@ var identity_provider: Identity
 var transport_factory: Callable
 ## True before other Cogito autoloads initialize during a dedicated boot.
 var dedicated_boot := false
+
+## Server game hook (level_root, player_id, authored_transform) -> level-local Transform3D.
+var spawn_policy: Callable:
+	set(value):
+		spawn_policy = value
+		if player_world:
+			player_world.spawn_policy = value
+## Number of authoritative pose updates per second, capped at the physics tick rate.
+var snapshot_hz := 25:
+	set(value):
+		snapshot_hz = maxi(1, value)
+		if player_world:
+			player_world.snapshot_hz = snapshot_hz
+## Online-only level, spawn and pose endpoint.
+var player_world: NET_PLAYERS
 
 var _mode := Mode.OFFLINE
 var _session: Session
@@ -154,9 +172,18 @@ func _attach(
 	_session.joined.connect(player_joined.emit)
 	_session.left.connect(player_left.emit)
 	_session.rejected.connect(_peer_rejected)
+	player_world = NET_PLAYERS.new()
+	player_world.name = "Players"
+	player_world.spawn_policy = spawn_policy
+	player_world.snapshot_hz = snapshot_hz
+	player_world.local_changed.connect(local_player_changed.emit)
+	_session.add_child(player_world)
 	_session.attach(api)
 	api.server_relay = false
 	api.multiplayer_peer = peer
+	var scene := get_tree().current_scene
+	if scene and scene.multiplayer == api and scene.has_method("bind_network_players"):
+		scene.call_deferred("bind_network_players")
 
 
 func _peer_rejected(peer_id: int, reason: String) -> void:
@@ -183,6 +210,8 @@ func disconnect_session() -> void:
 	var api := multiplayer as SceneMultiplayer
 	var peer := api.multiplayer_peer
 	var old_records := _session.records()
+	player_world.clear()
+	player_world = null
 	_session.detach()
 	if _mode == Mode.CLIENT and peer != null and 1 in api.get_peers():
 		peer.disconnect_peer(1, true)
@@ -241,6 +270,6 @@ func local_player_id() -> String:
 	return _session.local_id if _session else ""
 
 
-## MP1 will bind the spawned local actor.
+## The admitted local network avatar, or null before spawn, offline and on dedicated.
 func local_player() -> CogitoPlayer:
-	return null
+	return player_world.local_actor if player_world else null

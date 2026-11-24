@@ -1,7 +1,8 @@
 extends RefCounted
 ## Session configuration shared by programmatic startup and the dedicated CLI.
 
-const PROTOCOL_VERSION := 1
+const PROTOCOL_VERSION := 2
+const DEMO_LEVEL := "res://addons/cogito/DemoScenes/COGITO_4_Laboratory.tscn"
 const ENET_CEILING := 4095
 const DEFAULT_PORT := 7777
 const DEFAULT_SAVE_DIR := "user://net/server"
@@ -34,6 +35,7 @@ static func server_config(input: Dictionary, listen: bool) -> Dictionary:
 		"save_dir": DEFAULT_SAVE_DIR,
 		"content_version": content_version(),
 		"display_name": "Host",
+		"level": DEMO_LEVEL,
 	}
 	for key: Variant in input:
 		if not config.has(key) or typeof(input[key]) != typeof(config[key]):
@@ -61,7 +63,7 @@ static func parse_cli(args: PackedStringArray) -> Dictionary:
 		index += 1
 		if flag == "--server":
 			continue
-		if flag not in ["--config", "--bind", "--port", "--max-players", "--save-dir"]:
+		if flag not in ["--config", "--bind", "--port", "--max-players", "--save-dir", "--level"]:
 			return {"reason": "Unknown server option: " + flag}
 		if index == args.size() or args[index].begins_with("--"):
 			return {"reason": "Missing value for " + flag}

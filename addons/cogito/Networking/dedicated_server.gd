@@ -13,4 +13,14 @@ func _ready() -> void:
 	if CogitoNet.start_server(config) != OK:
 		get_tree().quit(1)
 		return
-	print("NET READY port=%d" % config.port)
+	_load_level.call_deferred(config.level, config.port)
+
+
+func _load_level(path: String, port: int) -> void:
+	var tree := get_tree()
+	var err := tree.change_scene_to_file(path)
+	if err != OK:
+		push_error("Cannot load dedicated level %s (%s)" % [path, error_string(err)])
+		tree.quit(1)
+		return
+	print("NET READY port=%d" % port)
