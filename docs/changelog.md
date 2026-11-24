@@ -32,6 +32,7 @@ Changes are relative to Cogito 1.2.0. Projects moving to this release should fol
 - Overlapping saves and scene changes are guarded. A failed load leaves the current game available. Invalid slot names cannot corrupt history. Compatible legacy binary states convert during a successful save.
 - Restoring health updates displays without triggering damage, loot or death again. Equipped ammo, magazine charge, empty inventory positions and quest progress restore with their saved owners.
 - Burn damage passes the full `damage_received` arguments. Buttons and switches accept shorter and longer damage calls. NPCs handle unfamiliar attackers and ignore their own burn damage as an alert source.
+- The player's `no_interaction_states` (rolling, free fall) now block interactions; the check was always false before.
 - Carrying blocks unrelated direct actions. Listing pickup actions has no gameplay side effects. Other fixes cover elemental transitions, NPC chase range, search markers, loot rows and gamepad scrolling.
 - Included from Cogito after 1.2.0 are fixes to quick load after transitions, the options menu, ledge climbing with hold-to-crouch and closing a door locked while open.
 

@@ -30,7 +30,7 @@ func use_sign(component: InteractionComponent, actor: PlayerInteractionComponent
             return
 ```
 
-While carrying, a direct action must belong to a component on the carried object's own parent body. With regular input, the matching carry action drops the object, and a pickup action can take it. Other world targets wait. Set `ignore_open_gui` to false to block the component while the player has an interface open. Set `disable_interaction_in_air` to require a grounded player. Direct actions check enabled state and these guards before running the callable.
+While carrying, a direct action must belong to a component on the carried object's own parent body. With regular input, the matching carry action drops the object, and a pickup action can take it. Other world targets wait. Set `ignore_open_gui` to false to block the component while the player has an interface open. Set `disable_interaction_in_air` to require a grounded player. Nothing can be used while the player is in one of its `no_interaction_states` (see [Player controller](player-controller.md)). Direct actions check enabled state and these guards before running the callable.
 
 ## Player-side components
 
