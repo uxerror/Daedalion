@@ -3,6 +3,7 @@ extends GdUnitTestSuite
 
 const FIXTURES := preload("res://tests/fixtures/element_fixtures.gd")
 const B := CogitoNPC.BehaviourState
+const BLASTER := preload("res://addons/cogito/Wieldables/NPC_blaster.tscn")
 
 var _level: Node3D
 var _npc: CogitoNPC
@@ -136,3 +137,24 @@ func test_attacker_of_resolves_shooter_wielder_and_direct_attackers() -> void:
 	wieldable.player_interaction_component = _player.player_interaction_component
 	assert_object(_npc.attacker_of(wieldable)).is_same(_player)
 	assert_object(_npc.attacker_of(_projectile(null, Vector3.ZERO))).is_null()
+
+
+func test_npc_draws_its_weapon_when_a_chase_starts_without_investigating() -> void:
+	_npc.free()
+	_npc = FIXTURES.make_npc()
+	_npc.response_to_player = "Hostile"
+	var blaster: NpcWieldable = BLASTER.instantiate()
+	_npc.add_child(blaster)
+	_npc.weapon = blaster
+	_level.add_child(_npc)
+	await _frames(5)
+	var raised := _npc.get_node(^"StateChart/Root/BodyPosture/UpperBody/RaisedWeapon")
+	assert_bool(raised.active).is_false()
+	assert_bool(blaster.wieldable_mesh.visible).is_false()
+	await _hit(_projectile(_player, _player.global_position))
+	assert_int(_npc.current_behaviour).is_equal(B.Chasing)
+	assert_bool(raised.active).is_true()
+	# The equip animation shows the mesh.
+	if blaster.animation_player.is_playing():
+		await blaster.animation_player.animation_finished
+	assert_bool(blaster.wieldable_mesh.visible).is_true()

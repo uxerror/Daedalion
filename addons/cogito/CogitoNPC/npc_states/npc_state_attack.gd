@@ -64,6 +64,9 @@ func attempt_attack():
 		state_chart.send_event("ubody_attack")
 		if npc.global_position.distance_to(target.global_position) <= 1.5:
 			punch_attack(target)
+	elif not npc.weapon.wieldable_mesh.visible:
+		# Never fire from a holstered weapon: draw it first, shoot on a later attack.
+		state_chart.send_event("ubody_raise_weapon")
 	else:
 		npc.sight_detection.check_if_player_in_los()
 		npc.weapon.npc_do_attack(npc)

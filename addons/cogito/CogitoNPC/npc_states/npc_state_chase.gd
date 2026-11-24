@@ -114,6 +114,9 @@ func _on_chasing_state_entered() -> void:
 		if not npc.previous_behaviour == behaviours.Attacking:
 			bark(chase_start_bark)
 		state_chart.send_event("body_run")
+		# Draw the weapon: a chase can start straight from patrol or idle, without investigating first.
+		if not npc.previous_behaviour == behaviours.Attacking:
+			state_chart.send_event("ubody_raise_weapon")
 		npc.move_speed = npc.sprint_speed
 		current_chase_status = ChaseStatus.CHASING
 		npc.head_turner.target_node = chase_target.get_path()
