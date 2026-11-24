@@ -25,14 +25,5 @@ func _on_body_exited(body: Node3D):
 		return
 
 
-func transition_to_next_scene():
-	if CogitoSceneManager.save_temp_game() != OK:
-		return
-
-	CogitoSceneManager.is_currently_loading = true
-	
-	CogitoSceneManager.fade_out()
-	await CogitoSceneManager.fade_finished
-	
-	# CogitoSceneManager.load_next_scene(path_to_new_scene, target_connector, "temp", CogitoSceneManager.CogitoSceneLoadMode.TEMP)
-	CogitoSceneManager.load_next_scene(target_scene_path, target_connector, "temp", CogitoSceneManager.CogitoSceneLoadMode.TEMP)
+func transition_to_next_scene() -> Error:
+	return await CogitoSceneManager.transition_from_zone(target_scene_path, target_connector)

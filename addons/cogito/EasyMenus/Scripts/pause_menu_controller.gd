@@ -114,7 +114,6 @@ func on_input(event):
 
 func update_load_related_gui():
 	if CogitoSceneManager.is_loaded_from_start_new_game:
-		CogitoSceneManager._active_slot = ""
 		%Screenshot_Spot.texture = empty_slot_texture
 		%Label_SaveTime.text = ""
 		%Label_Lastsave.visible = false
@@ -240,33 +239,25 @@ func _on_quickload_button_pressed() -> void:
 	_on_resume_game_button_pressed()
 
 
-func start_new_game():
-	if CogitoGlobals.cogito_settings.new_game_start_scene:
-		CogitoSceneManager.is_starting_new_game = true
-		CogitoSceneManager.delete_temp_saves()
-		var path_to_scene = CogitoGlobals.cogito_settings.new_game_start_scene.resource_path
-		CogitoSceneManager.load_next_scene(path_to_scene, "", "temp", CogitoSceneManager.CogitoSceneLoadMode.RESET) #Load_mode 2 means there's no attempt to load a state.
-		#Setting new game world state:
-		CogitoSceneManager._current_world_dict = CogitoGlobals.cogito_settings.get_new_game_world_dict()
-		get_tree().paused = false
-	#if start_game_scene: 
-		#CogitoSceneManager.load_next_scene(start_game_scene, "", "temp", CogitoSceneManager.CogitoSceneLoadMode.RESET) #Load_mode 2 means there's no attempt to load a state.
+func start_new_game() -> void:
+	if await CogitoSceneManager.start_new_game() == OK:
+		close_pause_menu()
 	else:
-		CogitoGlobals.debug_log(true, "CogitoPauseManu", "ISSUE: No start game scene set.")
+		%QuickLoadButton.text = CogitoSceneManager.last_slot_message
 
 
 func _on_back_to_main_menu_pressed() -> void:
-	if CogitoGlobals.cogito_settings.main_menu_scene:
+	var menu := CogitoGlobals.cogito_settings.main_menu_scene
+	if not menu:
+		return
+	var error := await CogitoSceneManager.load_next_scene(
+		menu.resource_path, "", "temp", CogitoSceneManager.CogitoSceneLoadMode.RESET
+	)
+	if error == OK:
 		CogitoSceneManager.delete_temp_saves()
-		var path_to_scene = CogitoGlobals.cogito_settings.main_menu_scene.resource_path
-		
-		# Cleanup
+		InputRouter.remove(on_input)
 		get_tree().paused = false
-		InputRouter.pop()
-		
-		CogitoSceneManager.load_next_scene(path_to_scene, "", "temp", CogitoSceneManager.CogitoSceneLoadMode.RESET) #Load_mode 2 means there's no attempt to load a state.
-	else:
-		CogitoGlobals.debug_log(true, "CogitoPauseMenu", "ISSUE: No main menu scene set.")
+
 
 func _on_input_device_changed(device: String, device_index: int) -> void:
 	Input.mouse_mode = Input.MouseMode.MOUSE_MODE_VISIBLE if device_index < 0 else Input.MouseMode.MOUSE_MODE_CAPTURED

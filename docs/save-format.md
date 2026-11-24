@@ -57,3 +57,31 @@ Future data migrations can register one document-to-document callable per
 source version in `MIGRATIONS`. Both formats validate the destination level
 during preparation. The loading screen obtains and instantiates the PackedScene
 before the manager replaces working files or frees the current scene.
+
+## Starting a playthrough
+
+New Game publishes an empty working generation and restores the configured initial
+world and quest state before the first level enters the tree. It leaves named saves
+and manual save history available. The active slot stays empty until the first
+successful manual save or named load. Autosaves always use the configured
+`auto_save_name` and do not select a manual slot.
+
+The scene manager rejects overlapping loads and saves with `ERR_BUSY`. A transition
+zone acquires the guard before saving the outgoing level and starting its fade.
+Menus receive the load result while the previous scene can still release input.
+The guard stays held until the new level has applied deferred state and positioned
+the player at the connector. Levels with `save_temp_on_enter` then capture that state.
+
+## Restart after death
+
+Reload checks manual slots across the profile and the configured autosave, including
+slots absent from the index. It skips empty or broken slots and the working `temp`
+directory. The largest player save timestamp wins. A legacy save without a timestamp
+uses its player file's modification time. Ties follow the most recent manual history
+entry, then alphabetical manual directory order, then autosave. A missing screenshot
+uses the placeholder.
+
+With no loadable save, Reload starts a fresh playthrough at the current level's
+entry with the configured initial world and starter items. A level without a file
+path uses the configured first level. A failure to open or copy the selected save
+keeps the death screen paused so the player can retry.

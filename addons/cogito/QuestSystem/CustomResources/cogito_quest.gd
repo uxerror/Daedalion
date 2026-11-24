@@ -52,6 +52,7 @@ enum QuestState {
 # Starts the quest
 # Parameter _mute: if true, doesn't play start audio
 func start(_mute: bool = false) -> void:
+	CogitoQuestManager.remember_defaults(self)
 	# Play start audio if available and not muted
 	if audio_on_start and not _mute:
 		CogitoAudio.play_sound(audio_on_start)
@@ -66,6 +67,7 @@ func start(_mute: bool = false) -> void:
 
 # Updates the quest by updating each associated objective against the world state
 func update() -> QuestState:
+	CogitoQuestManager.remember_defaults(self)
 	var world_state = CogitoSceneManager._current_world_dict
 	# Do not update the quest if the state is completed or inactive
 	if quest_state == QuestState.Completed or quest_state == QuestState.NotStarted:
@@ -98,6 +100,7 @@ func update() -> QuestState:
 # Completes the quest
 # Parameter _mute: if true, doesn't play completion audio
 func complete(_mute: bool = false) -> void:
+	CogitoQuestManager.remember_defaults(self)
 	# Play completion audio if available and not muted
 	if audio_on_complete and not _mute:
 		CogitoAudio.play_sound(audio_on_complete)
@@ -108,6 +111,7 @@ func complete(_mute: bool = false) -> void:
 # Marks the quest as failed
 # Parameter _mute: if true, doesn't play failure audio
 func failed(_mute: bool = false) -> void:
+	CogitoQuestManager.remember_defaults(self)
 	# Play failure audio if available and not muted
 	if audio_on_fail and not _mute:
 		CogitoAudio.play_sound(audio_on_fail)

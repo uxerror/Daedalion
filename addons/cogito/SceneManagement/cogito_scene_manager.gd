@@ -10,8 +10,8 @@ signal update_gui
 ## received the starter items.
 signal new_game_started
 
-# Used to set active save slot. This could be set/modified, when selecting a save slot from the MainMenu.
-@export var _active_slot : String = "A"
+# Empty until the player saves to, or loads, a named slot.
+@export var _active_slot: String = ""
 
 # Cached World State Dictionary, used for checks while game is running
 @export var _current_world_dict : Dictionary
@@ -45,6 +45,7 @@ class PreparedSlot:
 	var reason := ""
 	var player: CogitoPlayerState
 	var slot: String
+	var save_time: int
 	var warnings: Array[Dictionary] = []
 	var scene: CogitoSceneState
 
@@ -68,6 +69,7 @@ const SAVE_ID_KEYS : Array[String] = ["cogito_id", "cogito_parent_id"]
 var saves_data_file_path : String = cogito_state_dir + "saves.data"
 
 var is_currently_loading : bool = false
+var _busy_reported := false
 # This flag is used for save slot displays when new game has been started but not saved yet.
 var is_loaded_from_start_new_game : bool = false
 # This flag is used to call a function only when a new game is started.
@@ -85,7 +87,7 @@ var _destroyed_nodes_level_id : int = 0
 
 func _ready() -> void:
 	storage.recover_all() # Individual failures are logged and retried before use.
-	_player_state = get_existing_player_state(_active_slot)
+	delete_temp_saves()
 	instantiate_fade_panel()
 
 
@@ -206,6 +208,12 @@ func _prepare_files(slot: String) -> PreparedSlot:
 				result.reason = "Cannot read level state."
 			return result
 	result.status = SlotStatus.OK
+	result.save_time = result.player.player_state_savetime
+	if result.save_time <= 0:
+		var player_path := player_file(slot)
+		if not FileAccess.file_exists(player_path):
+			player_path = legacy_player_file(slot)
+		result.save_time = FileAccess.get_modified_time(player_path)
 	return result
 
 
@@ -217,21 +225,51 @@ func slot_error(message: String, detail: String, error := FAILED) -> Error:
 
 
 func loading_saved_game(slot: String, _current_scene_name_unused: String = "") -> Error:
+	if not _begin_transition():
+		return ERR_BUSY
 	var prepared := prepare_slot(slot)
 	if prepared.status != SlotStatus.OK:
+		finish_transition()
 		return slot_error(prepared.reason, slot, ERR_FILE_CANT_READ)
-	var screen = _new_loading_screen()
-	if not screen:
-		return slot_error("Cannot open loading screen.", slot)
-	screen.prepared_slot = prepared
-	screen.next_scene_path = prepared.player.player_current_scene_path
-	screen.load_mode = CogitoSceneLoadMode.LOAD_SAVE
-	var error: Error = screen.request_scene()
-	if error != OK:
-		screen.free()
-		return slot_error("Cannot open saved level.", prepared.player.player_current_scene_path, error)
-	get_tree().root.add_child(screen)
-	return await screen.save_load_ready
+	return await _load_prepared_slot(prepared)
+
+
+func _load_prepared_slot(prepared: PreparedSlot) -> Error:
+	return await _open_level(
+		prepared.player.player_current_scene_path, "", CogitoSceneLoadMode.LOAD_SAVE, prepared
+	)
+
+
+## Ties prefer the latest manual history entry, then a directory name, then autosave.
+func find_latest_loadable_slot() -> PreparedSlot:
+	var candidates := _saved_slots()
+	candidates.reverse()
+	var autosave := CogitoGlobals.cogito_settings.auto_save_name
+	candidates.erase(autosave)
+	for slot in DirAccess.get_directories_at(cogito_state_dir):
+		if slot != autosave and not candidates.has(slot):
+			candidates.append(slot)
+	candidates.append(autosave)
+	var latest: PreparedSlot = null
+	for slot: String in candidates:
+		if slot == "temp" or not storage.valid_slot(slot):
+			continue
+		var candidate := prepare_slot(slot)
+		if candidate.status != SlotStatus.OK:
+			continue
+		if not latest or candidate.save_time > latest.save_time:
+			latest = candidate
+	return latest
+
+
+func restart_after_death() -> Error:
+	if not _begin_transition():
+		return ERR_BUSY
+	var latest := find_latest_loadable_slot()
+	if latest:
+		return await _load_prepared_slot(latest)
+	var level := get_tree().current_scene
+	return await _start_new_game(level.scene_file_path if level else "")
 
 
 ## Called only after the threaded level was successfully instantiated. Until the
@@ -452,6 +490,8 @@ func _find_saved_node(data: Dictionary, id_key: String, legacy_path_key: String)
 
 
 func save_scene_state(level_name: String, slot: String) -> Error:
+	if is_currently_loading:
+		return _reject_busy()
 	var state := _capture_scene_state()
 	var error := state.write_state(slot, level_name)
 	if error == OK:
@@ -466,6 +506,8 @@ func _capture_scene_state() -> CogitoSceneState:
 		CogitoGlobals.debug_log(true,"CSM","No nodes in Persist group!")
 	else:
 		for node in save_nodes:
+			if node.is_queued_for_deletion():
+				continue
 			# A node needs a scene file to be created again on load, unless it is part of the level and gets updated where it is.
 			if node.scene_file_path.is_empty() and !CogitoPersistentId.of(node).begins_with("level:"):
 				CogitoGlobals.debug_log(true,"CSM","persistent node '%s' is not an instanced scene, skipped" % node.name)
@@ -495,6 +537,8 @@ func _capture_scene_state() -> CogitoSceneState:
 		CogitoGlobals.debug_log(true,"CSM","No nodes in save_object_state group!")
 	else:
 		for node in state_nodes:
+			if node.is_queued_for_deletion():
+				continue
 			if !node.has_method("save"): # Check the node has a save function.
 				CogitoGlobals.debug_log(true,"CSM","persistent node '%s' is missing a save() function, skipped" % node.name)
 				continue
@@ -617,34 +661,123 @@ func _new_loading_screen() -> CanvasLayer:
 func load_next_scene(target: String, connector_name: String, passed_slot: String, load_mode: CogitoSceneLoadMode) -> Error:
 	if load_mode == CogitoSceneLoadMode.LOAD_SAVE:
 		return await loading_saved_game(passed_slot)
+	if not _begin_transition():
+		return ERR_BUSY
+	return await _open_level(target, connector_name, load_mode)
+
+
+## Without an explicit level, start at the configured first level.
+func start_new_game(level_path := "") -> Error:
+	if not _begin_transition():
+		return ERR_BUSY
+	return await _start_new_game(level_path)
+
+
+func _start_new_game(level_path: String) -> Error:
+	if level_path.is_empty() and CogitoGlobals.cogito_settings.new_game_start_scene:
+		level_path = CogitoGlobals.cogito_settings.new_game_start_scene.resource_path
+	return await _open_level(level_path, "", CogitoSceneLoadMode.RESET, null, true)
+
+
+func _begin_transition() -> bool:
+	if is_currently_loading:
+		_reject_busy()
+		return false
+	is_currently_loading = true
+	_busy_reported = false
+	return true
+
+
+func _reject_busy() -> Error:
+	last_slot_message = "Level transition in progress."
+	if not _busy_reported:
+		_busy_reported = true
+		push_warning(last_slot_message)
+	return ERR_BUSY
+
+
+func finish_transition() -> void:
+	is_currently_loading = false
+
+
+## The zone owns the transition from the outgoing snapshot through the fade and level change.
+func transition_from_zone(target: String, connector_name: String) -> Error:
+	if not _begin_transition():
+		return ERR_BUSY
+	var error := _save_game("temp", false)
+	if error != OK:
+		finish_transition()
+		if get_player():
+			send_player_hint(null, last_slot_message)
+		return error
+	await fade_out()
+	return await _open_level(target, connector_name, CogitoSceneLoadMode.TEMP)
+
+
+func _open_level(
+	target: String, connector_name: String, load_mode: CogitoSceneLoadMode,
+	prepared: PreparedSlot = null, new_game := false
+) -> Error:
 	var screen = _new_loading_screen()
 	if not screen:
-		scene_load_failed(target, ERR_CANT_CREATE)
+		scene_load_failed(target, ERR_CANT_CREATE, "Cannot open loading screen.")
 		return ERR_CANT_CREATE
 	screen.next_scene_path = target
 	screen.connector_name = connector_name
 	screen.load_mode = load_mode
+	screen.prepared_slot = prepared
+	screen.new_game = new_game
 	var error: Error = screen.request_scene()
 	if error != OK:
 		screen.free()
+		if prepared:
+			finish_transition()
+			return slot_error("Cannot open saved level.", target, error)
 		scene_load_failed(target, error)
 		return error
-	scene_load_mode = load_mode
 	get_tree().root.add_child(screen)
+	return await screen.save_load_ready
+
+
+## Commit the reset only once the replacement level has been instantiated.
+func activate_new_game() -> Error:
+	var error := storage.replace("temp", "")
+	if error != OK:
+		return slot_error("Cannot reset working save.", "temp", error)
+	CogitoQuestManager.reset_playthrough()
+	_current_world_dict = CogitoGlobals.cogito_settings.get_new_game_world_dict().duplicate(true)
+	_destroyed_nodes = []
+	_destroyed_nodes_level_id = 0
+	_player_state = null
+	_scene_state = null
+	_current_sittable_node = null
+	_current_player_node = null
+	_current_scene_root_node = null
+	_screenshot_to_save = null
+	previous_menu = ""
+	previous_menu_button_pressed = ""
+	pause_menu = null
+	save_load_menu = null
+	game_menu = null
+	_active_slot = ""
+	is_loaded_from_start_new_game = true
+	is_starting_new_game = true
 	return OK
 
 
-func scene_load_failed(target: String, error: Error) -> void:
-	is_currently_loading = false
-	slot_error("Cannot open level.", target, error)
+func scene_load_failed(target: String, error: Error, message := "Cannot open level.") -> void:
+	finish_transition()
+	slot_error(message, target, error)
 	fade_in()
 	var player := get_player()
-	if player:
+	if player and not get_tree().paused:
 		player.resume()
 		send_player_hint(null, last_slot_message)
 
 
 func delete_save(slot: String) -> Error:
+	if is_currently_loading:
+		return _reject_busy()
 	var error := storage.recover(slot)
 	if error != OK:
 		return error
@@ -676,11 +809,14 @@ func find_object_from_uid(uid: int) -> Node3D:
 
 func starting_a_new_game() -> void:
 	get_tree().paused = false
-	CogitoGlobals.debug_log(true, "CSM", "New game. Adding new game start inventory to player inventory...")
-	var temp_item_list = CogitoGlobals.cogito_settings.new_game_starter_items.duplicate_deep(Resource.DeepDuplicateMode.DEEP_DUPLICATE_ALL)
-	for slot_data in temp_item_list:
-		get_player().inventory_data.pick_up_slot_data(slot_data)
-		
+	var player := get_player()
+	var starter_items := CogitoGlobals.cogito_settings.new_game_starter_items
+	if player:
+		for stack in starter_items.duplicate_deep(Resource.DeepDuplicateMode.DEEP_DUPLICATE_ALL):
+			player.inventory_data.pick_up_slot_data(stack)
+	elif not starter_items.is_empty():
+		push_warning("No player registered to receive starter items.")
+
 	fade_in()
 	is_starting_new_game = false
 	new_game_started.emit()
@@ -693,6 +829,12 @@ func _exit_tree() -> void:
 ## Capture temp, manual and automatic saves with the same directory transaction.
 ## Only a manual save promotes its slot in the existing Continue menu history.
 func save_game(slot: String, update_history := true) -> Error:
+	if is_currently_loading:
+		return _reject_busy()
+	return _save_game(slot, update_history)
+
+
+func _save_game(slot: String, update_history: bool) -> Error:
 	var player := get_player()
 	var level := get_tree().current_scene
 	if not player or not level or not storage.valid_slot(slot):
@@ -781,6 +923,8 @@ func save_temp_game() -> Error:
 
 
 func _save_autosave_state() -> Error:
+	if is_currently_loading:
+		return _reject_busy()
 	if not _screenshot_to_save:
 		_screenshot_to_save = grab_screenshot(CogitoGlobals.screenshot_scale)
 	var error := save_game(CogitoGlobals.cogito_settings.auto_save_name, false)
@@ -816,7 +960,7 @@ func fade_in(fade_duration:float = default_fade_duration) -> void:
 
 func fade_out(fade_duration:float = default_fade_duration) -> void:
 	fade_panel.set_modulate(Color.TRANSPARENT)
-	var fade_tween = get_tree().create_tween()
+	var fade_tween := get_tree().create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	
 	fade_tween.tween_property(fade_panel, "modulate", Color.BLACK, fade_duration).set_trans(Tween.TRANS_CUBIC)
 	await fade_tween.finished

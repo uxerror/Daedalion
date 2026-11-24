@@ -26,7 +26,11 @@ func before_test() -> void:
 		"_player_state",
 		"_scene_state",
 		"_screenshot_to_save",
+		"_current_sittable_node",
+		"_destroyed_nodes",
+		"_destroyed_nodes_level_id",
 		"scene_load_mode",
+		"is_starting_new_game",
 		"is_loaded_from_start_new_game",
 		"is_currently_loading",
 		"last_slot_message",
@@ -45,8 +49,9 @@ func before_test() -> void:
 
 func after_test() -> void:
 	var level := get_tree().current_scene
-	if level is CogitoPlayerSimple:
-		InputRouter.remove(level.on_input)
+	var player := manager.get_player()
+	if player is CogitoPlayerSimple:
+		InputRouter.remove(player.on_input)
 	get_tree().current_scene = _original_level
 	level.free()
 	for key: String in _previous:

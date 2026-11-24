@@ -1,6 +1,8 @@
 extends CanvasLayer
-# Loading screen script is heavily dependent on Cogito Scene Manager and scene states.
-# MODIFY AT YOUR OWN RISK. Besides the forced_delay, there aren't really any tweakable parameters here.
+
+signal save_load_ready(error: Error)
+
+const CogitoScene := preload("res://addons/cogito/SceneManagement/cogito_scene.gd")
 
 ## Adds a forced wait time to the loading screen. Used to avoid loading screen flickering if load time is too short.
 @export var forced_delay : float = 0.5
@@ -11,7 +13,7 @@ var connector_name : String
 var load_mode: CogitoSceneManager.CogitoSceneLoadMode
 var progress_array: Array
 var prepared_slot: CogitoSceneManager.PreparedSlot
-signal save_load_ready(error: Error)
+var new_game := false
 
 
 func request_scene() -> Error:
@@ -35,29 +37,36 @@ func _process(_delta: float) -> void:
 			level = packed.instantiate()
 	if not level:
 		if prepared_slot:
-			CogitoSceneManager.is_currently_loading = false
+			CogitoSceneManager.finish_transition()
 			save_load_ready.emit(CogitoSceneManager.slot_error("Cannot open saved level.", next_scene_path))
 		else:
 			CogitoSceneManager.scene_load_failed(next_scene_path, ERR_CANT_OPEN)
+			save_load_ready.emit(ERR_CANT_OPEN)
 		queue_free()
 		return
 
-	if prepared_slot:
-		var error := CogitoSceneManager.activate_saved_slot(prepared_slot)
-		# Resume the initiating menu while it is still alive to display the error
-		# or close itself and release its input handler on success.
+	var error := OK
+	if new_game:
+		error = CogitoSceneManager.activate_new_game()
+	elif prepared_slot:
+		error = CogitoSceneManager.activate_saved_slot(prepared_slot)
+	if error != OK:
+		level.free()
+		queue_free()
+		CogitoSceneManager.finish_transition()
 		save_load_ready.emit(error)
-		if error != OK:
-			level.free()
-			queue_free()
-			return
+		return
+	# Resume the initiating menu while it can still release its own input handler.
+	# Keep the guard through swapping levels, applying deferred states and moving the player.
+	save_load_ready.emit(OK)
+	CogitoSceneManager.scene_load_mode = load_mode
 	var current := get_tree().current_scene
 	if current:
 		current.free()
-	get_tree().root.add_child(level)
-	get_tree().current_scene = level
 	CogitoSceneManager._current_scene_name = level.name
 	CogitoSceneManager._current_scene_path = level.scene_file_path
+	get_tree().root.add_child(level)
+	get_tree().current_scene = level
 	match load_mode:
 		CogitoSceneManager.CogitoSceneLoadMode.LOAD_SAVE:
 			CogitoSceneManager.apply_saved_game(prepared_slot)
@@ -65,14 +74,23 @@ func _process(_delta: float) -> void:
 			CogitoSceneManager.load_scene_state(level.name, "temp")
 			CogitoSceneManager.load_player_state(CogitoSceneManager.get_player(), "temp")
 		CogitoSceneManager.CogitoSceneLoadMode.RESET:
-			if CogitoSceneManager.is_starting_new_game:
-				CogitoSceneManager.starting_a_new_game.call_deferred()
+			if new_game:
+				CogitoSceneManager.starting_a_new_game()
 	if load_mode != CogitoSceneManager.CogitoSceneLoadMode.RESET and CogitoSceneManager.get_player():
 		CogitoSceneManager.get_player().resume()
 	shader_precompilation()
 	if not connector_name.is_empty():
-		level.move_player_to_connector(connector_name)
-	CogitoSceneManager.is_currently_loading = false
+		if level.has_method("move_player_to_connector") and CogitoSceneManager.get_player():
+			level.move_player_to_connector(connector_name)
+		else:
+			push_warning("Cannot place player at connector %s in %s." % [connector_name, next_scene_path])
+	_finish_load.call_deferred(level)
+
+
+func _finish_load(level: Node) -> void:
+	CogitoSceneManager.finish_transition()
+	if level is CogitoScene and level.save_temp_on_enter:
+		level.save_temp()
 	queue_free()
 
 

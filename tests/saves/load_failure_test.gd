@@ -110,11 +110,10 @@ func test_missing_png_and_legacy_external_png() -> void:
 
 func test_failed_threaded_load_keeps_current_level() -> void:
 	var level := get_tree().current_scene
-	manager.is_currently_loading = true
-	manager.load_next_scene(
+	var error := await manager.load_next_scene(
 		"res://missing-level.tscn", "", "temp", manager.CogitoSceneLoadMode.TEMP
 	)
-	await get_tree().create_timer(0.2).timeout
+	assert_int(error).is_not_equal(OK)
 	assert_bool(manager.is_currently_loading).is_false()
 	assert_object(get_tree().current_scene).is_same(level)
 	assert_str(manager.last_slot_message).is_equal("Cannot open level.")
@@ -122,7 +121,6 @@ func test_failed_threaded_load_keeps_current_level() -> void:
 
 func test_rejected_threaded_request_keeps_current_level() -> void:
 	var level := get_tree().current_scene
-	manager.is_currently_loading = true
 	var error := await manager.load_next_scene("", "", "temp", manager.CogitoSceneLoadMode.TEMP)
 	assert_int(error).is_not_equal(OK)
 	assert_bool(manager.is_currently_loading).is_false()
@@ -159,3 +157,8 @@ func test_failed_saved_level_thread_preserves_menu_and_temp() -> void:
 	assert_object(get_tree().current_scene).is_same(previous_level)
 	assert_str(manager._active_slot).is_equal("A")
 	assert_str(FileAccess.get_sha256(manager.legacy_player_file("temp"))).is_equal(hash_before)
+	assert_bool(manager.is_currently_loading).is_false()
+	make_slot("working")
+	assert_int(await manager.loading_saved_game("working")).is_equal(OK)
+	await get_tree().process_frame
+	assert_str(manager._active_slot).is_equal("working")
