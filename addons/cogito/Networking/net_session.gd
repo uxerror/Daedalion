@@ -10,6 +10,7 @@ signal rejected(peer_id: int, reason: String)
 const NetConfig := preload("net_config.gd")
 const Identity := preload("net_identity.gd")
 const HANDSHAKE_MS := 10000
+const THROTTLE_INTERVAL_MS := 5000  # ENet default
 
 var identity: Identity
 var config: Dictionary
@@ -85,11 +86,13 @@ func for_id(player_id: String) -> Dictionary:
 
 func _peer_connected(peer_id: int) -> void:
 	if _api.is_server():
+		_disable_throttle(peer_id)
 		_pending[peer_id] = {"deadline": Time.get_ticks_msec() + HANDSHAKE_MS}
 		_watchdog.start()
 
 
 func _connected() -> void:
+	_disable_throttle(1)
 	_hello.rpc_id(1, NetConfig.PROTOCOL_VERSION, config.content_version, profile.player_id)
 
 
@@ -180,6 +183,18 @@ func _peer_disconnected(peer_id: int) -> void:
 		if other != 1 and other != peer_id and _is_connected(other):
 			_player_removed.rpc_id(other, id)
 	_player_removed(id)
+
+
+# ENet's default packet throttle randomly discards unreliable sends while RTT
+# jitters, dropping whole runs of commands and snapshots that redundancy and
+# interpolation cannot recover. Pacing is the game's job: never throttle.
+func _disable_throttle(peer_id: int) -> void:
+	var enet := _api.multiplayer_peer as ENetMultiplayerPeer
+	var packet_peer := enet.get_peer(peer_id) if enet else null
+	if packet_peer:
+		packet_peer.throttle_configure(
+			THROTTLE_INTERVAL_MS, ENetPacketPeer.PACKET_THROTTLE_SCALE, 0
+		)
 
 
 # Peers leaving at the same moment may still be listed while their transport is closing.
