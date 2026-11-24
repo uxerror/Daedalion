@@ -64,11 +64,6 @@
   "UNUSED_PARAMETER": 10,
   "UNUSED_VARIABLE": 2
  },
- "addons/cogito/CogitoObjects/cogito_player_simple.gd": {
-  "SHADOWED_VARIABLE": 2,
-  "UNUSED_PARAMETER": 3,
-  "UNUSED_VARIABLE": 2
- },
  "addons/cogito/CogitoObjects/cogito_pressure_plate.gd": {
   "UNUSED_SIGNAL": 2
  },
@@ -193,12 +188,7 @@
   "MISSING_TOOL": 1
  },
  "addons/cogito/SceneManagement/cogito_scene_manager.gd": {
-  "UNUSED_PRIVATE_CLASS_VARIABLE": 2,
-  "UNUSED_SIGNAL": 4,
-  "UNUSED_VARIABLE": 1
- },
- "addons/cogito/SceneManagement/loading_screen.gd": {
-  "UNUSED_VARIABLE": 1
+  "UNUSED_SIGNAL": 4
  },
  "addons/cogito/Scripts/cogito_attribute_zone.gd": {
   "INCOMPATIBLE_TERNARY": 1,

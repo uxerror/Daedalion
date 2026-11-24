@@ -281,7 +281,7 @@ func _ready():
 
 
 func create_new_state() -> CogitoPlayerState:
-	return CogitPlayerAdvancedState.new()
+	return CogitoPlayerAdvancedState.new()
 
 
 func slide_audio_init():

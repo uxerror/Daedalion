@@ -151,7 +151,7 @@ In short, with COGITO you get a quick start for a fully-featured first person ga
 ### [Cogito in the Godot Asset Store](https://store.godotengine.org/asset/philip-drobar/cogito/)
 
 ### Current Features
-- First person player controller (simple OR state-based):
+- State-based first person player controller:
   - Sprinting, jumping, crouching, sliding, stairs handling, ladder handling, sitting, swimming
   - Lots of exposed properties to tweak to your liking (speeds, headbob, fall damage, bunnyhop, etc.)
   - Easy-to-use dynamic footstep sound system

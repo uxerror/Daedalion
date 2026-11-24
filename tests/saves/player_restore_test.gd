@@ -20,12 +20,13 @@ class GroupCondition:
 		return quest_flags.get("door_open", false)
 
 
-var _player: CogitoPlayerSimple
+var _player: CogitoPlayerAdvanced
 
 
 func before_test() -> void:
 	super()
 	_player = (load(LEVEL) as PackedScene).instantiate()
+	_player.inventory_data = _player.inventory_data.duplicate(true)
 	get_tree().current_scene.add_child(_player)
 	manager._current_scene_path = LEVEL
 	await get_tree().process_frame
