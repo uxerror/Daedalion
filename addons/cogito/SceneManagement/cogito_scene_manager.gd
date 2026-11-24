@@ -90,6 +90,8 @@ var _fade := Fade.new(self)
 
 
 func _ready() -> void:
+	if CogitoNet.dedicated_boot:
+		return
 	storage.recover_all()  # Individual failures are logged and retried before use.
 	delete_temp_saves()
 	instantiate_fade_panel()

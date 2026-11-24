@@ -51,6 +51,11 @@ jobs:
         env:
           GODOT_BIN: /home/runner/godot/godot
           NICE: ""
+      - name: Multiplayer
+        run: tools/check.sh multiplayer
+        env:
+          GODOT_BIN: /home/runner/godot/godot
+          NICE: ""
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v7

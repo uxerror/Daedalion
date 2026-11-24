@@ -19,6 +19,7 @@ Documentation for Daedalion 1.3.0; docs for other versions: browse the docs/ fol
 | Guide | Use it to |
 | --- | --- |
 | [Player controller](player-controller.md) | Configure movement, the HUD and a custom player. |
+| [Networking](networking.md) | Start a listen or dedicated server, join a session and inspect the roster. |
 | [Input routing](input-routing.md) | Give a menu or spinner control of player input. |
 | [Interactions](interactions.md) | Build an object with prompts and selectable actions. |
 | [Quickslots](quickslots.md) | Add inventory slots or display a set in a bar or wheel. |

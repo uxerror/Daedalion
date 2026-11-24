@@ -6,8 +6,12 @@ const OptionsConstants = preload("./options_constants.gd")
 @onready var ControllerEchoInputGenerator = $ControllerEchoInputGenerator
 @onready var startup_loader = $StartupLoader
 
+
 # Called when the node enters the scene tree for the first time.
 func _ready():
+	if CogitoNet.dedicated_boot:
+		process_mode = Node.PROCESS_MODE_DISABLED
+		return
 	#InputMapUpdater.new()._ready()
 
 	var updater = InputMapUpdater.new()

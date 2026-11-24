@@ -2,7 +2,7 @@
 # Run every check CI runs: gdlint/gdformat (baseline), Godot warnings, gdUnit4
 # tests and a smoke run of the demo scenes.
 #
-# Usage: tools/check.sh [lint|warnings|tests|smoke ...]   (default: all)
+# Usage: tools/check.sh [lint|warnings|tests|smoke|multiplayer ...]   (default: all)
 # Env:   GODOT_BIN (default: godot), NICE (default: "nice -n 19"; set NICE= in CI)
 #
 # Needs: godot 4.7.x, python3, and uv (uvx) or gdtoolkit==4.5.0 installed.
@@ -13,7 +13,7 @@ GODOT_BIN="${GODOT_BIN:-$(command -v godot)}"
 export GODOT_BIN
 NICE="${NICE-nice -n 19}"
 STEPS=("$@")
-[ ${#STEPS[@]} -eq 0 ] && STEPS=(lint warnings tests smoke)
+[ ${#STEPS[@]} -eq 0 ] && STEPS=(lint warnings tests smoke multiplayer)
 SMOKE_SCENES=(
 	res://addons/cogito/DemoScenes/COGITO_0_MainMenu.tscn
 	res://addons/cogito/DemoScenes/COGITO_3_Lobby.tscn
@@ -74,6 +74,11 @@ step_smoke() {
 		fi
 	done
 	return $rc
+}
+
+step_multiplayer() {
+	echo "== multiplayer: headless ENet processes"
+	NICE="$NICE" python3 tools/check_multiplayer.py
 }
 
 step_import
