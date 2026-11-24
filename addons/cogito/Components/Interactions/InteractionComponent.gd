@@ -30,6 +30,17 @@ enum AttributeCheck {NONE, FAIL_MESSAGE, HIDE_INTERACTION}
 @export var attribute_effects : Array[ConsumableEffect] 
 
 
+## Query eligibility without spending attributes or addressing the HUD.
+func attribute_passes(actor: PlayerInteractionComponent) -> bool:
+	var attribute := actor.get_attribute(attribute_to_check)
+	return attribute != null and attribute.value_current >= min_value_to_pass
+
+
+## Optional schema for a server-resolved action. Empty means no payload.
+func net_payload_schema(_action: StringName) -> StringName:
+	return &""
+
+
 func check_attribute(player_interaction_component: PlayerInteractionComponent) -> bool:
 	if !attribute_to_check:
 		CogitoGlobals.debug_log(true,"InteractionComponent.gd", "attribute_to_check was null!")

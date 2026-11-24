@@ -78,6 +78,9 @@ func _ready():
 	previous_crosshair_texture = default_crosshair
 	crosshair_texture.texture = default_crosshair
 	
+	if player is CogitoPlayer and player.network_movement_only:
+		hint_area.process_mode = Node.PROCESS_MODE_PAUSABLE
+		$PromptUI.process_mode = Node.PROCESS_MODE_PAUSABLE
 	_setup_player.call_deferred()
 	connect_to_external_inventories.call_deferred()
 
@@ -281,6 +284,15 @@ func set_interaction_prompts(passed_interaction_nodes : Array[Node]):
 		instanced_object_name.set_object_name(display_name)
 	
 	for node: InteractionComponent in passed_interaction_nodes:
+		if player is CogitoPlayer and player.network_movement_only:
+			var pic: PlayerInteractionComponent = player.player_interaction_component
+			if pic.network_interactions:
+				var label: String = pic.network_interactions.prompt(pic, node)
+				if not label.is_empty():
+					var prompt: UiPromptComponent = prompt_component.instantiate()
+					prompt_area.add_child(prompt)
+					prompt.set_prompt(label, node.input_map_action)
+			continue
 		if node.set_disabled(player): # Call first
 			continue
 		if node.is_disabled:

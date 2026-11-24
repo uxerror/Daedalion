@@ -4,6 +4,8 @@ extends RefCounted
 ## Lets other controllers offer an object's actions directly, for example in a context menu, instead of through
 ## input actions and hold timing. Run it with PlayerInteractionComponent.perform_action().
 
+## Stable key within the component, independent of translation and UI order.
+var action_id: StringName
 ## Text to show for the action, like the interaction prompt.
 var text : String
 ## The component the action belongs to.
@@ -15,7 +17,15 @@ var enabled : bool
 var _perform : Callable
 
 
-func _init(action_text: String, action_component: InteractionComponent, perform_callable: Callable, is_enabled: bool = true) -> void:
+func _init(
+	action_text: String, action_component: InteractionComponent, perform_callable: Callable,
+	is_enabled: bool = true, key: StringName = &""
+) -> void:
+	action_id = key
+	if action_id.is_empty() and action_component:
+		action_id = StringName(action_component.input_map_action)
+		if action_id.is_empty():
+			action_id = &"interact"
 	text = action_text
 	component = action_component
 	_perform = perform_callable

@@ -54,8 +54,12 @@ func can_start_hold(interactor) -> bool:
 
 func _has_item(interactor, item) -> bool:
 	for slot_data in interactor.get_inventory().inventory_slots:
-		if slot_data != null and slot_data.inventory_item == item:
-			return true
+		if slot_data:
+			if slot_data.inventory_item == item:
+				return true
+			if interactor is PlayerInteractionComponent:
+				if interactor.matches_item(slot_data.inventory_item, item):
+					return true
 	return false
 
 

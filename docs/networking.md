@@ -1,6 +1,6 @@
 # Multiplayer sessions
 
-Daedalion 1.4 MP1b spawns a server-owned Advanced player for each admitted identity. The offline demo still starts from the main menu.
+Daedalion 1.4 MP2a spawns a server-owned Advanced player for each admitted identity and synchronizes interactions with authored world objects. The offline demo still starts from the main menu.
 
 ## Try the Laboratory
 
@@ -138,15 +138,103 @@ Reliable spawn RPCs use the stable session endpoint `Session/Players`. A client 
 
 The project uses 60 physics ticks per second by default. Commands use unreliable ordered channel 1. A packet contains the last four MP1a frames with byte lengths. Only movement actions go on the wire. The receiver checks lengths, action IDs and finite values, normalizes the move vector, wraps yaw and clamps pitch. It resolves the avatar from the RPC sender. Each controller consumes at most one new sequence per physics tick. The receive queue holds up to 24 frames, starts with a two-tick jitter window, skips unrecovered gaps, and expires to neutral after 12 ticks without a fresh frame. The packet budget is four per avatar per server tick. Wire sequences are uint32 and extend to the nearest sequence around the next expected tick using signed modular distance. This assumes consecutive accepted sequences differ by less than half the number space. ENet's adaptive packet throttle is disabled on every connection (`throttle_configure(5000, PACKET_THROTTLE_SCALE, 0)`): under RTT jitter it silently discards runs of unreliable sends on the sender side, longer than the four-frame redundancy can recover.
 
-`CogitoNet.snapshot_hz` defaults to 25. After physics the server sends poses on unreliable channel 2 to ready peers whose avatars share the same `CogitoLevel` root. Each pose includes server tick, input acknowledgement, position, velocity, yaw, neck yaw, pitch, head height and posture/moving/seat state. The owner keeps local aim during ordinary updates. Remote playback uses a 100 ms buffer and extrapolates velocity for at most 50 ms. A position discontinuity over 4 m clears the history. After forcing a server teleport, look or in-place respawn, call `CogitoNet.player_world.mark_teleport(player_id)`. The next pose revision resets local look and invalidates buffered input from before the change. A new incarnation starts with empty history.
+`CogitoNet.snapshot_hz` defaults to 25. After physics the server sends one batch on unreliable channel 1 per ready peer per snapshot tick. The batch contains the poses of every avatar sharing that observer’s `CogitoLevel` root. Each pose includes server tick, input acknowledgement, position, velocity, yaw, neck yaw, pitch, head height and posture/moving/seat state. The owner keeps local aim during ordinary updates. Remote playback uses a 100 ms buffer and extrapolates velocity for at most 50 ms. A position discontinuity over 4 m clears the history. After forcing a server teleport, look or in-place respawn, call `CogitoNet.player_world.mark_teleport(player_id)`. The next pose revision resets local look and invalidates buffered input from before the change. A new incarnation starts with empty history.
 
 Use `CogitoNet.player_world.avatar_for(player_id)` to look up a live binding. Its `actor` is the Advanced node. On a replica, `timeline.latest()` exposes the last received pose including `tick` and `ack`. On the server, `actor.last_consumed_sequence` records the last applied command.
 
+## World interactions
+
+Listen hosts and dedicated servers validate interactions with doors, including keyed locks,
+buttons, switches and keypads. A pressure plate on the server counts bodies above the plate.
+Readable and keypad interfaces belong to one viewer. Another player can continue moving or
+interacting while a panel is open. Inventory changes, including consumption of a disposable
+key, take place in the acting avatar’s server inventory. A remote player’s inventory UI does
+not yet reflect those changes.
+
+### Addresses and requests
+
+Binding a level indexes its objects by `(level_key, CogitoPersistentId.of(object))`. The level
+key must match on all peers. Authored scene paths relative to the level already provide
+persistent ids. An explicitly restored id takes precedence. A duplicate id produces an
+error and excludes every object with that id. The component key is the authored path from the
+object to its interaction component. Renaming an object or component changes its default wire
+address and requires matching content on all peers. Network lookups use the registration
+tables built at bind time.
+
+`CogitoInteractionAction.action_id` defaults to the component’s input action, with `interact`
+as the fallback for an empty binding. Pass a fifth constructor argument for a component with
+multiple actions. The shipped dual component uses `press` and `hold`. A keypad has an
+additional `submit_code` action. Prompt text can change or be translated independently.
+
+The local interaction ray drives the HUD. The existing input and context-menu entry points
+send the chosen action to `Session/Players/Interactions` on reliable channel 2. A request
+contains `level_key`, `epoch`, `request_id`, `entity_id`, `component_key`, `action_id`,
+`expected_revision` and a phase. The only optional field is a schema-checked payload. The
+requester can select a registered action. Its actor, the callable, inventory changes and the
+resulting world state are all determined on the server.
+
+1. The server binds the transport sender to its admitted avatar. The listen host enters the
+   same path directly as peer 1. All RPCs use `call_remote`.
+2. The server checks the active level, epoch and object revision. It raycasts from the server
+   avatar’s eye toward the configured target or collider, excluding the actor. Reach is the
+   actor’s interaction-ray length plus 0.25 m. Carry, posture, air and interface restrictions,
+   enabled actions and attribute thresholds are checked against that actor.
+3. Hold start and release are distinct requests. Release validates the target again and uses
+   server elapsed time. A short dual press selects the quick action. A short plain hold or a
+   cancellation spends nothing. Losing the target or the local input context cancels the hold.
+4. The server checks key ownership and code validity before committing. An ordinary open on a
+   keyed lock can unlock and open it in the same request. Only the acting inventory spends a
+   disposable key. Each changed object publishes its own revision, including linked doors
+   and switches used as lamps. A wrong code leaves both keypad and linked doors unchanged.
+5. A per-connection, per-level result cache remembers accepted and rejected monotonic request
+   ids. Retrying an id returns its original result. A competing request with an old revision
+   is rejected as `Stale revision`. Retry a newly selected action against the refreshed state.
+   Only the requester receives the result, HUD hint text and icon, or instruction to open a
+   readable/keypad. Replayed replies do not repeat private presentation.
+
+### State, baselines and author extensions
+
+The server assigns an epoch at level bind. Live state, events and private results carry the
+level key and epoch. At level-ready the server sends the current states and revisions on
+reliable channel 3 in chunks of up to 32 objects. A client load nonce identifies the matching
+baseline, even when reloading the same key. An acknowledgement releases queued live changes
+on channel 2. Each live record carries a state update and a separate presentation event id.
+A replica applies the state first, then plays that event once for its revision. A late join
+only applies state. The collision body of a door snaps to the target on baseline and follows
+the server-selected motion locally on live updates. Server collision controls passage.
+
+Start with a working offline interactable. Its collider belongs to the `interactable` group
+and exposes the interaction components used by the local ray and HUD. Give its object root
+a stable level-relative placement or a persistent id, then implement the following contract.
+
+| Member | Contract |
+| --- | --- |
+| `signal net_changed(event: StringName)` | Emit synchronously on the authority after each committed change, including timer, sensor or linked-object changes. |
+| `net_state() -> Dictionary` | Return a fresh, compact dictionary of wire-safe state sufficient to reconstruct pose, collision and visible state. |
+| `apply_net_state(state: Dictionary, silent: bool)` | Assign replica fields and visuals without invoking gameplay signals or calling linked objects. With `silent` true, install the final pose immediately. |
+| `present_net_event(event: StringName)` | Optional one-shot sound or animation for a live change. Handle listen-host presentation in the authority’s local transition. |
+| `net_bind_authority()`, `net_bind_replica()`, `net_unbind()` | Optional hooks to install or release role-specific simulation and presentation. |
+
+On a custom interaction component, return stable choices from `get_actions(actor)` and
+implement `net_commit(action_id, actor, payload)` to opt in. The actor argument is the
+server-resolved `PlayerInteractionComponent`. Keep eligibility queries side-effect free.
+`attribute_passes(actor)` checks the threshold without applying effects or sending hints.
+Commit the state and emit `net_changed` before yielding. Capture the explicit actor for any
+delayed linked operation and check that it is still live before using it.
+
+Override `net_payload_schema(action_id) -> StringName` to reserve input for a particular
+action. The default accepts no payload. The built-in `digits` schema accepts 1–16 ASCII digits
+as a string, preserving leading zeroes. For a custom numeric panel, return `&"digits"` for
+its submission action, validate the submitted value in game logic, and only then change the
+object. Extending the wire schema requires a matching change to the server validator.
+`actor.send_hint(icon, text)` addresses the acting peer. Offline controllers continue to call
+`interact(actor)` and `perform_action(action)` directly.
+
 ## Current limitations
 
-- MP1b synchronizes players in one active level. Translation includes network latency. Client prediction, rollback, independent travel and reconnect state restoration are future stages.
-- Interactions, inventory, weapons, carry, seat requests, quickslots and the solo menus are unavailable to network players. The interaction component is the integration point for MP2's server-validated requests. Offline keeps the existing handlers.
-- NPC simulation, damage, death, movable props, doors, pickups, quests and saves still use solo rules. Changes to level content can diverge between machines. Games should use static collision for network movement testing. Choose clear spawn transforms for levels with walls or narrow ledges near the authored start.
+- MP2a synchronizes players and the listed authored objects in one active level. Translation includes network latency. Client prediction, rollback, independent travel and reconnect state restoration are future stages.
+- Spinner/turnwheel, lockpick and cutscene adapters are planned for MP2b. Inventory and currency transactions, pickups, weapon use, vendors, carrying and seats await later stages. Unsupported interactions stay inert online. Direct server grants of authored items can be used to exercise keyed doors.
+- NPCs, damage, death, movable props, quests, runtime spawns and network saves still need subsystem replication. A linked custom object needs its own state adapter to appear on observers. Use level-authored motion/visual tracks for replica animations. Method, nested-animation and audio tracks on door/switch replica players are removed at bind.
 - The sender repeats four frames. A burst that loses every copy of an edge can still lose the action. Artificial loss in the process test covers individual packet loss. LAN feel under jitter and mannequin animation need a visual playtest.
 
 ## Verification
@@ -155,6 +243,6 @@ Use `CogitoNet.player_world.avatar_for(player_id)` to look up a live binding. It
 GODOT_BIN=/usr/bin/godot NICE='nice -n 19' bash tools/check.sh multiplayer
 ```
 
-The loopback ENet harness runs a dedicated server with two clients, then a listen host with one client. Separate temporary user directories preserve the MP0 identity, rejection, disconnect and restart checks. In a small arena it also checks stationary avatars, forward and turning distances, observation by the opposite peer, the late-join pose and removal. Clients drop every tenth command datagram after encoding its redundant history. A jump tap lands on a dropped datagram and the server and observer must see the jump height. Each topology has a 45 s deadline.
+The loopback ENet harness runs a dedicated server with two clients, then a listen host with one client. Separate temporary user directories preserve the MP0 identity, rejection, disconnect and restart checks. In a small arena it also checks stationary avatars, forward and turning distances, observation by the opposite peer, the late-join pose and removal. Clients drop every tenth command datagram after encoding its redundant history. A jump tap lands on a dropped datagram and the server and observer must see the jump height. The interaction checks also exercise a closed and open collision doorway, duplicate requests, rejection at distance, a button-linked door, wrong/right keypad codes and a silent third-client baseline. In the listen topology the host opens the first door and the client opens the linked door. Each topology has a 45 s deadline.
 
-The regular gdUnit run includes the socket-free codec, jitter, wrap, interpolation, level interest, role and actor-lifecycle tests in `tests/net/`.
+The regular gdUnit run includes the socket-free codec, jitter, wrap, interpolation, level interest, role, actor-lifecycle, entity identity, validation, concurrent commits, private interfaces, plate and baseline tests in `tests/net/`.

@@ -2,6 +2,110 @@
 
 [ext_resource type="PackedScene" path="res://tests/player/movement_level.tscn" id="1"]
 [ext_resource type="Script" path="res://tests/net/process_arena.gd" id="2"]
+[ext_resource type="Script" path="res://addons/cogito/CogitoObjects/cogito_door.gd" id="door"]
+[ext_resource type="Script" path="res://addons/cogito/CogitoObjects/cogito_button.gd" id="button"]
+[ext_resource type="Script" path="res://addons/cogito/CogitoObjects/cogito_switch.gd" id="switch"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Components/Interactions/BasicInteraction.tscn" id="basic"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Interactions/HoldInteraction.gd" id="hold"]
+[ext_resource type="PackedScene" path="res://addons/cogito/PackedScenes/keypad_prefab.tscn" id="keypad"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Components/Interactions/ReadableComponent.tscn" id="read"]
+[ext_resource type="Script" path="res://addons/cogito/CogitoObjects/cogito_object.gd" id="object"]
+
+[ext_resource type="AudioStream" path="res://addons/cogito/Assets/Audio/Kenney/doorOpen_1.ogg" id="sound"]
+[ext_resource type="PackedScene" path="res://addons/cogito/PackedScenes/cogito_pressure_plate.tscn" id="plate"]
+
+[sub_resource type="BoxShape3D" id="slab"]
+size = Vector3(3.6, 3, 0.2)
+
+[sub_resource type="BoxShape3D" id="panel"]
+size = Vector3(0.2, 0.3, 0.1)
 
 [node name="Arena" instance=ExtResource("1")]
 script = ExtResource("2")
+
+[node name="Door" type="AnimatableBody3D" parent="."]
+position = Vector3(6, 1.5, -14)
+collision_layer = 3
+script = ExtResource("door")
+door_type = 1
+closed_position = Vector3(6, 1.5, -14)
+open_position = Vector3(10, 1.5, -14)
+door_speed = 0.25
+open_sound = ExtResource("sound")
+metadata/cogito_persistent_id = "level:door"
+
+[node name="Audio" type="AudioStreamPlayer3D" parent="Door"]
+
+[node name="Shape" type="CollisionShape3D" parent="Door"]
+shape = SubResource("slab")
+
+[node name="Use" parent="Door" instance=ExtResource("basic")]
+
+[node name="Hold" type="Node3D" parent="Door"]
+script = ExtResource("hold")
+input_map_action = "interact2"
+hold_time = 0.3
+
+[node name="Button" type="StaticBody3D" parent="."]
+position = Vector3(7.35, 1.35, -13)
+collision_layer = 3
+script = ExtResource("button")
+allows_repeated_interaction = false
+objects_call_interact = Array[NodePath]([NodePath("../LinkedDoor")])
+metadata/cogito_persistent_id = "level:button"
+
+[node name="Shape" type="CollisionShape3D" parent="Button"]
+shape = SubResource("panel")
+
+[node name="Use" parent="Button" instance=ExtResource("basic")]
+
+[node name="LinkedDoor" type="AnimatableBody3D" parent="."]
+position = Vector3(12, 1.5, -18)
+script = ExtResource("door")
+door_type = 1
+closed_position = Vector3(12, 1.5, -18)
+open_position = Vector3(16, 1.5, -18)
+metadata/cogito_persistent_id = "level:linked"
+
+[node name="Shape" type="CollisionShape3D" parent="LinkedDoor"]
+shape = SubResource("slab")
+
+[node name="Keypad" parent="." node_paths=PackedStringArray("doors_to_unlock") instance=ExtResource("keypad")]
+position = Vector3(4.35, 1.4, -12.8)
+passcode = "0420"
+doors_to_unlock = [NodePath("../KeyDoor")]
+open_when_unlocked = true
+metadata/cogito_persistent_id = "level:keypad"
+
+[node name="KeyDoor" type="AnimatableBody3D" parent="."]
+position = Vector3(2, 1.5, -17)
+script = ExtResource("door")
+is_locked = true
+door_type = 1
+closed_position = Vector3(2, 1.5, -17)
+open_position = Vector3(-2, 1.5, -17)
+metadata/cogito_persistent_id = "level:keydoor"
+
+[node name="Shape" type="CollisionShape3D" parent="KeyDoor"]
+shape = SubResource("slab")
+
+[node name="Switch" type="StaticBody3D" parent="."]
+position = Vector3(5.1, 1.6, -11.7)
+script = ExtResource("switch")
+metadata/cogito_persistent_id = "level:switch"
+
+[node name="Shape" type="CollisionShape3D" parent="Switch"]
+shape = SubResource("panel")
+
+[node name="Use" parent="Switch" instance=ExtResource("basic")]
+
+[node name="Page" type="StaticBody3D" parent="."]
+position = Vector3(5.4, 1.4, -13.4)
+script = ExtResource("object")
+metadata/cogito_persistent_id = "level:page"
+
+[node name="Read" parent="Page" instance=ExtResource("read")]
+
+[node name="Plate" parent="." instance=ExtResource("plate")]
+position = Vector3(-6, 0, -12)
+metadata/cogito_persistent_id = "level:plate"

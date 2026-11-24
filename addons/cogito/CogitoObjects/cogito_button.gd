@@ -1,6 +1,8 @@
 @icon("res://addons/cogito/Assets/Graphics/Editor/Icon_CogitoButton.svg")
 extends Node3D
 class_name CogitoButton
+## Authoritative change observed by the bound level's replication endpoint.
+signal net_changed(event: StringName)
 signal object_state_updated(interaction_text: String) #used to display correct interaction prompts
 signal pressed()
 signal pressed_ref(button: CogitoButton) #same as pressed but passes pressed button instance
@@ -49,6 +51,7 @@ var interaction_nodes : Array[Node]
 var cogito_properties : CogitoProperties = null
 var currency_check : CurrencyCheck = null
 var cooldown : float
+var _net_pressed := false
 
 func _ready() -> void:
 	self.add_to_group("interactable")
@@ -60,7 +63,8 @@ func _ready() -> void:
 		interaction_text = usable_interaction_text + (currency_check.currency_text if currency_check.currency_cost != 0 else "")
 	else:
 		interaction_text = usable_interaction_text
-	object_state_updated.emit(interaction_text)
+	if multiplayer.is_server():
+		object_state_updated.emit(interaction_text)
 	find_cogito_properties()
 
 
@@ -76,6 +80,8 @@ func _physics_process(delta: float) -> void:
 
 
 func interact(_player_interaction_component:PlayerInteractionComponent):
+	if is_inside_tree() and not multiplayer.is_server():
+		return
 	if cooldown > 0:
 		return
 		
@@ -98,6 +104,8 @@ func interact(_player_interaction_component:PlayerInteractionComponent):
 
 
 func press():
+	if is_inside_tree() and not multiplayer.is_server():
+		return
 	# only run the currency check once the press is validated and triggered
 	# otherwise you can charge for a transaction and still not press the button
 	if currency_check and currency_check.currency_cost != 0:
@@ -116,17 +124,31 @@ func press():
 	else:
 		cooldown = press_cooldown_time
 	
+	if has_meta(&"cogito_net_world"):
+		_net_pressed = true
+		net_changed.emit(&"press")
 	if !objects_call_interact:
 		return
+	var instigator := player_interaction_component
+	var needs_actor := is_instance_valid(instigator)
+	var online := has_meta(&"cogito_net_world")
+	var world: Node = get_meta(&"cogito_net_world") if online else null
 	for nodepath in objects_call_interact:
 		await get_tree().create_timer(objects_call_delay).timeout
 		if nodepath != null:
 			var object = get_node(nodepath)
-			object.interact(player_interaction_component)
+			if not online:
+				object.interact(player_interaction_component)
+			elif is_instance_valid(world) and (not needs_actor or is_instance_valid(instigator)):
+				world.activate_link(object, instigator)
 
 
 # Accepts every form of damage_received: (amount), (amount, source) and (amount, source, hit direction, hit position).
 func _on_damage_received(_damage, source = null, _hit_direction := Vector3.ZERO, _hit_position := Vector3.ZERO):
+	if has_meta(&"cogito_net_world"):
+		if multiplayer.is_server() and source is CogitoPlayer:
+			interact(source.player_interaction_component)
+		return
 	if source == self:
 		return # Damage ticks of its own burning don't press it.
 	interact(CogitoSceneManager.get_player().player_interaction_component)
@@ -135,9 +157,11 @@ func _on_damage_received(_damage, source = null, _hit_direction := Vector3.ZERO,
 func check_for_item() -> bool:
 	var inventory = player_interaction_component.get_inventory()
 	for slot_data in inventory.inventory_slots:
-		if slot_data != null and slot_data.inventory_item == required_item:
+		if slot_data and player_interaction_component.matches_item(
+			slot_data.inventory_item, required_item
+		):
 			player_interaction_component.send_hint(null, required_item.name + " used.") # Sends a hint with the key item name.
-			if slot_data.inventory_item.discard_after_use:
+			if slot_data.inventory_item.get("discard_after_use"):
 				inventory.remove_item_from_stack(slot_data)
 				# inventory.remove_slot_data(slot_data) (removed on 20240913, leaving line just in case there's bugs.
 			return true
@@ -171,3 +195,22 @@ func save():
 		
 	}
 	return state_dict
+
+## Current press and one-use latch for this level instance.
+func net_state() -> Dictionary:
+	return {"pressed": _net_pressed, "used": has_been_used}
+
+
+## Update the prompt without invoking the linked objects.
+func apply_net_state(state: Dictionary, _silent: bool) -> void:
+	_net_pressed = state.pressed
+	has_been_used = state.used
+	if has_been_used:
+		interaction_text = unusable_interaction_text
+	for component: InteractionComponent in interaction_nodes:
+		component.interaction_text = interaction_text
+
+
+## Play a press only for live updates.
+func present_net_event(_event: StringName) -> void:
+	CogitoAudio.play_sound_3d_in(self, press_sound, global_position)

@@ -15,6 +15,8 @@ signal nothing_detected()
 signal started_carrying(interaction_node: Node)
 signal update_crosshair(is_visible: bool)
 
+## Bound only on session avatars. Offline actors retain their direct component calls.
+var network_interactions: Node
 var look_vector: Vector3
 var device_id: int = -1  # Used for displaying correct input prompts depending on input device.
 
@@ -91,7 +93,13 @@ func handles_action_event(event: InputEvent) -> bool:
 ## Handles a decoded action for this actor. Local sources resolve shared gamepad bindings.
 func on_action_input(event: InputEvent, gamepad: bool = false) -> void:
 	if player and player.network_movement_only:
-		return # TODO(MP2): route the intent to an authoritative interaction handler.
+		if network_interactions and player.is_local_presentation:
+			for input: String in ["interact", "interact2"]:
+				if event.is_action_pressed(input):
+					start_interaction(input)
+				elif event.is_action_released(input):
+					network_interactions.release(input)
+		return
 	if event.is_action_pressed("interact") or event.is_action_pressed("interact2"):
 		var action: String = "interact" if event.is_action_pressed("interact") else "interact2"
 		start_interaction(action)
@@ -131,6 +139,8 @@ func on_action_input(event: InputEvent, gamepad: bool = false) -> void:
 
 ## End latched fire and aim when a menu takes over, even if physics has just been paused.
 func release_held_actions() -> void:
+	if network_interactions and player.is_local_presentation:
+		network_interactions.cancel_hold()
 	if wieldables.primary_action_held:
 		wieldables.primary_action_held = false
 		if wieldables.is_wielding and not carrying.is_carrying:
@@ -145,7 +155,9 @@ func release_held_actions() -> void:
 ## Lets other controllers trigger interactions, for example after walking to an object that was clicked.
 func start_interaction(action: String) -> void:
 	if player and player.network_movement_only:
-		return # TODO(MP2): route the intent to an authoritative interaction handler.
+		if network_interactions and player.is_local_presentation:
+			network_interactions.press(self, action)
+		return
 	# Seat entry/exit is part of locomotion. Other legacy world interactions may open
 	# process-wide interfaces and will get explicit recipients in MP2.
 	if not player.is_local_presentation:
@@ -218,7 +230,9 @@ func _is_interaction_blocked(node: InteractionComponent) -> bool:
 ## Checks the same things as start_interaction() and updates the prompts afterwards.
 func perform_action(action: CogitoInteractionAction) -> void:
 	if player and player.network_movement_only:
-		return # TODO(MP2): route the intent to an authoritative interaction handler.
+		if network_interactions and player.is_local_presentation:
+			network_interactions.perform(action)
+		return
 	if !action.enabled:
 		return
 	var node := action.component
@@ -244,6 +258,9 @@ func on_death():
 
 # Function called by interactables if they need to send a hint. The signal sent here gets picked up by the Player_Hud_Manager.
 func send_hint(hint_icon: Texture2D, hint_text: String):
+	if network_interactions:
+		network_interactions.route_hint(self, hint_icon, hint_text)
+		return
 	hint_prompt.emit(hint_icon, hint_text)
 
 
@@ -265,6 +282,8 @@ func open_interface(on_menu_pressed: Callable = Callable()) -> void:
 
 ## Counterpart of open_interface(). Pass the same on_menu_pressed that was passed to open_interface().
 func close_interface(on_menu_pressed: Callable = Callable()) -> void:
+	if network_interactions:
+		network_interactions.dismiss_view()
 	if on_menu_pressed.is_valid():
 		player.menu_pressed.disconnect(on_menu_pressed)
 	player.toggled_interface.emit(false)
@@ -307,6 +326,13 @@ func _on_interaction_raycast_interactable_unseen() -> void:
 ## This prevents incidental quickslot cycling when only attempting to interact with an item in the world that uses the same input action
 func _on_can_cycle_quickslots_timeout() -> void:
 	can_cycle_quickslots = true
+
+
+## Match a private authoritative inventory item to the definition configured on a world object.
+func matches_item(item: InventoryItemPD, required: InventoryItemPD) -> bool:
+	if network_interactions and item and item.has_meta(&"cogito_item_definition"):
+		return item == required or item.get_meta(&"cogito_item_definition") == required
+	return item == required
 
 
 func get_inventory() -> CogitoInventory:

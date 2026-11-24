@@ -5,6 +5,8 @@ extends Node
 ## The local controller has its initial pose, or has been removed.
 signal local_changed(actor: CogitoPlayer)
 
+const INTERACTIONS := preload("net_interactions.gd")
+const WORLD := preload("net_world_state.gd")
 const SESSION := preload("net_session.gd")
 const AVATAR := preload("net_avatar.gd")
 const CHANNEL := preload("net_command_channel.gd")
@@ -18,6 +20,11 @@ var snapshot_hz := 25
 var command_channel := CHANNEL.new()
 ## Local network controller once ready. Dedicated sessions leave this empty.
 var local_actor: CogitoPlayerAdvanced
+## Replicated object registry and state for this online branch.
+var world := WORLD.new()
+## Reliable gameplay requests and private results for this session.
+var interactions := INTERACTIONS.new()
+var _bindings := {}
 var _session: SESSION
 var _prefab: PackedScene
 var _level: Node
@@ -33,6 +40,11 @@ var _elapsed := 0.0
 
 
 func _ready() -> void:
+	world.name = "World"
+	add_child(world)
+	interactions.name = "Interactions"
+	interactions.world = world
+	add_child(interactions)
 	_session = get_parent()
 	process_physics_priority = 100
 	_session.joined.connect(_joined)
@@ -57,6 +69,7 @@ func bind_level(root: Node, start: Transform3D, key: String) -> void:
 	_start = start
 	set_process(not multiplayer.is_server())
 	_owns_root = CogitoLevel.mark_network_root(root)
+	world.bind(root, key)
 	root.tree_exiting.connect(_level_exiting, CONNECT_ONE_SHOT)
 	if multiplayer.is_server():
 		for record in _session.records():
@@ -73,6 +86,9 @@ func _exit_tree() -> void:
 
 func _level_exiting() -> void:
 	clear()
+	interactions.clear()
+	world.clear()
+	_bindings.clear()
 	if _owns_root:
 		CogitoLevel.unmark_network_root(_level)
 		_owns_root = false
@@ -86,21 +102,40 @@ func _announce_level() -> void:
 		and not _session.local_id.is_empty()
 		and not multiplayer.is_server()
 	):
-		_level_ready.rpc_id(1, _level_key)
+		_level_ready.rpc_id(1, _level_key, world.binding())
 
 
 @rpc("any_peer", "call_remote", "reliable", 0)
-func _level_ready(key: String) -> void:
+func _level_ready(key: String, nonce: int) -> void:
 	var peer := multiplayer.get_remote_sender_id()
 	if not multiplayer.is_server() or _session.for_peer(peer).is_empty() or key.length() > 512:
 		return
-	if _ready_levels.has(peer):
+	if nonce <= int(_bindings.get(peer, 0)):
 		return
 	_peer_by_id[_session.for_peer(peer).player_id] = peer
+	world.forget(peer)
+	_bindings[peer] = nonce
 	_ready_levels[peer] = key
 	for id in _avatars:
 		if _visible(peer, id):
 			_send_spawn(peer, id)
+
+	_subscribe(peer)
+
+
+func _subscribe(peer: int) -> void:
+	var id: String = _session.for_peer(peer).get("player_id", "")
+	if _avatars.has(id) and _visible(peer, id):
+		world.subscribe(peer, _bindings[peer])
+
+
+## True for the listen player or an admitted observer bound to this live root.
+func peer_in_level(peer: int) -> bool:
+	var id: String = _session.for_peer(peer).get("player_id", "")
+	var avatar := avatar_for(id)
+	if not avatar or CogitoLevel.root_of(avatar.actor) != _level:
+		return false
+	return peer == 1 or _ready_levels.get(peer) == _level_key
 
 
 func _visible(peer: int, id: String) -> bool:
@@ -131,6 +166,7 @@ func _joined(id: String) -> void:
 			_send_spawn(peer, id)
 		# A level can finish loading after several of its clients have signalled ready.
 		if peer == _peer_by_id[id]:
+			_subscribe(peer)
 			for other in _avatars:
 				if other != id and _visible(peer, other):
 					_send_spawn(peer, other)
@@ -152,6 +188,7 @@ func _create(id: String, life: int, start: Transform3D, initial_pose: Dictionary
 	if not _prefab:
 		_prefab = load(AVATAR.PREFAB)
 	avatar.spawn(_prefab, _level, id, start, local, multiplayer.is_server())
+	avatar.actor.player_interaction_component.network_interactions = interactions
 	if not initial_pose.is_empty():
 		avatar.receive(initial_pose)
 	if local:
@@ -176,13 +213,19 @@ func _spawn(key: String, id: String, life: int, frame: Dictionary) -> void:
 
 
 func _remove(id: String) -> void:
-	_ready_levels.erase(_peer_by_id.get(id, 0))
+	var peer := int(_peer_by_id.get(id, 0))
+	world.forget(peer)
+	interactions.forget(peer)
+	_bindings.erase(peer)
+	_ready_levels.erase(peer)
 	_peer_by_id.erase(id)
 	if not _avatars.has(id):
 		return
 	var avatar := _avatars[id]
 	_avatars.erase(id)
 	var local := avatar.actor == local_actor
+	if local:
+		interactions.close_view(avatar.actor.player_interaction_component)
 	avatar.despawn()
 	if local:
 		local_actor = null
@@ -225,12 +268,17 @@ func _physics_process(delta: float) -> void:
 	if _elapsed < interval:
 		return
 	_elapsed = fmod(_elapsed, interval)
+	var poses := {}
 	for id in _avatars:
 		var avatar := _avatars[id]
-		var frame := SNAPSHOT.capture(avatar.actor, _tick, avatar.revision)
-		for peer: int in _ready_levels:
+		poses[id] = [id, avatar.lifetime, SNAPSHOT.capture(avatar.actor, _tick, avatar.revision)]
+	for peer: int in _ready_levels:
+		var batch := []
+		for id in _avatars:
 			if _visible(peer, id):
-				_pose.rpc_id(peer, id, avatar.lifetime, frame)
+				batch.append(poses[id])
+		if not batch.is_empty():
+			_poses.rpc_id(peer, batch)
 
 
 @rpc("any_peer", "call_remote", "unreliable_ordered", 1)
@@ -243,8 +291,13 @@ func _commands(life: int, revision: int, data: PackedByteArray) -> void:
 		avatar.source.receive(data)
 
 
-@rpc("authority", "call_remote", "unreliable", 2)
-func _pose(id: String, life: int, frame: Dictionary) -> void:
+@rpc("authority", "call_remote", "unreliable", 1)
+func _poses(batch: Array) -> void:
+	for pose: Array in batch:
+		_receive_pose(pose[0], pose[1], pose[2])
+
+
+func _receive_pose(id: String, life: int, frame: Dictionary) -> void:
 	var avatar := avatar_for(id)
 	if avatar and avatar.timeline and avatar.lifetime == life:
 		var previous_revision := avatar.revision

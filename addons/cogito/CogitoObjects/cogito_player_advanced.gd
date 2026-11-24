@@ -715,6 +715,11 @@ func _handle_command_edge(edge: int, index: int) -> void:
 		if current_moving_state not in [MovingState.Swimming, MovingState.LedgeClimbing]:
 			try_crouch = not try_crouch
 	if network_movement_only:
+		if is_local_presentation and action in [ACTION.INTERACT, ACTION.INTERACT2]:
+			var intent := InputEventAction.new()
+			intent.action = CogitoPlayerCommand.ACTIONS[action]
+			intent.pressed = pressed
+			player_interaction_component.on_action_input(intent)
 		if action == ACTION.JUMP and pressed:
 			current_command.held |= 1 << ACTION.JUMP
 		return

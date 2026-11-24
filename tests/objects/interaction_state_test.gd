@@ -49,3 +49,14 @@ func test_in_air_blocks_only_components_that_ask_for_it() -> void:
 	assert_bool(pic._is_interaction_blocked(_component)).is_false()
 	_component.disable_interaction_in_air = true
 	assert_bool(pic._is_interaction_blocked(_component)).is_true()
+
+
+func test_offline_action_uses_original_callable_without_network_binding() -> void:
+	assert_bool(CogitoNet.is_online()).is_false()
+	var pic := _player.player_interaction_component
+	assert_object(pic.network_interactions).is_null()
+	var action := _action()
+	action.action_id = &"third_party_context"
+	await pic.perform_action(action)
+	assert_int(_calls).is_equal(1)
+	assert_int(CogitoNet.get_child_count()).is_zero()

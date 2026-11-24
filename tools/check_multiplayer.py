@@ -44,6 +44,7 @@ class Role:
         self.events = deque()
         self.samples = deque(maxlen=600)
         self.generation = 0
+        self.order = 0
         self.tail = deque(maxlen=25)
         self.expected_failure = expected_failure
         self.stopping = False
@@ -244,6 +245,59 @@ class Scenario:
             raise CheckFailed(f"{name}: peers disagree on final position {positions}")
         return positions[0]
 
+    def sample(self, role, predicate):
+        while not role.samples or not predicate(role.samples[-1]):
+            self.next_line()
+        return role.samples[-1]
+
+    def order(self, role, **command):
+        role.order += 1
+        path = role.directory / f"order-{role.order}"
+        pending = path.with_suffix(".tmp")
+        pending.write_text(json.dumps(command))
+        pending.replace(path)
+        return self.sample(role, lambda s: s["order"] == role.order)
+
+    def use(self, role, component, reason=None, **fields):
+        self.order(role, op="use", component=component, **fields)
+        def result():
+            line = self.wait_line(role, lambda event: event.startswith("NET RESULT "))
+            return json.loads(line.removeprefix("NET RESULT "))
+        reply = result()
+        if reply["ok"] != (reason is None) or reply.get("reason") != reason:
+            raise CheckFailed(f"{role.directory.name}: unexpected interaction result {reply}")
+        if fields.get("retry") and result() != reply:
+            raise CheckFailed("duplicate request got a different result")
+
+    def panels(self, first, second, first_name, walker=None):
+        for role in (first, second):
+            self.sample(role, lambda s: s["epoch"] > 0)
+        self.use(first, "Door/Use", reason="Out of reach")
+        self.order(self.server, op="stage", first=first_name)
+        if walker:
+            self.order(second, op="walk")
+            self.sample(second, lambda s: s["walk"] == 0)
+            blocked = self.sample(self.server, lambda s: s["actors"][walker][2] < -13.0)
+            if blocked["actors"][walker][2] < -13.95 or blocked["open"]:
+                raise CheckFailed("walker crossed the closed door")
+        self.use(first, "Door/Use", retry=True)
+        for role in (self.server, second):
+            self.sample(role, lambda s: s["open"] and s["door_revision"] == 1)
+        if walker:
+            self.order(second, op="walk")
+            self.sample(self.server, lambda s: s["actors"][walker][2] < -14.8)
+            self.sample(second, lambda s: s["walk"] == 0)
+            self.order(self.server, op="stage", first=first_name)
+        self.use(second, "Button/Use")
+        for role in (self.server, first):
+            self.sample(role, lambda s: s["linked"])
+        self.use(first, "Keypad/BasicInteraction", reason="Wrong code", action="submit_code", code="0000")
+        if not self.server.samples[-1]["locked"] or not self.server.samples[-1]["keydoor_locked"]:
+            raise CheckFailed("wrong code changed the world")
+        self.use(first, "Keypad/BasicInteraction", action="submit_code", code="0420")
+        for role in (self.server, second):
+            self.sample(role, lambda s: not s["locked"] and not s["keydoor_locked"] and s["keydoor_open"])
+
     def dedicated(self):
         self.start(dedicated=True)
         first = self.fixture("Ada", "client")
@@ -259,6 +313,18 @@ class Scenario:
             raise CheckFailed(f"late-join pose {arrival} vs {settled}")
         self.drive(first, "Ada", roster, [self.server, second])
         self.drive(second, "Ben", roster, [self.server, first])
+        self.panels(first, second, "Ada", "Ben")
+        late = self.fixture("Cy", "client")
+        self.state(late, ["Ada", "Ben", "Cy"])
+        self.state(first, ["Ada", "Ben", "Cy"])
+        self.state(second, ["Ada", "Ben", "Cy"])
+        baseline = self.sample(late, lambda s: s["epoch"] > 0)
+        if (not baseline["open"] or not baseline["keydoor_open"] or baseline["locked"]
+                or baseline["keydoor_locked"] or baseline["events"]):
+            raise CheckFailed(f"incorrect late-join world baseline: {baseline}")
+        self.stop(late)
+        self.state(first, roster)
+        self.state(second, roster)
         self.expect_rejection("old", "Content version mismatch", extra=("--content", "wrong"))
         self.expect_rejection("duplicate", "Identity already connected", copy_from=first)
         self.stop(first)
@@ -279,7 +345,7 @@ class Scenario:
         if self.state(restored, ["Ada"]) != (ada, {"Ada": ada}):
             raise CheckFailed("server restart changed identity")
         self.stop(restored)
-        print("PASS dedicated + 2 clients: movement, lost jump packet, late join, departure, identity, restart")
+        print("PASS dedicated + 2 clients: movement, collision, interaction retry, keypad, silent late join, identity, restart")
 
     def listen(self):
         self.start(dedicated=False)
@@ -291,11 +357,12 @@ class Scenario:
         self.stationary(self.server, roster)
         self.drive(self.server, "Host", roster, [self.server, client])
         self.drive(client, "Ada", roster, [self.server, client])
+        self.panels(self.server, client, "Host")
         self.stop(client)
         self.state(self.server, ["Host"])
         self.pose(self.server, ["Host"])
         self.stop(self.server)
-        print("PASS listen host + 1 client: movement, lost jump packet, host identity, departure")
+        print("PASS listen host + 1 client: movement, interactions in both directions, host identity, departure")
 
 
 def main():

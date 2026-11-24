@@ -6,6 +6,11 @@ class_name CogitoKeypad
 signal correct_code_entered
 ## Emitted when the object status changes, used for UI prompts.
 signal object_state_updated(interaction_text:String)
+## Authoritative change observed by the bound level's replication endpoint.
+signal net_changed(event: StringName)
+
+## Bound by an online session to route code entry to the authority.
+var net_component: InteractionComponent
 
 @onready var keypad_ui: Control = $KeypadUi
 @onready var code_display: Label = $KeypadUi/Bindings/ScrollContainer/VBoxContainer/HBoxContainer/Panel/CodeDisplay
@@ -75,7 +80,8 @@ func _ready():
 	else:
 		interaction_text = interaction_text_when_locked
 		
-	object_state_updated.emit(interaction_text)
+	if multiplayer.is_server():
+		object_state_updated.emit(interaction_text)
 
 func interact(_player: PlayerInteractionComponent):
 	player = _player
@@ -134,6 +140,9 @@ func update_code_display():
 	code_display.text = entered_code
 
 func check_entered_code():
+	if net_component and player and player.network_interactions:
+		player.network_interactions.submit_code(net_component, entered_code)
+		return
 	if entered_code == passcode and is_locked:
 		unlock_keypad()
 	else:
@@ -143,6 +152,9 @@ func check_entered_code():
 		clear_entered_code()
 
 func unlock_keypad():
+	if has_meta(&"cogito_net_world"):
+		net_unlock(null)
+		return
 	CogitoAudio.play_sound(correct_code_entered_sound)
 	is_locked = false
 	lock_color.modulate = correct_code_color
@@ -199,3 +211,47 @@ func save():
 		
 	}
 	return state_dict
+
+## Private UI entry point on the requesting peer.
+func open_net_interface(actor: PlayerInteractionComponent, component: InteractionComponent) -> void:
+	net_component = component
+	clear_entered_code()
+	if not keypad_ui.visible:
+		interact(actor)
+
+
+## Commit a previously validated code on the server, even when there is no local HUD.
+func net_unlock(actor: PlayerInteractionComponent) -> void:
+	if not multiplayer.is_server() or not is_locked:
+		return
+	is_locked = false
+	can_interact = false
+	lock_color.modulate = correct_code_color
+	interaction_text = interaction_text_when_unlocked
+	object_state_updated.emit(interaction_text)
+	net_changed.emit(&"unlock")
+	present_net_event(&"unlock")
+	correct_code_entered.emit()
+	for door in doors_to_unlock:
+		door.unlock_door()
+		if open_when_unlocked:
+			door.open_door(actor)
+
+
+## World state excludes private typed digits.
+func net_state() -> Dictionary:
+	return {"locked": is_locked}
+
+
+## Update lock presentation without replaying unlock or sending gameplay signals.
+func apply_net_state(state: Dictionary, _silent: bool) -> void:
+	is_locked = state.locked
+	interaction_text = interaction_text_when_locked if is_locked else interaction_text_when_unlocked
+	lock_color.modulate = Color.WHITE if is_locked else correct_code_color
+	for component: InteractionComponent in interaction_nodes:
+		component.interaction_text = interaction_text
+
+
+## Play the keypad beep spatially for a live unlock.
+func present_net_event(_event: StringName) -> void:
+	CogitoAudio.play_sound_3d_in(self, correct_code_entered_sound, global_position)

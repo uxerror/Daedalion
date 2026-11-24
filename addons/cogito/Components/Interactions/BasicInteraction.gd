@@ -32,3 +32,19 @@ func _on_object_state_change(_interaction_text: String):
 	interaction_text = _interaction_text
 	if player_interaction_component:
 		player_interaction_component.targeting.rebuild_interaction_prompts()
+
+
+## A keypad has a second, explicit action available through its local UI.
+func get_actions(actor: PlayerInteractionComponent) -> Array[CogitoInteractionAction]:
+	var actions := super.get_actions(actor)
+	if parent_node is CogitoKeypad and actor and actor.network_interactions:
+		var submit := CogitoInteractionAction.new(
+			interaction_text, self, interact, not is_disabled, &"submit_code"
+		)
+		actions.append(submit)
+	return actions
+
+
+## Only the code submission action accepts wire data.
+func net_payload_schema(action: StringName) -> StringName:
+	return &"digits" if parent_node is CogitoKeypad and action == &"submit_code" else &""

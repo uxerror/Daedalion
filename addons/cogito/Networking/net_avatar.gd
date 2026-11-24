@@ -63,12 +63,21 @@ func spawn(
 		actor.collision_mask = 0
 	actor.get_node("AutoPickUpZone").free()
 	var ray := actor.get_node("Body/Neck/Head/Eyes/Camera/InteractionRaycast") as RayCast3D
-	ray.enabled = false
-	ray.process_mode = Node.PROCESS_MODE_DISABLED
+	if not local:
+		ray.enabled = false
+		ray.process_mode = Node.PROCESS_MODE_DISABLED
 	if local:
 		# Keep first-person display, suppress solo inventory/hold/quickslot event handlers.
 		actor.get_node("GUI").process_mode = Node.PROCESS_MODE_DISABLED
+	var template := actor.inventory_data
 	root.add_child(actor)
+	if server and template and template != actor.inventory_data:
+		# Private mutable starter resources still match the level's authored key/item definition.
+		for i in template.inventory_slots.size():
+			var original := template.inventory_slots[i]
+			var slot := actor.inventory_data.inventory_slots[i]
+			if original and slot and original.inventory_item != slot.inventory_item:
+				slot.inventory_item.set_meta(&"cogito_item_definition", original.inventory_item)
 	if not server and not local:
 		actor.set_physics_process(false)
 		actor.input_source = null

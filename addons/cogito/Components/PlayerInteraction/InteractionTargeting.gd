@@ -61,6 +61,8 @@ func rebuild_interaction_prompts() -> void:
 
 
 func _set_interactable(new_interactable) -> void:
+	if pic and pic.network_interactions and interactable != new_interactable:
+		pic.network_interactions.cancel_hold()
 	interactable = new_interactable
 	# Ensure the drop prompt isn't cleared.
 	if pic.carrying.is_carrying:

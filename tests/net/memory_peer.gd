@@ -7,6 +7,7 @@ var arrivals: Array[int] = []
 var departures: Array[int] = []
 var packets: Array[Dictionary] = []
 var drop_every_tenth_command := false
+var pose_packets := {}
 var _command_count := 0
 var _target: int
 var _channel: int
@@ -46,6 +47,8 @@ func _put_packet_script(buffer: PackedByteArray) -> Error:
 		_command_count += 1
 		if _command_count % 10 == 0:
 			return OK
+	if _channel == 1 and _transfer == TRANSFER_MODE_UNRELIABLE:
+		pose_packets[_target] = pose_packets.get(_target, 0) + 1
 	for other: int in network:
 		if other != id and (_target == other or (_target <= 0 and other != -_target)):
 			network[other].packets.append({"source": id, "data": buffer.duplicate()})

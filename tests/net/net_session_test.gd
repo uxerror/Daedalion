@@ -329,3 +329,324 @@ func test_wrong_level_receives_no_actors_and_silent_peer_stays_still() -> void:
 	assert_int(actor.last_consumed_sequence).is_equal(-1)
 	assert_object(client.local_player()).is_null()
 	assert_object(client.player_world.avatar_for(id)).is_null()
+
+
+func test_snapshot_tick_sends_one_batch_to_each_ready_peer() -> void:
+	var server := _branch(1)
+	assert_int(server.start_server({"save_dir": "user://net/batch"})).is_equal(OK)
+	_level(server)
+	for peer in [2, 3]:
+		var client := _branch(peer)
+		assert_int(client.join("memory", 1500 + peer)).is_equal(OK)
+		_level(client)
+		_pump()
+	_network[1].pose_packets.clear()
+	server.player_world._physics_process(1.0)
+	_pump()
+	assert_dict(_network[1].pose_packets).is_equal({2: 1, 3: 1})
+	for client: Facade in _branches.slice(1):
+		for record in server.players():
+			var avatar := client.player_world.avatar_for(record.player_id)
+			assert_int(avatar.timeline.latest().tick).is_equal(1)
+
+
+func _arena(branch: Facade) -> Node3D:
+	var host := CogitoLevelHost.new()
+	branch.add_child(host)
+	var level := host.load_level("res://tests/net/process_arena.tscn", &"arena") as Node3D
+	var start := Transform3D(Basis.IDENTITY, Vector3(5.3, 0.1, -12.6))
+	branch.player_world.bind_level(level, start, "arena")
+	return level
+
+
+func _observer(peer: int) -> Facade:
+	var branch := _branch(peer)
+	assert_int(branch.join("memory", 1800 + peer)).is_equal(OK)
+	_arena(branch)
+	_pump()
+	return branch
+
+
+func _use(branch: Facade, path: String, action := &"interact", payload: Variant = null) -> void:
+	var component := branch.player_world.active_level().get_node(path) as InteractionComponent
+	branch.player_world.interactions.submit(component, action, payload)
+	_pump()
+
+
+func test_interaction_validation_and_private_results(_timeout := 15000) -> void:
+	var server := _branch(1)
+	assert_int(server.start_server({"save_dir": "user://net/validate"})).is_equal(OK)
+	var level := _arena(server)
+	var client := _observer(2)
+	var api := client.player_world.interactions
+	var client_root := client.player_world.active_level()
+	var responses: Array[Dictionary] = []
+	api.result_received.connect(func(result: Dictionary) -> void: responses.append(result))
+	await _ticks(15)
+	var door: CogitoDoor = level.get_node("Door")
+	var actor := server.player_world.avatar_for(client.local_player_id()).actor
+	var use: InteractionComponent = client_root.get_node("Door/Use")
+	var start := actor.position
+	var request := api.make_request(use, &"interact")
+	request.epoch += 1
+	api.dispatch(request)
+	_pump()
+	assert_array(responses).is_empty()
+	request = api.make_request(use, &"interact")
+	request.entity_id = "unknown"
+	api.dispatch(request)
+	_pump()
+	assert_str(responses.back().reason).is_equal("Unknown entity or component")
+	actor.position += Vector3.RIGHT * 20
+	_use(client, "Door/Use")
+	assert_str(responses.back().reason).is_equal("Out of reach")
+	actor.position = start
+	var wall := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(5, 4, 0.1)
+	shape.shape = box
+	wall.add_child(shape)
+	level.add_child(wall)
+	wall.position = Vector3(5.5, 1.5, -13.3)
+	await _ticks(3)
+	_use(client, "Door/Use")
+	assert_str(responses.back().reason).is_equal("Line of sight blocked")
+	wall.free()
+	await _ticks(2)
+	door.get_node("Use").is_disabled = true
+	_use(client, "Door/Use")
+	assert_str(responses.back().reason).is_equal("Disabled action")
+	door.get_node("Use").is_disabled = false
+	door.is_locked = true
+	door.key = KeyItemPD.new()
+	door.key.discard_after_use = true
+	_use(client, "Door/Use")
+	assert_str(responses.back().reason).is_equal("Key required")
+	assert_bool(door.is_open).is_false()
+	assert_int(server.player_world.world.revisions["level:door"]).is_zero()
+	for bad: Variant in ["", "1e10", "+123", "12345678901234567", {"result": true}]:
+		_use(client, "Keypad/BasicInteraction", &"submit_code", bad)
+		assert_str(responses.back().reason).is_equal("Invalid payload")
+	_use(client, "Keypad/BasicInteraction", &"submit_code", "9999")
+	assert_str(responses.back().reason).is_equal("Wrong code")
+	assert_bool(level.get_node("Keypad").is_locked).is_true()
+	assert_int(server.player_world.world.revisions["level:keypad"]).is_zero()
+	var key := InventorySlotPD.new()
+	key.inventory_item = door.key
+	key.quantity = 1
+	key.origin_index = 0
+	actor.inventory_data.inventory_slots[0] = key
+	var response_count := responses.size()
+	_use(client, "Door/Use")
+	assert_int(responses.size()).is_equal(response_count + 1)
+	assert_bool(responses.back().ok).is_true()
+	assert_bool(door.is_open).is_true()
+	assert_bool(door.is_locked).is_false()
+	assert_object(actor.inventory_data.inventory_slots[0]).is_null()
+	assert_array(responses.back().hints).is_not_empty()
+
+
+func test_concurrent_retry_replica_events_and_late_baseline(_timeout := 15000) -> void:
+	var server := _branch(1)
+	assert_int(server.start_server({"save_dir": "user://net/objects"})).is_equal(OK)
+	var level := _arena(server)
+	var first := _observer(2)
+	var second := _observer(3)
+	var replica := second.player_world.active_level()
+	var replies: Array[Dictionary] = []
+	var others: Array[Dictionary] = []
+	var events: Array[String] = []
+	var signals: Array[bool] = []
+	first.player_world.interactions.result_received.connect(func(r: Dictionary): replies.append(r))
+	second.player_world.interactions.result_received.connect(func(r: Dictionary): others.append(r))
+	second.player_world.world.presented.connect(
+		func(id: String, _rev: int, _event: StringName): events.append(id)
+	)
+	replica.get_node("Door").door_state_changed.connect(func(open: bool): signals.append(open))
+	await _ticks(12)
+	var a := first.player_world.interactions
+	var b := second.player_world.interactions
+	var request := a.make_request(
+		first.player_world.active_level().get_node("Door/Use"), &"interact"
+	)
+	var stale := b.make_request(replica.get_node("Door/Use"), &"interact")
+	a.dispatch(request)
+	a.dispatch(request)
+	b.dispatch(stale)
+	_pump()
+	assert_int(replies.size()).is_equal(2)
+	assert_dict(replies[0]).is_equal(replies[1])
+	assert_bool(replies[0].ok).is_true()
+	assert_str(others[0].reason).is_equal("Stale revision")
+	assert_array(events).contains_exactly(["level:door"])
+	assert_array(signals).is_empty()
+	assert_bool(replica.get_node("Door/Audio").playing).is_true()
+	assert_bool(level.get_node("Door").is_open).is_true()
+	assert_bool(replica.get_node("Door").is_open).is_true()
+	_use(second, "Button/Use")
+	_use(second, "Button/Use")
+	assert_bool(others.back().ok).is_false()
+	assert_int(server.player_world.world.revisions["level:button"]).is_equal(1)
+	_use(first, "Switch/Use")
+	_use(first, "Keypad/BasicInteraction", &"submit_code", "0420")
+	await _ticks(5)
+	assert_bool(level.get_node("LinkedDoor").is_open).is_true()
+	assert_bool(level.get_node("KeyDoor").is_open).is_true()
+	var late := _branch(4)
+	assert_int(late.join("memory", 1804)).is_equal(OK)
+	var quiet: Array[bool] = []
+	late.player_world.world.presented.connect(
+		func(_id: String, _rev: int, _event: StringName): quiet.append(true)
+	)
+	var baseline := _arena(late)
+	_pump()
+	assert_array(quiet).is_empty()
+	assert_bool(baseline.get_node("Door/Audio").playing).is_false()
+	assert_bool(baseline.get_node("Door").is_open).is_true()
+	assert_vector(baseline.get_node("Door").position).is_equal(level.get_node("Door").open_position)
+	assert_bool(baseline.get_node("Button").has_been_used).is_true()
+	assert_bool(baseline.get_node("Switch").is_on).is_true()
+	assert_bool(baseline.get_node("Keypad").is_locked).is_false()
+	assert_bool(baseline.get_node("KeyDoor").is_locked).is_false()
+	assert_dict(late.player_world.world.revisions).is_equal(server.player_world.world.revisions)
+
+
+func test_hold_release_cancel_and_personal_interfaces(_timeout := 15000) -> void:
+	var server := _branch(1)
+	assert_int(server.host({"save_dir": "user://net/holds"})).is_equal(OK)
+	var level := _arena(server)
+	var client := _observer(2)
+	var replica := client.player_world.active_level()
+	var api := client.player_world.interactions
+	await _ticks(12)
+	var hold := replica.get_node("Door/Hold") as HoldInteraction
+	api.perform(hold.get_actions(client.local_player().player_interaction_component)[0])
+	_pump()
+	api.cancel_hold()
+	_pump()
+	assert_bool(level.get_node("Door").is_open).is_false()
+	api.perform(hold.get_actions(client.local_player().player_interaction_component)[0])
+	_pump()
+	api.release("interact2")
+	_pump()
+	assert_bool(level.get_node("Door").is_open).is_false()
+	api.perform(hold.get_actions(client.local_player().player_interaction_component)[0])
+	_pump()
+	await get_tree().create_timer(0.36).timeout
+	api.release("interact2")
+	_pump()
+	assert_bool(level.get_node("Door").is_open).is_true()
+	_use(server, "Page/Read")
+	assert_bool(level.get_node("Page/Read/ReadableUi").visible).is_true()
+	assert_bool(replica.get_node("Page/Read/ReadableUi").visible).is_false()
+	level.get_node("Page/Read").close(server.local_player().player_interaction_component)
+	_use(server, "Keypad/BasicInteraction")
+	assert_bool(level.get_node("Keypad/KeypadUi").visible).is_true()
+	assert_bool(replica.get_node("Keypad/KeypadUi").visible).is_false()
+	level.get_node("Keypad").close(server.local_player().player_interaction_component)
+
+	var pic := client.local_player().player_interaction_component
+	server.player_world.avatar_for(client.local_player_id()).actor.position = Vector3(
+		4.7, 0.1, -12.6
+	)
+	await _ticks(3)
+	pic.targeting.interactable = replica.get_node("Keypad")
+	pic.start_interaction("interact")
+	_pump()
+	assert_bool(replica.get_node("Keypad/KeypadUi").visible).is_true()
+	assert_bool(level.get_node("Keypad/KeypadUi").visible).is_false()
+	replica.get_node("Keypad").entered_code = "0420"
+	replica.get_node("Keypad").check_entered_code()
+	_pump()
+	assert_bool(replica.get_node("Keypad/KeypadUi").visible).is_false()
+	assert_bool(level.get_node("KeyDoor").is_open).is_true()
+
+
+func test_plate_counts_authority_bodies_and_ignores_replica_bodies() -> void:
+	var server := _branch(1)
+	assert_int(server.start_server({"save_dir": "user://net/plate"})).is_equal(OK)
+	var level := _arena(server)
+	var client := _observer(2)
+	var replica := client.player_world.active_level()
+	var plate: CogitoPressureplate = level.get_node("Plate")
+	var copy: CogitoPressureplate = replica.get_node("Plate")
+	var activations: Array[bool] = []
+	copy.plate_activated.connect(func(): activations.append(true))
+	var body := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(0.2, 0.2, 0.2)
+	shape.shape = box
+	body.add_child(shape)
+	body.position = plate.position + Vector3.UP * 0.25
+	var local_body := body.duplicate() as StaticBody3D
+	replica.add_child(local_body)
+	await _ticks(4)
+	assert_bool(copy.is_activated).is_false()
+	level.add_child(body)
+	var weight := body.duplicate() as StaticBody3D
+	level.add_child(weight)
+	await _ticks(4)
+	assert_bool(plate.is_activated).is_true()
+	assert_bool(copy.is_activated).is_true()
+	body.free()
+	await _ticks(3)
+	assert_bool(plate.is_activated).is_true()
+	weight.free()
+	await _ticks(4)
+	assert_bool(copy.is_activated).is_false()
+	assert_array(activations).is_empty()
+	assert_int(server.player_world.world.revisions["level:plate"]).is_equal(2)
+	# Authored server scripts can also unlock a panel without any local player.
+	replica.get_node("Keypad").unlock_keypad()
+	assert_bool(replica.get_node("Keypad").is_locked).is_true()
+	level.get_node("Keypad").unlock_keypad()
+	level.get_node("Keypad").unlock_keypad()
+	_pump()
+	assert_bool(replica.get_node("Keypad").is_locked).is_false()
+	assert_bool(replica.get_node("KeyDoor").is_open).is_true()
+	assert_int(server.player_world.world.revisions["level:keypad"]).is_equal(1)
+
+
+func test_prompt_is_pure_and_only_authority_runs_auto_close() -> void:
+	var server := _branch(1)
+	assert_int(server.start_server({"save_dir": "user://net/preview"})).is_equal(OK)
+	var level := _arena(server)
+	var client := _observer(2)
+	var replica := client.player_world.active_level()
+	await _ticks(12)
+	var door := level.get_node("Door") as CogitoDoor
+	var copy := replica.get_node("Door") as CogitoDoor
+	var profile := ConsumableEffect.new()
+	profile.attribute_name = "health"
+	profile.attribute_change_amount = -3.0
+	for object: CogitoDoor in [door, copy]:
+		var use := object.get_node("Use") as InteractionComponent
+		use.attribute_check = InteractionComponent.AttributeCheck.HIDE_INTERACTION
+		use.attribute_to_check = "health"
+		use.min_value_to_pass = 1.0
+		use.attribute_effects = [profile]
+		object.auto_close_time = 0.15
+	var pic := client.local_player().player_interaction_component
+	var local_health := pic.get_attribute("health")
+	var initial := local_health.value_current
+	var hints := []
+	pic.hint_prompt.connect(func(_icon: Texture2D, text: String): hints.append(text))
+	pic.targeting.interactable = copy
+	pic.targeting.rebuild_interaction_prompts()
+	assert_array(hints).is_empty()
+	assert_float(local_health.value_current).is_equal(initial)
+	var actor := server.player_world.avatar_for(client.local_player_id()).actor
+	var health := actor.player_interaction_component.get_attribute("health")
+	var balance := health.value_current
+	pic.start_interaction("interact")
+	_pump()
+	assert_bool(copy.is_open).is_true()
+	assert_float(health.value_current).is_equal(balance - 3.0)
+	assert_float(local_health.value_current).is_equal(initial)
+	assert_object(door.close_timer).is_not_null()
+	assert_object(copy.close_timer).is_null()
+	await _ticks(17)
+	assert_bool(copy.is_open).is_false()
+	assert_int(client.player_world.world.revisions["level:door"]).is_equal(2)

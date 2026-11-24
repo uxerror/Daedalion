@@ -2,6 +2,8 @@
 class_name CogitoSwitch
 extends Node3D
 
+## Authoritative change observed by the bound level's replication endpoint.
+signal net_changed(event: StringName)
 signal object_state_updated(interaction_text: String) #used to display correct interaction prompts
 signal switched(is_on: bool)
 signal damage_received(damage_value:float)
@@ -92,6 +94,8 @@ func find_cogito_properties():
 
 
 func interact(_player_interaction_component):
+	if is_inside_tree() and not multiplayer.is_server():
+		return
 	player_interaction_component = _player_interaction_component
 	if !allows_repeated_interaction and is_on:
 		player_interaction_component.send_hint(null, has_been_used_hint)
@@ -122,6 +126,8 @@ func interact(_player_interaction_component):
 
 
 func switch():
+	if is_inside_tree() and not multiplayer.is_server():
+		return
 	if audio_stream_player_3d: audio_stream_player_3d.play()
 	if needs_item_to_operate and !is_holding_item:
 		if !check_for_item():
@@ -138,14 +144,23 @@ func switch():
 func call_interact_on_objects():
 	if !objects_call_interact:
 		return
+	var instigator := player_interaction_component
+	var needs_actor := is_instance_valid(instigator)
+	var online := has_meta(&"cogito_net_world")
+	var world: Node = get_meta(&"cogito_net_world") if online else null
 	for nodepath in objects_call_interact:
 		await get_tree().create_timer(objects_call_delay).timeout
 		if nodepath != null:
 			var object = get_node(nodepath)
-			object.interact(player_interaction_component)
+			if not online:
+				object.interact(player_interaction_component)
+			elif is_instance_valid(world) and (not needs_actor or is_instance_valid(instigator)):
+				world.activate_link(object, instigator)
 
 
 func switch_on():
+	if is_inside_tree() and not multiplayer.is_server():
+		return
 	for node in nodes_to_show_when_on:
 		node.show()
 		
@@ -158,10 +173,14 @@ func switch_on():
 	is_on = true
 	interaction_text = interaction_text_when_on
 	object_state_updated.emit(interaction_text)
+	if has_meta(&"cogito_net_world"):
+		net_changed.emit(&"switch")
 	switched.emit(is_on)
 
 
 func switch_off():
+	if is_inside_tree() and not multiplayer.is_server():
+		return
 	for node in nodes_to_show_when_on:
 		node.hide()
 		
@@ -169,18 +188,25 @@ func switch_off():
 		node.show()
 		
 	if animation_player:
-		animation_player.play(anim_when_switched_on,-1,animation_speed)
+		var clip := anim_when_switched_on
+		if has_meta(&"cogito_net_world") and not anim_when_switched_off.is_empty():
+			clip = anim_when_switched_off
+		animation_player.play(clip, -1, animation_speed)
 	
 	is_on = false
 	interaction_text = interaction_text_when_off
 	object_state_updated.emit(interaction_text)
+	if has_meta(&"cogito_net_world"):
+		net_changed.emit(&"switch")
 	switched.emit(is_on)
 
 
 func check_for_item() -> bool:
 	var inventory = player_interaction_component.get_inventory()
 	for slot_data in inventory.inventory_slots:
-		if slot_data != null and slot_data.inventory_item == required_item_slot.inventory_item:
+		if slot_data and player_interaction_component.matches_item(
+			slot_data.inventory_item, required_item_slot.inventory_item
+		):
 			player_interaction_component.send_hint(null, tr(required_item_slot.inventory_item.name) + " " + tr("HINT_SWITCH_item_used") ) # Sends a hint with the key item name.
 			inventory.remove_item_from_stack(slot_data)
 			return true
@@ -192,6 +218,10 @@ func check_for_item() -> bool:
 
 # Accepts every form of damage_received: (amount), (amount, source) and (amount, source, hit direction, hit position).
 func _on_damage_received(_damage, source = null, _hit_direction := Vector3.ZERO, _hit_position := Vector3.ZERO):
+	if has_meta(&"cogito_net_world"):
+		if multiplayer.is_server() and source is CogitoPlayer:
+			interact(source.player_interaction_component)
+		return
 	if source == self:
 		return # Damage ticks of its own burning don't press it.
 	interact(CogitoSceneManager.get_player().player_interaction_component)
@@ -230,3 +260,34 @@ func save():
 		
 	}
 	return state_dict
+
+## Switch position and item latch replicated to interested observers.
+func net_state() -> Dictionary:
+	return {"on": is_on, "holding": is_holding_item}
+
+
+## Apply local presentation without calling interact on linked objects.
+func apply_net_state(state: Dictionary, silent: bool) -> void:
+	is_on = state.on
+	is_holding_item = state.holding
+	interaction_text = interaction_text_when_on if is_on else interaction_text_when_off
+	for node in nodes_to_show_when_on:
+		node.visible = is_on
+	for node in nodes_to_hide_when_on:
+		node.visible = not is_on
+	for component: InteractionComponent in interaction_nodes:
+		component.interaction_text = interaction_text
+	var clip := anim_when_switched_on
+	if not is_on and not anim_when_switched_off.is_empty():
+		clip = anim_when_switched_off
+	if clip and animation_player:
+		animation_player.play(clip, -1, animation_speed)
+		if silent:
+			animation_player.seek(animation_player.current_animation_length, true, true)
+			animation_player.pause()
+
+
+## One spatial switch sound for each live change.
+func present_net_event(_event: StringName) -> void:
+	if audio_stream_player_3d:
+		audio_stream_player_3d.play()

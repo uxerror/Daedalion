@@ -37,12 +37,20 @@ func interact(_player_interaction_component: PlayerInteractionComponent):
 		open(_player_interaction_component)
 
 
-func open(_player: PlayerInteractionComponent):
+## Open the accepted reader's copy without emitting the world gameplay signal.
+func open_net_interface(actor: PlayerInteractionComponent) -> void:
+	if not readable_ui.visible:
+		CogitoAudio.play_sound_3d_in(self, interact_sound, global_position)
+		open(actor, false)
+
+
+func open(_player: PlayerInteractionComponent, notify: bool = true):
 	player = _player
 	InputRouter.push(on_input)
 	player.open_interface(close) #Connecting input action menu to close function.
 	readable_ui.show()
-	has_been_read.emit()
+	if notify:
+		has_been_read.emit()
 	
 	if InputHelper.device_index == -1:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE

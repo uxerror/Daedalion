@@ -3,11 +3,15 @@
 class_name CogitoDoor
 extends Node3D
 
+## Authoritative change observed by the bound level's replication endpoint.
+signal net_changed(event: StringName)
 signal object_state_updated(interaction_text:String)
 signal lock_state_updated(lock_interaction_text:String)
 signal door_state_changed(is_open:bool)
 signal lock_state_changed(is_locked:bool)
 signal damage_received(damage_value:float)
+
+const NET_MOTION := preload("../Networking/net_door_motion.gd")
 
 enum DoorType {
   ROTATING,
@@ -71,17 +75,6 @@ enum PromptPositionMode{
 		door_type = value
 		notify_property_list_changed()
 
-func _validate_property(property: Dictionary):
-	if property.name in ["bidirectional_swing", "open_rotation", "closed_rotation", "forced_rotation_axis","angle_tolerance"] and door_type != DoorType.ROTATING:
-		property.usage = PROPERTY_USAGE_NO_EDITOR
-	elif property.name in ["open_position", "closed_position"] and door_type != DoorType.SLIDING:
-		property.usage = PROPERTY_USAGE_NO_EDITOR
-	elif property.name in ["animation_player", "opening_animation", "reverse_opening_anim_for_close", "closing_animation"] and door_type != DoorType.ANIMATED:
-		property.usage = PROPERTY_USAGE_NO_EDITOR
-	elif property.name in ["closing_animation"] and reverse_opening_anim_for_close:
-		property.usage = PROPERTY_USAGE_NO_EDITOR
-
-
 ## Set this to true if the door should swing opposite the direction of the interactor
 @export var bidirectional_swing : bool = false
 ## Rotation Y when the door is open. In degrees.
@@ -126,7 +119,19 @@ var close_timer : Timer #Used for auto-close
 var interaction_nodes : Array[Node]
 var cogito_properties : CogitoProperties = null
 var player_interaction_component : PlayerInteractionComponent
+var _net_motion: NET_MOTION
 #endregion
+
+
+func _validate_property(property: Dictionary):
+	if property.name in ["bidirectional_swing", "open_rotation", "closed_rotation", "forced_rotation_axis","angle_tolerance"] and door_type != DoorType.ROTATING:
+		property.usage = PROPERTY_USAGE_NO_EDITOR
+	elif property.name in ["open_position", "closed_position"] and door_type != DoorType.SLIDING:
+		property.usage = PROPERTY_USAGE_NO_EDITOR
+	elif property.name in ["animation_player", "opening_animation", "reverse_opening_anim_for_close", "closing_animation"] and door_type != DoorType.ANIMATED:
+		property.usage = PROPERTY_USAGE_NO_EDITOR
+	elif property.name in ["closing_animation"] and reverse_opening_anim_for_close:
+		property.usage = PROPERTY_USAGE_NO_EDITOR
 
 
 func _ready():
@@ -152,11 +157,14 @@ func _ready():
 	else:
 		lock_interaction_text = interaction_text_when_unlocked
 	
-	object_state_updated.emit(interaction_text)
-	lock_state_updated.emit(lock_interaction_text)
+	if multiplayer.is_server():
+		object_state_updated.emit(interaction_text)
+		lock_state_updated.emit(lock_interaction_text)
 
 
 func interact(interactor: Node3D):
+	if is_inside_tree() and not multiplayer.is_server():
+		return
 	player_interaction_component = interactor
 	
 	if is_open:
@@ -170,7 +178,8 @@ func door_rattle(interactor):
 	if audio_player and rattle_sound:
 		audio_player.stream = rattle_sound
 		audio_player.play()
-	interactor.send_hint(null, tr("DOOR_locked_hint") )
+	if is_instance_valid(interactor):
+		interactor.send_hint(null, tr("DOOR_locked_hint") )
 
 
 func get_prompt_marker_pos() -> Vector3:
@@ -210,26 +219,41 @@ func vectors_approx_equal( v1 : Vector3, v2 : Vector3, epsilon : float ) -> bool
 
 
 func lock_unlock_switch():
+	if is_inside_tree() and not multiplayer.is_server():
+		return
 	if is_locked:
 		unlock_door()
 		
 	else: 
 		lock_door()
 	
+	if has_meta(&"cogito_net_world"):
+		return
 	for nodepath in doors_to_sync_with:
 		if nodepath != null:
 			var object = get_node(nodepath)
 			object.lock_unlock_switch()
 
 
-func unlock_door():
+func unlock_door(key_user: PlayerInteractionComponent = null):
+	if has_meta(&"cogito_net_world") and not is_locked:
+		return
+	if is_inside_tree() and not multiplayer.is_server():
+		return
 	if audio_player and unlock_sound:
 		audio_player.stream = unlock_sound
 		audio_player.play()
 	is_locked = false
 	
 #	Key Discard Logic
-	if key && key.discard_after_use:
+	if has_meta(&"cogito_net_world"):
+		if key_user and key and key.discard_after_use:
+			for slot in key_user.get_inventory().inventory_slots:
+				if slot and key_user.matches_item(slot.inventory_item, key):
+					key_user.get_inventory().remove_item_from_stack(slot)
+					key_user.send_hint(null, tr(key.name) + " " + tr("HINT_SWITCH_item_used"))
+					break
+	elif key && key.discard_after_use:
 		var inventory = player_interaction_component.get_inventory()
 		for slot_data in inventory.inventory_slots:
 			if slot_data != null and slot_data.inventory_item == key:
@@ -237,28 +261,45 @@ func unlock_door():
 				inventory.remove_item_from_stack(slot_data)
 	
 	lock_interaction_text = interaction_text_when_unlocked	
+	if has_meta(&"cogito_net_world"):
+		net_changed.emit(&"unlock" if not is_locked else &"lock")
+		_sync_lock()
 	lock_state_changed.emit(is_locked)
 	lock_state_updated.emit(lock_interaction_text)
 
 
 func lock_door():
+	if has_meta(&"cogito_net_world") and is_locked:
+		return
+	if is_inside_tree() and not multiplayer.is_server():
+		return
 	if audio_player and lock_sound:
 		audio_player.stream = lock_sound
 		audio_player.play()
 		
 	is_locked = true
 	lock_interaction_text = interaction_text_when_locked
+	if has_meta(&"cogito_net_world"):
+		net_changed.emit(&"unlock" if not is_locked else &"lock")
+		_sync_lock()
 	lock_state_changed.emit(is_locked)
 	lock_state_updated.emit(lock_interaction_text)
 
 
 
 func open_door(interactor: Node3D):
+	if has_meta(&"cogito_net_world") and is_open:
+		return
+	if is_inside_tree() and not multiplayer.is_server():
+		return
 	if audio_player and open_sound:
 		audio_player.stream = open_sound
 		audio_player.play()
 
-	if door_type == DoorType.ANIMATED:
+	if has_meta(&"cogito_net_world"):
+		is_open = true
+		_net_motion.start(self, true, interactor)
+	elif door_type == DoorType.ANIMATED:
 		anim_player.play(opening_animation)
 	elif door_type == DoorType.ROTATING:
 		target_rotation_vector = open_rotation
@@ -283,6 +324,8 @@ func open_door(interactor: Node3D):
 	is_open = true
 	interaction_text = interaction_text_when_open
 	object_state_updated.emit(interaction_text)
+	if has_meta(&"cogito_net_world"):
+		net_changed.emit(&"open")
 	door_state_changed.emit(true)
 	
 	# Only used if there's an auto close time set.
@@ -296,18 +339,28 @@ func open_door(interactor: Node3D):
 
 
 func on_auto_close_time():
+	if has_meta(&"cogito_net_world"):
+		close_door(null)
+		return
 	close_door(player_interaction_component)
 
 
 func close_door(_interactor: Node3D):
-	if close_timer: #If there's an auto_close_timer, destroy it.
+	if has_meta(&"cogito_net_world") and not is_open:
+		return
+	if is_inside_tree() and not multiplayer.is_server():
+		return
+	if is_instance_valid(close_timer): #If there's an auto_close_timer, destroy it.
 		close_timer.queue_free()
 	
 	if audio_player and close_sound:
 		audio_player.stream = close_sound
 		audio_player.play()
 	
-	if door_type == DoorType.ANIMATED:
+	if has_meta(&"cogito_net_world"):
+		is_open = false
+		_net_motion.start(self, false)
+	elif door_type == DoorType.ANIMATED:
 		if reverse_opening_anim_for_close:
 			anim_player.play_backwards(opening_animation)
 		else:
@@ -328,6 +381,8 @@ func close_door(_interactor: Node3D):
 	is_open = false
 	interaction_text = interaction_text_when_closed
 	object_state_updated.emit(interaction_text)
+	if has_meta(&"cogito_net_world"):
+		net_changed.emit(&"close")
 	door_state_changed.emit(false)
 
 
@@ -367,6 +422,8 @@ func set_to_closed_position():
 
 #alternate interaction for locking/unlocking
 func interact2(interactor: Node3D):
+	if is_inside_tree() and not multiplayer.is_server():
+		return
 	player_interaction_component = interactor
 	if not is_open:
 		lock_unlock_switch()
@@ -387,3 +444,68 @@ func save():
 		
 	}
 	return state_dict
+
+func _sync_lock() -> void:
+	for path in doors_to_sync_with:
+		var other := get_node_or_null(path) as CogitoDoor
+		if other and other.is_locked != is_locked:
+			if is_locked:
+				other.lock_door()
+			else:
+				other.unlock_door()
+
+
+## Replicate the destination so late observers can snap without replaying motion.
+func net_state() -> Dictionary:
+	if not _net_motion:
+		_net_motion = NET_MOTION.new()
+	return _net_motion.state(self)
+
+
+## Apply only pose, collision and prompt data. Linked-door signals belong to authority.
+func apply_net_state(state: Dictionary, silent: bool) -> void:
+	var moved := is_open != bool(state.open)
+	is_open = state.open
+	is_locked = state.locked
+	if moved or silent:
+		_net_motion.apply(self, state, silent)
+	interaction_text = interaction_text_when_open if is_open else interaction_text_when_closed
+	lock_interaction_text = (
+		interaction_text_when_locked if is_locked else interaction_text_when_unlocked
+	)
+	for component: InteractionComponent in interaction_nodes:
+		if component is DualInteraction:
+			component.press_interaction_text = interaction_text
+			component.hold_interaction_text = lock_interaction_text
+			component.interaction_text = (
+				tr(interaction_text) + tr(component.interaction_text_joiner) + tr(lock_interaction_text)
+			)
+		elif component.has_method("can_start_hold"):
+			component.interaction_text = lock_interaction_text
+		else:
+			component.interaction_text = interaction_text
+
+
+## Stop an existing solo auto-close timer when taking over a loaded level as a replica.
+func net_bind_replica() -> void:
+	if is_instance_valid(close_timer):
+		close_timer.stop()
+		close_timer.queue_free()
+		close_timer = null
+
+
+## Drop the session destination before binding this door again.
+func net_unbind() -> void:
+	if _net_motion:
+		_net_motion.stop()
+		_net_motion = null
+
+
+## Play the one-shot for a live authoritative transition.
+func present_net_event(event: StringName) -> void:
+	var sounds := {
+		&"open": open_sound, &"close": close_sound, &"lock": lock_sound, &"unlock": unlock_sound
+	}
+	if audio_player and sounds.get(event):
+		audio_player.stream = sounds[event]
+		audio_player.play()

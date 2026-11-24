@@ -57,8 +57,10 @@ func get_actions(_player_interaction_component: PlayerInteractionComponent) -> A
 	var press_text := press_interaction_text if press_interaction_text else interaction_text
 	var hold_text := hold_interaction_text if hold_interaction_text else interaction_text
 	return [
-		CogitoInteractionAction.new(press_text, self, perform_quick_action, !is_disabled),
-		CogitoInteractionAction.new(hold_text, self, perform_hold_action, !is_disabled and can_hold),
+		CogitoInteractionAction.new(press_text, self, perform_quick_action, !is_disabled, &"press"),
+		CogitoInteractionAction.new(
+			hold_text, self, perform_hold_action, !is_disabled and can_hold, &"hold"
+		),
 	]
 
 

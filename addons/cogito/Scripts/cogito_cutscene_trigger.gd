@@ -34,6 +34,8 @@ func on_input(event: InputEvent) -> void:
 func _on_body_entered(body: Node3D):
 	if body is not CogitoPlayer or not body.is_local_presentation:
 		return
+	if body.network_movement_only: # TODO(MP2b): actor-addressed cutscene takeover.
+		return
 	
 	player_reference = body
 	play_cutscene()

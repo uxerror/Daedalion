@@ -23,6 +23,9 @@ func _process(_delta: float) -> void:
 	if is_holding and hold_interaction:
 		if hold_timer.time_left  < hold_timer.wait_time-buffer_time:
 			show()
+		if player_interaction_component.network_interactions:
+			progress_wheel.current_value = 1 - hold_timer.time_left / maxf(hold_timer.wait_time, 0.001)
+			return
 		hold_interaction.is_being_held.emit(hold_timer.time_left, _delta)
 		progress_wheel.current_value = 1 - (hold_timer.time_left / hold_interaction.hold_time)
 		
@@ -43,11 +46,14 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Accept a routed release as well, including a tap completed between physics ticks.
 func release_action(action: StringName) -> void:
 	if is_holding and hold_interaction.input_map_action == action:
-		hold_interaction.perform_quick_action(player_interaction_component)
+		if not player_interaction_component.network_interactions:
+			hold_interaction.perform_quick_action(player_interaction_component)
 		stop_holding()
 
 
 func _on_hold_complete():
+	if player_interaction_component and player_interaction_component.network_interactions:
+		return # The server evaluates the release. This timer only draws progress.
 	hold_interaction.perform_hold_action(player_interaction_component)
 	stop_holding()
 

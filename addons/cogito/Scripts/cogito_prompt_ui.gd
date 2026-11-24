@@ -59,10 +59,7 @@ func _physics_process(delta: float) -> void:
 	#var unprojected_position := camera.unproject_position(parent_position)
 	## `get_size_override()` will return a valid size only if the stretch mode is `2d`.
 	## Otherwise, the viewport size is used directly.
-	var viewport_base_size: Vector2i = (
-			get_viewport().content_scale_size if get_viewport().content_scale_size > Vector2i(0, 0)
-			else get_viewport().size
-	)
+
 #
 #
 	## We need to handle the axes differently.
@@ -132,10 +129,10 @@ func _convert_3d_pos_to_2d_pos(parent_position: Vector3) -> Vector2:
 	var unprojected_position := camera.unproject_position(parent_position)
 	# `get_size_override()` will return a valid size only if the stretch mode is `2d`.
 	# Otherwise, the viewport size is used directly.
-	var viewport_base_size: Vector2i = (
-			get_viewport().content_scale_size if get_viewport().content_scale_size > Vector2i(0, 0)
-			else get_viewport().size
-	)
+	var viewport := get_viewport()
+	var viewport_base_size := Vector2i(viewport.get_visible_rect().size)
+	if viewport is Window and viewport.content_scale_size > Vector2i.ZERO:
+		viewport_base_size = viewport.content_scale_size
 
 
 	# We need to handle the axes differently.
