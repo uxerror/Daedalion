@@ -90,6 +90,8 @@ func action_primary(_passed_item_reference : InventoryItemPD, _is_released: bool
 	projectile.damage_amount = _passed_item_reference.wieldable_damage
 	projectile.set_linear_velocity(direction * projectile_velocity)
 	projectile.direction = direction
+	projectile.throw_point = bullet_point.global_position
+	projectile.shooter = player_interaction_component.player
 	projectile.reparent(CogitoLevel.spawn_parent(self))
 
 

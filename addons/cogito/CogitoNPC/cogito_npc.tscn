@@ -17671,6 +17671,13 @@ event = &"alerted"
 delay_in_seconds = "0.0"
 metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
 
+[node name="Start Chasing" type="Node" parent="StateChart/Root/BehaviourState/Idle" unique_id=770810438]
+script = ExtResource("7_sflq1")
+to = NodePath("../../Chasing")
+event = &"chase"
+delay_in_seconds = "0.0"
+metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
+
 [node name="Patrolling" type="Node" parent="StateChart/Root/BehaviourState" unique_id=105453097]
 script = ExtResource("5_tg15e")
 
@@ -17725,6 +17732,13 @@ metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
 script = ExtResource("7_sflq1")
 to = NodePath("../../Chasing")
 event = &"chase"
+delay_in_seconds = "0.0"
+metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
+
+[node name="Alerted" type="Node" parent="StateChart/Root/BehaviourState/Investigating" unique_id=1810678424]
+script = ExtResource("7_sflq1")
+to = NodePath("../../Alerted")
+event = &"alerted"
 delay_in_seconds = "0.0"
 metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
 
@@ -17809,6 +17823,13 @@ event = &"patrol"
 delay_in_seconds = "0.0"
 metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
 
+[node name="Alerted" type="Node" parent="StateChart/Root/BehaviourState/Searching" unique_id=1149345395]
+script = ExtResource("7_sflq1")
+to = NodePath("../../Alerted")
+event = &"alerted"
+delay_in_seconds = "0.0"
+metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
+
 [node name="Alerted" type="Node" parent="StateChart/Root/BehaviourState" unique_id=658319552]
 script = ExtResource("5_tg15e")
 metadata/_custom_type_script = "uid://cytafq8i1y8qm"
@@ -17840,6 +17861,13 @@ metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
 script = ExtResource("7_sflq1")
 to = NodePath("../../Investigating")
 event = &"investigate"
+delay_in_seconds = "0.0"
+metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
+
+[node name="Alerted Again" type="Node" parent="StateChart/Root/BehaviourState/Alerted" unique_id=908046905]
+script = ExtResource("7_sflq1")
+to = NodePath("../../Alerted")
+event = &"alerted"
 delay_in_seconds = "0.0"
 metadata/_custom_type_script = "uid://cf1nsco3w0mf6"
 

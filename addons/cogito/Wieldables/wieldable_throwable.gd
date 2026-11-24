@@ -74,6 +74,9 @@ func action_primary(_passed_item_reference : InventoryItemPD, _is_released: bool
 	bullet_point.add_child(projectile)
 	projectile.damage_amount = _passed_item_reference.wieldable_damage
 	projectile.set_linear_velocity(direction * projectile_velocity)
+	if projectile is CogitoObject:
+		projectile.throw_point = bullet_point.global_position
+		projectile.shooter = player_interaction_component.player
 	projectile.reparent(CogitoLevel.spawn_parent(self))
 
 

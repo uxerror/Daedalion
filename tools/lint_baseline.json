@@ -150,20 +150,19 @@
    "trailing-whitespace": 11
   },
   "addons/cogito/CogitoObjects/cogito_loot_drop_container.gd": {
-   "class-definitions-order": 16,
+   "class-definitions-order": 15,
    "function-variable-name": 1,
    "max-line-length": 34,
-   "no-elif-return": 1,
-   "trailing-whitespace": 40
+   "trailing-whitespace": 39
   },
   "addons/cogito/CogitoObjects/cogito_lootable_container.gd": {
-   "class-definitions-order": 23,
+   "class-definitions-order": 20,
    "function-variable-name": 3,
    "max-line-length": 31,
    "trailing-whitespace": 34
   },
   "addons/cogito/CogitoObjects/cogito_object.gd": {
-   "class-definitions-order": 18,
+   "class-definitions-order": 19,
    "max-line-length": 10,
    "trailing-whitespace": 21,
    "unnecessary-pass": 1
@@ -194,7 +193,7 @@
   "addons/cogito/CogitoObjects/cogito_projectile.gd": {
    "class-definitions-order": 13,
    "max-line-length": 16,
-   "trailing-whitespace": 13
+   "trailing-whitespace": 12
   },
   "addons/cogito/CogitoObjects/cogito_security_camera.gd": {
    "class-definitions-order": 22,
@@ -395,7 +394,7 @@
    "trailing-whitespace": 1
   },
   "addons/cogito/Components/LootComponent.gd": {
-   "class-definitions-order": 11,
+   "class-definitions-order": 9,
    "function-variable-name": 2,
    "max-line-length": 10,
    "trailing-whitespace": 20
@@ -420,7 +419,7 @@
   },
   "addons/cogito/Components/PlayerInteractionComponent.gd": {
    "class-definitions-order": 24,
-   "max-line-length": 22,
+   "max-line-length": 21,
    "max-public-methods": 1,
    "no-else-return": 1
   },
@@ -516,7 +515,7 @@
   },
   "addons/cogito/DynamicFootstepSystem/Scripts/footstep_surface_detector.gd": {
    "class-definitions-order": 1,
-   "max-line-length": 7,
+   "max-line-length": 6,
    "max-returns": 1,
    "no-elif-return": 4,
    "no-else-return": 1,
@@ -743,8 +742,8 @@
    "trailing-whitespace": 25
   },
   "addons/cogito/InventoryPD/cogito_loot_generator.gd": {
-   "class-definitions-order": 7,
-   "function-variable-name": 19,
+   "class-definitions-order": 5,
+   "function-variable-name": 17,
    "max-line-length": 24,
    "trailing-whitespace": 38,
    "unused-argument": 1
@@ -865,10 +864,10 @@
    "trailing-whitespace": 4
   },
   "addons/cogito/SceneManagement/cogito_persistent_id.gd": {
-   "max-line-length": 7
+   "max-line-length": 6
   },
   "addons/cogito/SceneManagement/cogito_player_advanced_state.gd": {
-   "max-line-length": 4,
+   "max-line-length": 3,
    "trailing-whitespace": 17
   },
   "addons/cogito/SceneManagement/cogito_player_state.gd": {
@@ -925,8 +924,7 @@
    "class-definitions-order": 4,
    "class-variable-name": 2,
    "constant-name": 3,
-   "max-line-length": 23,
-   "trailing-whitespace": 21
+   "max-line-length": 3
   },
   "addons/cogito/Scripts/cogito_hover_tool.gd": {
    "class-definitions-order": 4,
@@ -1097,9 +1095,7 @@
    "unused-argument": 1
   },
   "addons/cogito/cogito_plugin.gd": {
-   "load-constant-name": 1,
-   "max-line-length": 4,
-   "trailing-whitespace": 10
+   "load-constant-name": 1
   },
   "addons/cogito/cogito_settings.gd": {
    "constant-name": 2,
@@ -1228,12 +1224,10 @@
   "addons/cogito/EasyMenus/Scripts/input_map_updater.gd",
   "addons/cogito/EasyMenus/Scripts/main_menu_controller.gd",
   "addons/cogito/EasyMenus/Scripts/main_menu_saveslot_manager.gd",
-  "addons/cogito/EasyMenus/Scripts/menu_template_manager.gd",
   "addons/cogito/EasyMenus/Scripts/option_button_input_propagator.gd",
   "addons/cogito/EasyMenus/Scripts/options_constants.gd",
   "addons/cogito/EasyMenus/Scripts/pause_menu_controller.gd",
   "addons/cogito/EasyMenus/Scripts/slider_w_labels.gd",
-  "addons/cogito/EasyMenus/Scripts/startup_loader.gd",
   "addons/cogito/EasyMenus/Scripts/tab_menu.gd",
   "addons/cogito/FloatableBody/floatable_body_3d.gd",
   "addons/cogito/FloatableBody/floatable_player_3d.gd",
@@ -1303,7 +1297,6 @@
   "addons/cogito/Scripts/cogito_audio.gd",
   "addons/cogito/Scripts/cogito_credits.gd",
   "addons/cogito/Scripts/cogito_cutscene_trigger.gd",
-  "addons/cogito/Scripts/cogito_game_config.gd",
   "addons/cogito/Scripts/cogito_hover_tool.gd",
   "addons/cogito/Scripts/cogito_hud.gd",
   "addons/cogito/Scripts/cogito_meter.gd",
@@ -1341,7 +1334,6 @@
   "addons/cogito/Wieldables/wieldable_throwable.gd",
   "addons/cogito/Wieldables/wieldable_toy_pistol.gd",
   "addons/cogito/cogito_globals.gd",
-  "addons/cogito/cogito_plugin.gd",
   "addons/cogito/cogito_settings.gd"
  ]
 }
