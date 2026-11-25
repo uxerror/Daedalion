@@ -12,6 +12,8 @@ const CHUNK_SIZE := 32
 var entities := ENTITIES.new()
 ## Last applied authoritative revision per entity.
 var revisions := {}
+## Public carrier identities by body id. Empty hands have no map entry.
+var holders: Dictionary[String, String] = {}
 var _animations: Array[ANIMATION] = []
 var _states := {}
 var _subscribers := {}
@@ -25,6 +27,7 @@ var _awaiting_avatar := false
 func bind(root: Node, key: String) -> void:
 	_generation += 1
 	_client_binding += 1
+	entities.registered.connect(_runtime_registered)
 	entities.bind(root, key, _generation if multiplayer.is_server() else 0)
 	for id in entities.objects:
 		var node := entities.objects[id]
@@ -48,6 +51,13 @@ func bind(root: Node, key: String) -> void:
 					_animations.append(presentation)
 				if node.has_method("net_bind_replica"):
 					node.net_bind_replica()
+
+
+func _runtime_registered(id: String, node: Node) -> void:
+	node.set_meta(&"cogito_net_world", self)
+	revisions.get_or_add(id, 0)
+	if node is RigidBody3D:
+		get_parent().bodies.track(id, node)
 
 
 ## Tombstone kept for late joiners and contested pickup replies.
@@ -77,6 +87,7 @@ func clear() -> void:
 	_awaiting_avatar = false
 	entities = ENTITIES.new()
 	revisions.clear()
+	holders.clear()
 	_states.clear()
 	_subscribers.clear()
 	_pending.clear()
@@ -124,9 +135,17 @@ func subscribe(peer: int, nonce: int) -> void:
 	_pending[peer] = []
 	var chunk := []
 	for id: String in _states:
-		if not entities.live_object(id) and not _states[id].get("removed", false):
+		var node := entities.live_object(id)
+		var state: Dictionary = _states[id]
+		if not node and not state.get("removed", false):
 			continue
-		chunk.append([id, revisions[id], _states[id]])
+		if node is Node3D and state.has("pose"):
+			state = state.duplicate()
+			state.pose = node.global_transform
+		var row := [id, revisions[id], state]
+		if holders.has(id):
+			row.append(holders[id])
+		chunk.append(row)
 		if chunk.size() == CHUNK_SIZE:
 			_baseline.rpc_id(peer, entities.level_key, entities.epoch, nonce, chunk, false)
 			chunk = []
@@ -141,6 +160,8 @@ func _baseline(key: String, epoch: int, nonce: int, rows: Array, last: bool) -> 
 		return
 	for row: Array in rows:
 		_apply(row[0], row[1], row[2], true)
+		if row.size() > 3:
+			holders[row[0]] = row[3]
 	if last:
 		entities.epoch = epoch
 		_awaiting_avatar = true
@@ -180,14 +201,26 @@ func _changed(event: StringName, id: String) -> void:
 func publish(id: String, state: Dictionary, event: StringName = &"") -> void:
 	revisions[id] = revisions.get(id, 0) + 1
 	_states[id] = state
+	if state.get("removed", false):
+		holders.erase(id)
 	_broadcast([id, revisions[id], state, event])
 
 
-## Track physics independently of inventory eligibility. A falling pickup keeps its revision.
-func publish_pose(id: String, pose: Transform3D) -> void:
-	if _states.has(id) and not is_removed(id):
-		_states[id].pose = pose
-		_broadcast([id, revisions[id], pose])
+## Invalidate requests observed before an exclusive grab or release, retaining the item's state.
+func publish_holder(id: String, player_id: String) -> void:
+	if id.is_empty() or is_removed(id):
+		return
+	_states.get_or_add(id, {})
+	revisions[id] = revisions.get(id, 0) + 1
+	_set_holder(id, player_id)
+	_broadcast([id, revisions[id], player_id])
+
+
+func _set_holder(id: String, player_id: String) -> void:
+	if player_id.is_empty():
+		holders.erase(id)
+	else:
+		holders[id] = player_id
 
 
 func _broadcast(change: Array) -> void:
@@ -209,13 +242,11 @@ func _delta(key: String, epoch: int, change: Array) -> void:
 	if not entities.matches(key, epoch):
 		return
 	var observed: int = revisions.get(change[0], -1)
-	if change[2] is Transform3D:
-		var body := entities.live_object(change[0]) as Node3D
-		if body and observed == change[1]:
-			body.global_transform = change[2]
-			_states[change[0]].pose = change[2]
-		return
 	if change[1] <= observed:
+		return
+	if change[2] is String:
+		_set_holder(change[0], change[2])
+		revisions[change[0]] = change[1]
 		return
 	if _apply(change[0], change[1], change[2], false):
 		var node := entities.objects[String(change[0])]
@@ -225,7 +256,12 @@ func _delta(key: String, epoch: int, change: Array) -> void:
 
 
 func _apply(id: String, revision: int, state: Dictionary, silent: bool) -> bool:
+	if state.is_empty():
+		revisions[id] = revision
+		return false
 	var tombstone: bool = state.size() == 1 and state.get("removed", false)
+	if tombstone:
+		holders.erase(id)
 	if state.has("quantity") or tombstone or id.begins_with("runtime:"):
 		if get_parent().spawner.apply(id, state):
 			revisions[id] = revision

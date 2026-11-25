@@ -34,6 +34,12 @@ var interactions := INTERACTIONS.new()
 var inventory := INVENTORY.new()
 var containers := CONTAINERS.new()
 var spawner := SPAWNER.new()
+## Motion stream shared by authored and runtime bodies.
+var bodies := preload("net_bodies.gd").new()
+## Owner-scoped carry input and release.
+var carry := preload("net_carry.gd").new()
+## Authoritative seat and driver claims.
+var seats := preload("net_seats.gd").new()
 var combat := COMBAT.new()
 var projectiles := PROJECTILES.new()
 var _profiles := {}
@@ -61,6 +67,10 @@ func _ready() -> void:
 	add_child(inventory)
 	containers.name = "Containers"
 	add_child(containers)
+	carry.name = "Carry"
+	add_child(carry)
+	bodies.name = "Bodies"
+	add_child(bodies)
 	spawner.name = "Spawner"
 	add_child(spawner)
 	world.name = "World"
@@ -95,6 +105,14 @@ func bind_level(root: Node, start: Transform3D, key: String) -> void:
 	root.set_meta(&"cogito_net_players", self)
 	spawner.bind(root)
 	world.bind(root, key)
+	for id in world.entities.objects:
+		var node := world.entities.objects[id]
+		if node is RigidBody3D:
+			bodies.track(id, node)
+		if node is CogitoVehicle:
+			var target: Node3D = node.vehicle_node if node.vehicle_node else node
+			if not target is RigidBody3D and CogitoLevel.root_of(target) == root:
+				bodies.track(CogitoPersistentId.of(target), target)
 	spawner.track_authored()
 	root.tree_exiting.connect(_level_exiting, CONNECT_ONE_SHOT)
 	if multiplayer.is_server():
@@ -111,9 +129,12 @@ func _exit_tree() -> void:
 
 
 func _level_exiting() -> void:
+	if multiplayer.has_multiplayer_peer() and 1 in multiplayer.get_peers():
+		_level_left.rpc_id(1, _level_key, world.binding())
 	projectiles.clear()
 	clear()
 	interactions.clear()
+	bodies.clear()
 	world.clear()
 	_bindings.clear()
 	if _owns_root:
@@ -134,6 +155,25 @@ func _announce_level() -> void:
 
 
 @rpc("any_peer", "call_remote", "reliable", 0)
+func _level_left(key: String, nonce: int) -> void:
+	var peer := multiplayer.get_remote_sender_id()
+	if multiplayer.is_server() and _bindings.get(peer) == nonce and _ready_levels.get(peer) == key:
+		_release_subscription(peer)
+
+
+func _release_subscription(peer: int) -> void:
+	_ready_levels.erase(peer)
+	carry.release(peer, false)
+	var avatar := avatar_for(_session.for_peer(peer).get("player_id", ""))
+	if avatar:
+		seats.release(avatar.actor)
+	interactions.forget(peer)
+	containers.forget(peer)
+	world.forget(peer)
+	bodies.forget(peer)
+
+
+@rpc("any_peer", "call_remote", "reliable", 0)
 func _level_ready(key: String, nonce: int) -> void:
 	var peer := multiplayer.get_remote_sender_id()
 	if not multiplayer.is_server() or _session.for_peer(peer).is_empty() or key.length() > 512:
@@ -141,9 +181,8 @@ func _level_ready(key: String, nonce: int) -> void:
 	if nonce <= int(_bindings.get(peer, 0)):
 		return
 	_peer_by_id[_session.for_peer(peer).player_id] = peer
-	world.forget(peer)
 	if _bindings.has(peer):
-		interactions.forget(peer)
+		_release_subscription(peer)
 	_bindings[peer] = nonce
 	_ready_levels[peer] = key
 	for id in _avatars:
@@ -255,6 +294,10 @@ func _spawn(key: String, id: String, life: int, frame: Dictionary) -> void:
 
 func _remove(id: String) -> void:
 	var peer := int(_peer_by_id.get(id, 0))
+	carry.release(peer, false)
+	if multiplayer.is_server() and _avatars.has(id):
+		seats.release(_avatars[id].actor)
+	bodies.forget(peer)
 	world.forget(peer)
 	interactions.forget(peer)
 	_bindings.erase(peer)
@@ -345,6 +388,9 @@ func _wield_state(id: String, life: int, path: String, on: bool, ads: bool) -> v
 func _physics_process(delta: float) -> void:
 	if _avatars.is_empty():
 		return
+	carry.flush_rotation()
+	if local_actor:
+		carry.filter_trigger(local_actor.current_command)
 	if local_actor and inventory.local:
 		var own := _avatars[_session.local_id].wield
 		local_actor.current_command.wield_generation = inventory.local.snapshot.get("generation", 0)
@@ -357,11 +403,19 @@ func _physics_process(delta: float) -> void:
 				_commands.rpc_id(1, avatar.lifetime, avatar.revision, packet)
 		return
 	for avatar in _avatars.values():
+		if avatar.actor.is_dead:
+			seats.release(avatar.actor)
+		if local_actor:
+			avatar.present_seat(avatar.actor.is_sitting)
 		avatar.wield.tick(delta)
 		if local_actor and avatar.actor == local_actor:
 			avatar.wield.reconcile(
 				local_actor.last_consumed_sequence, avatar.wield.accepted_sequence
 			)
+	var positions := {}
+	for id in _avatars:
+		positions[_peer_by_id[id]] = _avatars[id].actor.global_position
+	bodies.advance(delta, positions, observers())
 	_tick += 1
 	_elapsed += delta
 	var interval := 1.0 / clampi(snapshot_hz, 1, Engine.physics_ticks_per_second)
@@ -391,7 +445,7 @@ func _commands(life: int, revision: int, data: PackedByteArray) -> void:
 	var record := _session.for_peer(multiplayer.get_remote_sender_id())
 	var avatar := avatar_for(record.get("player_id", ""))
 	if avatar and avatar.lifetime == life and avatar.revision == revision and avatar.source:
-		avatar.source.receive(data)
+		avatar.source.receive(data, avatar.actor.current_seat is CogitoVehicle)
 
 
 @rpc("authority", "call_remote", "unreliable", 1)
@@ -412,6 +466,7 @@ func _receive_pose(id: String, life: int, frame: Dictionary, accepted := -1) -> 
 
 
 func _process(delta: float) -> void:
+	bodies.present()
 	for avatar in _avatars.values():
 		if avatar.timeline:
 			avatar.present(delta)

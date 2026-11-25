@@ -40,7 +40,7 @@ func packet(command: CogitoPlayerCommand) -> PackedByteArray:
 
 
 ## Rejects malformed packets atomically and limits wire input to movement and wield actions.
-static func decode(data: PackedByteArray) -> Array[CogitoPlayerCommand]:
+static func decode(data: PackedByteArray, driving := false) -> Array[CogitoPlayerCommand]:
 	var result: Array[CogitoPlayerCommand] = []
 	if data.size() > REDUNDANCY * (MAX_FRAME + 1):
 		return []
@@ -53,6 +53,10 @@ static func decode(data: PackedByteArray) -> Array[CogitoPlayerCommand]:
 		if offset + size > data.size() or result.size() == REDUNDANCY:
 			return []
 		var end := offset + size - GENERATION_BYTES
+		if driving:
+			var axes := Vector2(data.decode_float(offset + 4), data.decode_float(offset + 8))
+			if not axes.is_finite() or axes.length_squared() > 1.00001:
+				return []
 		var command := CogitoPlayerCommand.decode(data.slice(offset, end))
 		if not command:
 			return []

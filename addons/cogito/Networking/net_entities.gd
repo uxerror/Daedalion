@@ -1,6 +1,9 @@
 extends RefCounted
 ## The object and component tables for one bound level instance. Wire keys never resolve paths.
 
+## Emitted after a runtime object and its interaction components can be resolved.
+signal registered(id: String, node: Node)
+
 ## Root of the live level instance.
 var root: Node
 ## Game-defined level key, shared by peers loading the same content.
@@ -26,7 +29,8 @@ func bind(level: Node, key: String, generation: int) -> void:
 		if _needs_parent_address(node):
 			candidates[node.get_parent()] = true
 		if (
-			node.has_method("net_state")
+			node is RigidBody3D
+			or node.has_method("net_state")
 			or node.is_in_group("Persist")
 			or node.is_in_group("save_object_state")
 		):
@@ -42,7 +46,9 @@ func bind(level: Node, key: String, generation: int) -> void:
 			objects[id] = node
 	for id in objects.keys():
 		var node := objects[id]
-		if not node.has_method("net_state") and not _has_addressable_child(node):
+		if not (
+			node is RigidBody3D or node.has_method("net_state") or _has_addressable_child(node)
+		):
 			objects.erase(id)
 			continue
 		if node.has_method("net_state"):
@@ -96,6 +102,7 @@ func register_runtime(id: String, node: Node) -> void:
 		components[str(node.get_path_to(child))] = child
 		_owners[child] = node
 	_components[id] = components
+	registered.emit(id, node)
 
 
 ## Reject a removed, queued or reparented object even if the content was present at bind.

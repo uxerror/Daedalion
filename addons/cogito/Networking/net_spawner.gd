@@ -7,7 +7,6 @@ const GRID := preload("net_grid.gd")
 ## Authority RNG for loot quantities, weights and impulses.
 var rng := RandomNumberGenerator.new()
 var _serial := 0
-var _elapsed := 0.0
 var _live := {}
 var _bags := {}
 
@@ -26,8 +25,10 @@ static func _pickup(node: Node) -> PickupComponent:
 	return null if components.is_empty() else components[0] as PickupComponent
 
 
-## Authored rigid pickups use the same server poses as drops while they remain in the level.
+## Publish initial stack quantities independently of the body motion stream.
 func track_authored() -> void:
+	if not multiplayer.is_server():
+		return
 	var world: Node = get_parent().world
 	for id: String in world.entities.objects:
 		var node: Node = world.entities.objects[id]
@@ -35,13 +36,9 @@ func track_authored() -> void:
 			continue
 		var pickup := _pickup(node)
 		if pickup and pickup.slot_data:
-			if multiplayer.is_server():
-				var spec := {"quantity": pickup.slot_data.quantity, "pose": node.global_transform}
-				_live[id] = {"node": node, "spec": spec}
-				world.publish(id, spec.duplicate())
-			else:
-				node.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
-				node.freeze = true
+			var spec := {"quantity": pickup.slot_data.quantity}
+			_live[id] = {"node": node, "spec": spec}
+			world.publish(id, spec.duplicate())
 
 
 ## Place a stack in front of the authoritative avatar. A blocked origin rejects the drop.
@@ -170,13 +167,9 @@ func _instantiate(id: String, spec: Dictionary) -> Node3D:
 		if not multiplayer.is_server():
 			for props in node.find_children("*", "CogitoProperties", true, false):
 				props.free()
-	if node is RigidBody3D and not multiplayer.is_server():
-		node.freeze = true
-		node.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 	node.transform = world.entities.root.global_transform.affine_inverse() * spec.pose
 	world.entities.root.add_child(node)
 	world.entities.register_runtime(id, node)
-	node.set_meta(&"cogito_net_world", world)
 	_live[id] = {"node": node, "spec": spec.duplicate()}
 	return node
 
@@ -184,24 +177,6 @@ func _instantiate(id: String, spec: Dictionary) -> Node3D:
 func _despawn(id: String) -> void:
 	if _live.erase(id) and is_inside_tree():
 		get_parent().world.publish(id, {"removed": true})
-
-
-func _physics_process(delta: float) -> void:
-	if not multiplayer.is_server() or _live.is_empty():
-		return
-	_elapsed += delta
-	if _elapsed < 0.2:
-		return
-	_elapsed = 0.0
-	for id: String in _live.keys():
-		var record: Dictionary = _live[id]
-		if not is_instance_valid(record.node):
-			_live.erase(id)
-			continue
-		var node := record.node as Node3D
-		if not node.global_transform.is_equal_approx(record.spec.pose):
-			record.spec.pose = node.global_transform
-			get_parent().world.publish_pose(id, node.global_transform)
 
 
 ## Apply authored removal/remainder or an authority-issued runtime lifecycle record.
@@ -215,8 +190,6 @@ func apply(id: String, state: Dictionary) -> bool:
 		return true
 	if not node and id.begins_with("runtime:"):
 		node = _instantiate(id, state)
-	if node and state.has("pose"):
-		node.global_transform = state.pose
 	if node and state.has("quantity"):
 		var pickup := _pickup(node)
 		if pickup:

@@ -23,11 +23,11 @@ static func unwrap(sequence: int, expected: int) -> int:
 
 
 ## At most four bounded packets per simulation tick, including malformed packets.
-func receive(data: PackedByteArray) -> void:
+func receive(data: PackedByteArray, driving := false) -> void:
 	if _packets >= 4:
 		return
 	_packets += 1
-	for command in CHANNEL.decode(data):
+	for command in CHANNEL.decode(data, driving):
 		var seq := unwrap(command.sequence, _ack + 1)
 		if seq <= _ack or _pending.has(seq):
 			continue

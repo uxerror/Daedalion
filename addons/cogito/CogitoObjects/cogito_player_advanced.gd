@@ -703,6 +703,8 @@ func _physics_process(delta):
 		body.rotation.y = command.yaw
 		head.rotation.x = clampf(command.pitch, -PI / 2.0, PI / 2.0)
 		neck.rotation.y = command.neck_yaw
+		if network_movement_only and current_seat:
+			player_interaction_component.network_interactions.get_parent().seats.clamp_look(self)
 		for index in command.edges.size():
 			_handle_command_edge(command.edges[index], index)
 			if current_command != command:
@@ -719,6 +721,10 @@ func _handle_command_edge(edge: int, index: int) -> void:
 		if current_moving_state not in [MovingState.Swimming, MovingState.LedgeClimbing]:
 			try_crouch = not try_crouch
 	if network_movement_only:
+		if is_local_presentation and pressed and action == ACTION.PRIMARY:
+			var pic := player_interaction_component
+			if pic.carrying.is_carrying:
+				pic.network_interactions.get_parent().carry.primary_pressed(current_command.sequence)
 		if is_local_presentation and action in [ACTION.INTERACT, ACTION.INTERACT2]:
 			var intent := InputEventAction.new()
 			intent.action = CogitoPlayerCommand.ACTIONS[action]

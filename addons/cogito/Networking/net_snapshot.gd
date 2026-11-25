@@ -12,7 +12,7 @@ var _render_tick := -1.0
 
 ## Captures the simulated pose after movement. Revision changes force even a small teleport.
 static func capture(actor: CogitoPlayerAdvanced, tick: int, revision: int) -> Dictionary:
-	return {
+	var frame := {
 		"tick": tick,
 		"revision": revision,
 		"ack": actor.last_consumed_sequence,
@@ -26,6 +26,12 @@ static func capture(actor: CogitoPlayerAdvanced, tick: int, revision: int) -> Di
 		"posture": int(actor.current_body_posture_state),
 		"sitting": actor.is_sitting,
 	}
+	if actor.is_sitting and actor.current_seat:
+		var api := actor.player_interaction_component.network_interactions
+		if api:
+			frame.seat = api.world.entities.id_for(actor.current_seat)
+			frame.basis = actor.transform.basis
+	return frame
 
 
 ## Returns true when the renderer must reset position and local look immediately.

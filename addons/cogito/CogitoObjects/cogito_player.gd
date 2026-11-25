@@ -21,10 +21,12 @@ var network_movement_only := false
 ## Seat driving this actor. The facade retains the local seat for legacy callers and saves.
 var current_seat: CogitoSittable:
 	get:
-		return CogitoSceneManager._current_sittable_node if is_local_presentation else current_seat
+		if is_local_presentation and not network_movement_only:
+			return CogitoSceneManager._current_sittable_node
+		return current_seat
 	set(value):
 		current_seat = value
-		if is_local_presentation:
+		if is_local_presentation and not network_movement_only:
 			CogitoSceneManager._current_sittable_node = value
 
 ## Refereence to Player HUD node

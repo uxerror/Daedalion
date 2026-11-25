@@ -156,7 +156,18 @@ func release_held_actions() -> void:
 func start_interaction(action: String) -> void:
 	if player and player.network_movement_only:
 		if network_interactions and player.is_local_presentation:
-			network_interactions.press(self, action)
+			if carrying.is_carrying:
+				if carrying.carried_object.input_map_action == action:
+					network_interactions.get_parent().carry.input(&"drop")
+				else:
+					network_interactions.press(self, action)
+			else:
+				var seat := player.current_seat
+				var exiting: bool = seat and not targeting.interactable is CogitoSittable
+				if exiting and seat.BasicInteraction.input_map_action == action:
+					network_interactions.submit(seat.BasicInteraction, StringName(action))
+				else:
+					network_interactions.press(self, action)
 		return
 	# Seat entry/exit is part of locomotion. Other legacy world interactions may open
 	# process-wide interfaces and will get explicit recipients in MP2.
@@ -249,6 +260,10 @@ func perform_action(action: CogitoInteractionAction) -> void:
 
 
 func on_death():
+	if network_interactions and network_interactions.multiplayer.is_server():
+		var players: Node = network_interactions.get_parent()
+		players.carry.release(players.peer_for_actor(player), false)
+		players.seats.release(player)
 	if wieldables.equipped_wieldable_item:
 		wieldables.equipped_wieldable_item.is_being_wielded = false
 

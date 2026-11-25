@@ -19,6 +19,7 @@ var revision := 0
 var timeline: SNAPSHOT
 ## Receive buffer on a server simulating a remote owner.
 var source: INPUT
+var _seated_pose := false
 
 
 class HeadLook:
@@ -118,6 +119,14 @@ func apply_pose(frame: Dictionary, weight: float, force_look: bool) -> void:
 	actor.current_moving_state = frame.moving
 	actor.current_body_posture_state = frame.posture
 	actor.is_sitting = frame.sitting
+	present_seat(frame.sitting)
+	var api := actor.player_interaction_component.network_interactions
+	if api:
+		actor.current_seat = api.world.entities.live_object(frame.get("seat", "")) as CogitoSittable
+		actor.transform.basis = frame.get("basis", Basis.IDENTITY)
+		if actor.current_seat and actor.current_seat.look_marker_node:
+			actor.sittable_look_marker = actor.current_seat.look_marker_node.global_position
+			actor.sittable_look_angle = actor.current_seat.horizontal_look_angle
 	actor.head.position.y = frame.height
 	if not local or force_look:
 		actor.body.rotation.y = frame.yaw
@@ -132,6 +141,20 @@ func apply_pose(frame: Dictionary, weight: float, force_look: bool) -> void:
 		tree.standing_up()
 
 
+## Switch the mannequin to the authored sitting clip while attached to a seat.
+func present_seat(seated: bool) -> void:
+	if _seated_pose == seated:
+		return
+	_seated_pose = seated
+	var tree := actor.get_node("PlayerAnimationTree") as AnimationTree
+	var animator := actor.get_node("AnimationPlayer") as AnimationPlayer
+	tree.active = not seated
+	if seated:
+		animator.play(&"Sitting_Idle")
+	else:
+		animator.stop()
+
+
 ## Release locally held objects and remove the name immediately so reconnect can reuse it.
 func despawn() -> void:
 	if not is_instance_valid(actor):
@@ -139,7 +162,12 @@ func despawn() -> void:
 	actor.player_interaction_component.release_held_actions()
 	var carried: Variant = actor.player_interaction_component.carrying.carried_object
 	if is_instance_valid(carried):
-		carried.leave()
+		if timeline:
+			actor.player_interaction_component.network_interactions.get_parent().carry.clear_owner(
+				actor.player_interaction_component
+			)
+		else:
+			carried.leave()
 	var seat := actor.current_seat
 	if is_instance_valid(seat) and seat.player_node == actor:
 		seat._stand_up(false)

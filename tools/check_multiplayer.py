@@ -20,7 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = "res://tests/net/process_peer.tscn"
-SCENARIO_SECONDS = 70
+SCENARIO_SECONDS = 103
 
 
 class CheckFailed(Exception):
@@ -128,17 +128,17 @@ class Scenario:
     def next_line(self):
         remaining = self.deadline - time.monotonic()
         if remaining <= 0:
-            raise CheckFailed("70 s scenario deadline exceeded")
+            raise CheckFailed(f"{SCENARIO_SECONDS} s scenario deadline exceeded")
         try:
             role, line = self.output.get(timeout=remaining)
         except queue.Empty:
-            raise CheckFailed("70 s scenario deadline exceeded") from None
+            raise CheckFailed(f"{SCENARIO_SECONDS} s scenario deadline exceeded") from None
         if line is None:
             role.exited = True
             try:
                 rc = role.process.wait(timeout=max(0, self.deadline - time.monotonic()))
             except subprocess.TimeoutExpired:
-                raise CheckFailed("70 s scenario deadline exceeded during exit") from None
+                raise CheckFailed(f"{SCENARIO_SECONDS} s scenario deadline exceeded during exit") from None
             if role.bind_failed and role is self.server:
                 raise BindFailed(f"could not bind UDP {self.port}")
             if not role.stopping or (rc != 0 and not role.killed):
@@ -338,6 +338,79 @@ class Scenario:
         if second.samples[-1]["cutscene_starts"] or not first.samples[-1]["cutscene"]:
             raise CheckFailed("cutscene was not private while the observer moved")
 
+    def physics(self, a, b, first, second, roster):
+        def stage(place):
+            self.order(self.server, op="physics_stage", place=place, first=first)
+            tick = self.server.samples[-1]["tick"]
+            self.pose(self.server, roster, tick + 8)
+
+        def throw_and_settle(carrier, name):
+            self.sample(carrier, lambda s: s["carrying"])
+            self.order(carrier, op="walk")
+            self.sample(self.server, lambda s: s["actors"][name][2] < -14.2)
+            self.sample(carrier, lambda s: s["walk"] == 0)
+            held = self.sample(self.server, lambda s: s["crate"][2] < -15)
+            for viewer in (a, b):
+                self.sample(viewer, lambda s: math.dist(s["crate"], held["crate"]) < 0.65)
+            self.order(carrier, op="throw")
+            self.sample(carrier, lambda s: not s["carrying"])
+            rest = self.sample(self.server, lambda s: s["rest"])
+            if math.dist(held["crate"], rest["crate"]) < 1.0:
+                raise CheckFailed("thrown crate did not travel")
+            for viewer in (a, b):
+                self.sample(viewer, lambda s: math.dist(s["crate"], rest["crate"]) < 0.035)
+
+        stage("carry")
+        starts = {r: r.samples[-1] for r in (a, b)}
+        if a is self.server:
+            for carrier, name in ((a, first), (b, second)):
+                if carrier is b:
+                    stage("carry")
+                self.use(carrier, "CarryBox/CarryableComponent", action="interact2")
+                throw_and_settle(carrier, name)
+        else:
+            for role in (a, b):
+                self.order(role, op="prepare_grab")
+            for role in (a, b):
+                self.order(role, op="race")
+            replies = [json.loads(self.wait_line(r, lambda x: x.startswith("NET RESULT "))
+                                  .removeprefix("NET RESULT ")) for r in (a, b)]
+            if sum(reply["ok"] for reply in replies) != 1:
+                raise CheckFailed(f"carry race: {replies}")
+            winner = 0 if replies[0]["ok"] else 1
+            throw_and_settle((a, b)[winner], (first, second)[winner])
+
+        stage("seat")
+        self.use(a, "Seat/BasicInteraction")
+        self.sample(b, lambda s: s["seat"] == roster[first])
+        self.use(b, "Seat/BasicInteraction", reason="In use")
+        self.use(a, "Seat/BasicInteraction")
+        self.sample(b, lambda s: not s["seat"])
+        self.use(b, "Seat/BasicInteraction")
+        self.sample(a, lambda s: s["seat"] == roster[second])
+        self.use(b, "Seat/BasicInteraction")
+
+        stage("vehicle")
+        self.use(a, "Vehicle/BasicInteraction")
+        origin = self.sample(b, lambda s: s["driver"] == roster[first])["vehicle"]
+        self.order(a, op="walk")
+        self.sample(b, lambda s: math.dist(s["vehicle"], origin) > 0.2)
+        self.sample(a, lambda s: s["walk"] == 0)
+        self.use(a, "Vehicle/BasicInteraction")
+        self.sample(b, lambda s: not s["driver"])
+
+        stage("slot")
+        self.use(a, "CarryBox/CarryableComponent", action="interact2")
+        self.order(a, op="walk")
+        for role in (a, b, self.server):
+            self.sample(role, lambda s: s["slot_id"] == "physics:box")
+        self.sample(a, lambda s: not s["carrying"] and s["walk"] == 0)
+        for role, start in starts.items():
+            end = role.samples[-1]
+            if "rx" in end and role is not self.server:
+                rate = (end["rx"] - start["rx"]) * 60 / (end["tick"] - start["tick"])
+                print(f"MP4 {role.directory.name} received {rate:.0f} payload bytes/s", flush=True)
+
     def inventories(self, a, b, first, second):
         def items(role, name):
             return role.samples[-1]["inventories"][name]["items"]
@@ -445,6 +518,7 @@ class Scenario:
         self.drive(first, "Ada", roster, [self.server, second])
         self.drive(second, "Ben", roster, [self.server, first])
         self.panels(first, second, "Ada", "Ben")
+        self.physics(first, second, "Ada", "Ben", roster)
         self.devices(first, second, "Ada", "Ben")
         self.inventories(first, second, "Ada", "Ben")
         holdings = self.combat(first, second, "Ada", "Ben")
@@ -460,6 +534,9 @@ class Scenario:
         if (baseline["wield"]["Ada"] != ["Cogito_Flashlight.tres", True]
                 or baseline["flights"] or baseline["shots"] or baseline["impacts"]):
             raise CheckFailed(f"incorrect combat baseline: {baseline}")
+        if baseline["slot_id"] != "physics:box":
+            raise CheckFailed("missing snapped crate on late join")
+        self.sample(late, lambda s: math.dist(s["crate"], self.server.samples[-1]["crate"]) < 0.035)
         if baseline["loose"] or baseline["drop"]:
             raise CheckFailed("picked objects appeared on late join")
         self.order(self.server, op="inventory_stage", place="box", first="Cy")
@@ -490,7 +567,7 @@ class Scenario:
         if self.state(restored, ["Ada"]) != (ada, {"Ada": ada}):
             raise CheckFailed("server restart changed identity")
         self.stop(restored)
-        print("PASS dedicated + 2 clients: movement, collision, interaction retry, keypad, turnwheel, lockpick, private cutscene, pickup race, drops, container, purchase, rifle, dart recovery, flashlight, late join, inventory reconnect, restart")
+        print("PASS dedicated + 2 clients: carry race, throw, seats, driving, snap, movement, collision, interaction retry, keypad, turnwheel, lockpick, private cutscene, pickup race, drops, container, purchase, rifle, dart recovery, flashlight, late join, inventory reconnect, restart")
 
     def listen(self):
         self.start(dedicated=False)
@@ -503,6 +580,7 @@ class Scenario:
         self.drive(self.server, "Host", roster, [self.server, client])
         self.drive(client, "Ada", roster, [self.server, client])
         self.panels(self.server, client, "Host")
+        self.physics(self.server, client, "Host", "Ada", roster)
         self.devices(self.server, client, "Host", "Ada")
         self.inventories(self.server, client, "Host", "Ada")
         self.combat(self.server, client, "Host", "Ada")
@@ -510,7 +588,7 @@ class Scenario:
         self.state(self.server, ["Host"])
         self.pose(self.server, ["Host"])
         self.stop(self.server)
-        print("PASS listen host + 1 client: movement, interactions in both directions, turnwheel, lockpick, private cutscene, container trade, purchase, bidirectional shots, dart recovery, flashlight, host identity, departure")
+        print("PASS listen host + 1 client: bidirectional carry, throw, seats, driving, snap, movement, interactions in both directions, turnwheel, lockpick, private cutscene, container trade, purchase, bidirectional shots, dart recovery, flashlight, host identity, departure")
 
 
 def main():

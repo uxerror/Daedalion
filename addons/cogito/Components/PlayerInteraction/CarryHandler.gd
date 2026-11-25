@@ -18,7 +18,8 @@ func start_carrying(_carried_object):
 
 func stop_carrying():
 	carried_object = null
-	pic.targeting.rebuild_interaction_prompts() # Ensures the drop prompt gets deleted
+	if pic.is_inside_tree():
+		pic.targeting.rebuild_interaction_prompts() # Ensures the drop prompt gets deleted
 
 
 func get_carryable_destination_point(distance_offset: float) -> Vector3:
@@ -39,6 +40,10 @@ func get_carryable_destination_point(distance_offset: float) -> Vector3:
 
 	var destination_point = pic.carryable_position.global_position + (distance_offset + safe_distance_offset) * looking_vector
 
+	if pic.network_interactions:
+		return pic.network_interactions.get_parent().carry.clamp_anchor(
+			pic, carried_object_parent, destination_point
+		)
 	var interaction_raycast := pic.interaction_raycast
 	if interaction_raycast.is_colliding():
 		var collision_point = interaction_raycast.get_collision_point()

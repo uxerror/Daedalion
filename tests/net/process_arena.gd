@@ -44,10 +44,16 @@ class Driver:
 	var doorway_ticks := 0
 	var combat_lane := false
 	var trigger_ticks := 0
+	var throwing := false
 
 	func sample(actor: CogitoPlayer, sequence: int) -> CogitoPlayerCommand:
 		var command := super.sample(actor, sequence)
-		if combat_lane:
+		if throwing:
+			throwing = false
+			command.add_edge(CogitoPlayerCommand.Action.PRIMARY)
+			command.held = 1 << CogitoPlayerCommand.Action.PRIMARY
+			return command
+		if combat_lane and doorway_ticks == 0:
 			command.yaw = 0
 			command.neck_yaw = 0
 			command.pitch = 0
@@ -150,8 +156,21 @@ func _physics_process(_delta: float) -> void:
 		"cutscene": $Cutscene.player_reference != null,
 		"cut_used": $Cutscene.has_been_triggered,
 	}
+	if "received_bytes" in multiplayer.multiplayer_peer:
+		data.rx = multiplayer.multiplayer_peer.received_bytes
 	data.merge(_inventory_sample())
 	data.merge(_combat_sample())
+	var box: RigidBody3D = $CarryBox
+	var crate_pos := box.global_position
+	var vehicle_pos: Vector3 = $Vehicle.global_position
+	var local := CogitoNet.local_player()
+	data["crate"] = [crate_pos.x, crate_pos.y, crate_pos.z]
+	data["rest"] = box.sleeping
+	data["slot_id"] = $Slot.snapped_id
+	data["carrying"] = local != null and local.player_interaction_component.carrying.is_carrying
+	data["seat"] = $Seat.occupant_id
+	data["driver"] = $Vehicle.occupant_id
+	data["vehicle"] = [vehicle_pos.x, vehicle_pos.y, vehicle_pos.z]
 	print("NET POS ", JSON.stringify(data))
 
 
@@ -304,6 +323,13 @@ func _presented(_id: String, _revision: int, _event: StringName) -> void:
 
 func _execute(order: Dictionary) -> void:
 	match order.op:
+		"physics_stage":
+			stage_physics(CogitoNet.player_world, order.place, order.first)
+		"prepare_grab":
+			var api := CogitoNet.player_world.interactions
+			_pickup_request = api.make_request($CarryBox/CarryableComponent, &"interact2")
+		"throw":
+			_driver.throwing = true
 		"combat_stage":
 			_combat_stage(order.first)
 		"fire":
@@ -396,3 +422,32 @@ func _execute(order: Dictionary) -> void:
 			api.dispatch(request)
 			if order.get("retry", false):
 				api.dispatch(request)
+
+
+## Put the actors at the entrance to each fixture lane. Subsequent movement uses commands.
+func stage_physics(players: Node, place: String, first: String) -> void:
+	var crate: RigidBody3D = $CarryBox
+	var center := Vector3(6, 0.05, -12.3)
+	if place == "seat":
+		center = $Seat.position + Vector3(0, 0, 1.25)
+	elif place == "vehicle":
+		center = $Vehicle.position + Vector3(0, 0, 1.25)
+	elif place == "slot":
+		center = $Slot.position + Vector3(0, 0, 3.4)
+	center.y = 0.05
+	for record: Dictionary in players.get_parent().records():
+		var actor: CogitoPlayerAdvanced = players.avatar_for(record.player_id).actor
+		actor.player_attributes.strength.value_current = 6
+		var leading: bool = first in [record.display_name, record.player_id]
+		var offset := -0.45 if leading else 0.65
+		actor.position = center + Vector3.RIGHT * offset
+		actor.body.rotation = Vector3.ZERO
+		actor.neck.rotation = Vector3.ZERO
+		actor.head.rotation = Vector3.ZERO
+		actor.velocity = Vector3.ZERO
+		players.mark_teleport(record.player_id)
+	if place in ["carry", "slot"]:
+		crate.freeze = true
+		crate.global_transform = Transform3D(Basis.IDENTITY, center + Vector3(0, 1.25, -1.4))
+		crate.linear_velocity = Vector3.ZERO
+		crate.angular_velocity = Vector3.ZERO

@@ -2,6 +2,7 @@
 extends Node3D
 class_name CogitoSnapSlot
 
+signal net_changed(event: StringName)
 signal object_placed
 signal object_removed
 signal object_state_updated(interaction_text:String)
@@ -47,6 +48,8 @@ var interaction_text = null
 var interaction_nodes : Array[Node]
 var cogito_properties : CogitoProperties = null
 var player_interaction_component : PlayerInteractionComponent
+## Stable MP2 address of the body occupying this slot.
+@onready var snapped_id := ""
 
 
 var is_holding_object : bool:
@@ -56,6 +59,10 @@ var is_holding_object : bool:
 		if snap_shape:
 			snap_shape.visible = !is_holding_object
 		
+		if has_meta(&"cogito_net_world"):
+			interaction_text = interaction_text_to_remove if value else interaction_text_to_place
+			return
+
 		if is_holding_object:
 			object_placed.emit()
 			interaction_text = interaction_text_to_remove
@@ -113,6 +120,9 @@ func place_item():
 
 
 func place_carryable(world_carryable: Node3D):
+	if has_meta(&"cogito_net_world"):
+		_snap_online(world_carryable)
+		return
 	if !world_carryable:
 		return
 	if !world_carryable.is_class("RigidBody3D"):
@@ -136,6 +146,9 @@ func remove_object():
 
 
 func _on_body_entered_snap_area(body : Node3D):
+	if has_meta(&"cogito_net_world"):
+		_snap_online(body)
+		return
 	if !expected_object:
 		return
 	
@@ -153,6 +166,8 @@ func _on_body_entered_snap_area(body : Node3D):
 
 
 func _on_body_exited_snap_area(body: Node3D):
+	if has_meta(&"cogito_net_world"):
+		return
 	if !expected_object:
 		return
 	if body is CogitoObject and instanced_expected_object.cogito_name == body.cogito_name:
@@ -190,3 +205,91 @@ func save():
 		
 	}
 	return state_dict
+
+
+func _snap_online(body: Node3D) -> void:
+	if not multiplayer.is_server() or not is_active or is_holding_object or not body is RigidBody3D:
+		return
+	if not body is CogitoObject or not instanced_expected_object:
+		return
+	var matches_scene := body.scene_file_path == expected_object.resource_path
+	var matches_name: bool = (
+		not body.cogito_name.is_empty() and body.cogito_name == instanced_expected_object.cogito_name
+	)
+	if not (matches_scene or matches_name) or body.has_meta(&"net_snap_slot"):
+		return
+	var world: Node = get_meta(&"cogito_net_world")
+	var id: String = world.entities.id_for(body)
+	if id.is_empty():
+		return
+	snapped_id = id
+	body.set_meta(&"net_snap_slot", self)
+	body.tree_exiting.connect(release_body.bind(body), CONNECT_ONE_SHOT)
+	for component in body.get_children():
+		if component is CogitoCarryableComponent and component.is_being_carried:
+			component.leave()
+	body.freeze = true
+	body.linear_velocity = Vector3.ZERO
+	body.angular_velocity = Vector3.ZERO
+	body.global_transform = snap_position.global_transform
+	is_holding_object = true
+	object_placed.emit()
+	object_state_updated.emit(interaction_text)
+	net_changed.emit(&"placed")
+	present_net_event(&"placed")
+
+
+## Re-grabbing or removing the same body vacates the slot once.
+func release_body(body: Node3D) -> void:
+	if body.get_meta(&"net_snap_slot", null) != self:
+		return
+	body.remove_meta(&"net_snap_slot")
+	if body.tree_exiting.is_connected(release_body.bind(body)):
+		body.tree_exiting.disconnect(release_body.bind(body))
+	snapped_id = ""
+	is_holding_object = false
+	object_removed.emit()
+	object_state_updated.emit(interaction_text)
+	net_changed.emit(&"removed")
+	present_net_event(&"removed")
+
+
+## Restore slot occupancy independently of the body's snapshot stream.
+func net_state() -> Dictionary:
+	return {"occupied": is_holding_object, "object": snapped_id}
+
+
+## Silent baseline and live state use the same side-effect-free visual update.
+func apply_net_state(state: Dictionary, _silent: bool) -> void:
+	snapped_id = state.object
+	is_holding_object = state.occupied
+	for component in interaction_nodes:
+		component.interaction_text = interaction_text
+
+
+## Play a live placement or removal sound.
+func present_net_event(event: StringName) -> void:
+	var sound := object_placement_sound if event == &"placed" else object_removed_sound
+	if sound:
+		CogitoAudio.play_sound_3d_in(self, sound, global_position)
+
+
+## Remove the slot's tree-exit subscription before the level or the session disappears.
+func net_unbind() -> void:
+	if not has_meta(&"cogito_net_world") or snapped_id.is_empty():
+		return
+	var world: Node = get_meta(&"cogito_net_world")
+	var body: Node = world.entities.objects.get(snapped_id)
+	if is_instance_valid(body) and body.has_meta(&"net_snap_slot"):
+		body.remove_meta(&"net_snap_slot")
+		if body.tree_exiting.is_connected(release_body.bind(body)):
+			body.tree_exiting.disconnect(release_body.bind(body))
+
+
+func _exit_tree() -> void:
+	net_unbind()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE and is_instance_valid(instanced_expected_object):
+		instanced_expected_object.free()

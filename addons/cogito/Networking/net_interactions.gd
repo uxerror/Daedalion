@@ -9,7 +9,7 @@ const WORLD := preload("net_world_state.gd")
 const AVATAR := preload("net_avatar.gd")
 const SESSION := preload("net_session.gd")
 const DEVICES := preload("net_devices.gd")
-const UNSUPPORTED := "Unavailable online (MP4 carry and seats, MP5 death and respawn)"
+const UNSUPPORTED := "Unavailable online (MP5 damage and death, MP6 NPCs)"
 ## Retries older than this many requests per peer get "Old request" instead of a cached reply.
 const RESULT_CACHE := 64
 const DOUBLE_PRESS_MSEC := 300
@@ -80,10 +80,22 @@ func prompt(pic: PlayerInteractionComponent, component: InteractionComponent) ->
 ## Select a bound component from the local ray. The authority re-queries every action.
 func press(pic: PlayerInteractionComponent, input: String) -> void:
 	var target: Node = pic.targeting.interactable
-	if not target or not pic.player.is_local_presentation:
+	var held := pic.carrying.is_carrying
+	if held:
+		target = pic.carrying.carried_object.get_parent()
+	if not target or not pic.player.is_local_presentation or not "interaction_nodes" in target:
 		return
 	for component: InteractionComponent in target.interaction_nodes:
 		if component.input_map_action != input or component.is_disabled:
+			continue
+		if (
+			held
+			and not (
+				component is PickupComponent
+				or component is ExtendedPickupInteraction
+				or component is BackpackComponent
+			)
+		):
 			continue
 		if not ACTIONS.supported(target, component):
 			pic.hint_prompt.emit(null, ACTIONS.hud_reason(UNSUPPORTED))
@@ -279,7 +291,7 @@ func _evaluate_action(
 	if phase.has("ok"):
 		return phase
 	var why := _actor_guard(peer, pic, component, request)
-	if why.is_empty():
+	if why.is_empty() and not (node is CogitoSittable and pic.player.current_seat == node):
 		why = ACTIONS.geometry(pic.player, node, component)
 	if not why.is_empty():
 		return {"ok": false, "reason": why}
@@ -326,7 +338,10 @@ func _actor_guard(
 ) -> String:
 	if request.expected_revision != world.revisions[request.entity_id]:
 		return "Stale revision"
-	if not pic.player.can_act() or pic.player.is_dead or pic._is_interaction_blocked(component):
+	if not pic.player.can_act() or pic.player.is_dead:
+		return "Posture blocks interaction"
+	var seated_use: bool = pic.player.is_sitting and component.get_parent() is CogitoSittable
+	if not seated_use and pic._is_interaction_blocked(component):
 		return "Posture blocks interaction"
 	var private_view := (
 		component is ReadableComponent
@@ -340,7 +355,10 @@ func _actor_guard(
 	var viewing := pic.player.is_showing_ui or _views.has(peer)
 	var entering_code: bool = request.action_id == "submit_code" and _views.get(peer) == component
 	if (
-		pic.carrying.is_carrying
+		(
+			pic.carrying.is_carrying
+			and pic.carrying.carried_object.get_parent() != component.get_parent()
+		)
 		or (viewing and not entering_code and not component.ignore_open_gui)
 	):
 		return "Actor busy"

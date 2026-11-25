@@ -33,6 +33,11 @@ func _on_parent_node_collision(_collided_node):
 			return
 	
 	if audio_stream_player_3d and !audio_stream_player_3d.playing and !is_delaying:
+		if parent.has_meta(&"cogito_net_world"):
+			var world: Node = parent.get_meta(&"cogito_net_world")
+			if not world.multiplayer.is_server():
+				return
+			world.get_parent().bodies.impact(parent, self)
 		audio_stream_player_3d.play()
 		impact_time_delay()
 

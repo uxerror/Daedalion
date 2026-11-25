@@ -83,6 +83,12 @@ func _physics_process(_delta):
 		carry_position = player_interaction_component.carrying.get_carryable_destination_point(carry_distance_offset)
 		parent_object.set_linear_velocity((carry_position - parent_object.global_position) * carrying_velocity_multiplier)
 		
+		if player_interaction_component.network_interactions:
+			var distance := carry_position.distance_to(parent_object.global_position)
+			if carrier.is_dead or carrier.is_sitting or distance >= drop_distance:
+				leave()
+			return
+
 		if player_interaction_component.wieldables.secondary_action_held and enable_manual_rotating:
 			player_interaction_component.set_mouselook_enabled(false)
 			is_being_rotated = true

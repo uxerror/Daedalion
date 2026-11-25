@@ -14,7 +14,10 @@ var _frame_view_events: Dictionary[int, InputEvent] = {}
 ## Collect action transitions between ticks and apply local mouse look at event frequency.
 func on_input(actor: CogitoPlayerAdvanced, event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
-		if actor.is_mouselook_active:
+		if _rotating(actor):
+			var api := actor.player_interaction_component.network_interactions
+			api.get_parent().carry.rotate_input(event.relative)
+		elif actor.is_mouselook_active:
 			_mouse_look(actor, event)
 	elif event is InputEventJoypadMotion and actor.is_mouselook_active:
 		match event.axis:
@@ -69,7 +72,13 @@ func sample(player: CogitoPlayer, sequence: int) -> CogitoPlayerCommand:
 	_pending = PackedByteArray()
 	_frame_view_events = _pending_view_events
 	_pending_view_events = {}
-	_stick_look(actor, 90.0, 120.0)
+	if _rotating(actor):
+		var pic := actor.player_interaction_component
+		pic.network_interactions.get_parent().carry.rotate_input(
+			_stick * pic.carrying.carried_object.gamepad_sensitivity
+		)
+	else:
+		_stick_look(actor, 90.0, 120.0)
 	if not actor.free_look_requested(command):
 		actor.body.rotation.y += actor.neck.rotation.y
 		actor.neck.rotation.y = 0.0
@@ -138,3 +147,13 @@ func apply_seated_look(actor: CogitoPlayerAdvanced, relative: Vector2) -> void:
 	actor.head.rotate_x(pitch if actor.INVERT_Y_AXIS else -pitch)
 	var limit := deg_to_rad(actor.current_seat.vertical_look_angle)
 	actor.head.rotation.x = clampf(actor.head.rotation.x, -limit, limit)
+
+
+func _rotating(actor: CogitoPlayerAdvanced) -> bool:
+	var pic := actor.player_interaction_component
+	return (
+		actor.network_movement_only
+		and pic.carrying.is_carrying
+		and pic.carrying.carried_object.enable_manual_rotating
+		and Input.is_action_pressed("action_secondary")
+	)

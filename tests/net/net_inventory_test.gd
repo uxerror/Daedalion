@@ -173,11 +173,11 @@ func test_pickup_race_partial_drop_and_container_conflict(_timeout := 15000) -> 
 			assert_bool(node.freeze).is_equal(peer != server)
 	var world := server.player_world.world
 	var version: int = world.revisions["runtime:1"]
-	var falling := world.entities.live_object("runtime:1") as Node3D
+	var falling := world.entities.live_object("runtime:1") as RigidBody3D
+	falling.freeze = true
 	falling.position.y += 0.5
 	var pose := falling.global_transform
-	server.player_world.spawner._physics_process(0.2)
-	_pump()
+	await _ticks(5)
 	assert_int(world.revisions["runtime:1"]).is_equal(version)
 	var replica := a.player_world.world.entities.live_object("runtime:1") as Node3D
 	assert_bool(replica.global_transform.is_equal_approx(pose)).is_true()

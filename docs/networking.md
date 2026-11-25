@@ -1,6 +1,6 @@
 # Multiplayer sessions
 
-Daedalion 1.4 MP3 gives each admitted identity a server-owned Advanced player and private inventory. The server simulates world interactions, pickups, shared containers, vendor transactions and equipped items. Hitscan, melee and ballistic impacts resolve in the shooter’s server world. The offline demo still starts from the main menu.
+Daedalion 1.4 MP4 gives each admitted identity a server-owned Advanced player and private inventory. The server simulates world interactions, pickups, shared containers, vendor transactions and equipped items. It also simulates rigid bodies, grants exclusive carry and seat ownership and drives vehicles from their occupant’s movement commands. Hitscan, melee and ballistic impacts resolve in the shooter’s server world. The offline demo still starts from the main menu.
 
 ## Try the Laboratory
 
@@ -328,9 +328,9 @@ level observers. An exhausted authored pickup leaves a removal record for late j
 Runtime drops use a server-minted `runtime:<number>` id. The spawn record identifies an
 item definition whose authored `drop_scene` supplies the prefab, or a registered level
 loot component whose `loot_bag_scene` supplies the bag. Player commands carry only slot
-and quantity information. The server simulates the rigid body and publishes changed poses
-at up to 5 Hz, including the final pose. Movement preserves the pickup's interaction revision
-so a falling item remains eligible for a request. Replicas freeze the body. Loot tables, bag timers
+and quantity information. Pickups use the shared MP4 body stream. Movement preserves the pickup's
+interaction revision so a falling item remains eligible for a request. Grabbing and releasing the
+item advance its revision. Loot tables, bag timers
 and respawns run on the authority even with an empty roster.
 
 **Containers and vendors.** An MP2 open grants that player a container token. Several
@@ -436,11 +436,91 @@ pickup scene with a `PickupComponent` for recovery. To add a different behavior,
 effect only if the existing visual events are insufficient. Game-specific destructibles
 can publish their result with the MP2 state adapter contract above.
 
+## Rigid bodies, carry and seats
+
+Protocol 7 adds the level-scoped `Session/Players/Bodies` stream. Both server topologies
+run Godot physics at the project physics rate. The Advanced avatar's slide contacts apply
+the ordinary push impulse. Buoyancy, impact damage, hearing stimuli and authored carry
+callbacks run on the server. Client rigid bodies are frozen in kinematic mode with contact
+reporting and their physics callbacks disabled. Their shapes and layers remain available
+to local rays. The owning player collides with simulated bodies during server movement
+and displays the resulting translation on the client. There is no client movement prediction.
+
+| Body and observer | Delivery |
+| --- | --- |
+| Awake within 24 m of any avatar, or driven vehicle | Up to 20 Hz to interested peers |
+| Other awake body | Up to 5 Hz |
+| Observer farther than 96 m or in another level | No motion traffic to that peer. Server physics continues. |
+| First observation or return to interest | Reliable current pose at the next body tick after level acknowledgement, applied immediately |
+| Sleep or freeze | One reliable final pose, followed by silence until movement, wake or interest re-entry |
+
+Each ready observer receives at most one body batch per 20 Hz tick. A batch shares a level,
+epoch and physics tick. Its rows contain a registered id, transform, linear and angular
+velocity and playback flags. Ordinary motion uses unreliable channel 1. A batch containing
+an interest baseline or final rest pose uses reliable channel 2, ordered with runtime
+spawns. The entry tick distinguishes a new observation even if motion overtakes the baseline.
+Playback interpolates position and orientation 100 ms behind the server clock and extrapolates
+for at most 50 ms. The same playback draws the owner's carried body. An authored
+`ImpactSounds` collision sends a one-shot to ready listeners in body interest. Joining or
+returning to interest installs the pose silently.
+
+**Carrying and dragging.** The grab uses the existing MP2 component action, attribute check,
+reach and line of sight. The server grants one body to one actor. The reliable world row
+exposes its durable player id through `player_world.world.holders.get(body_id, "")`.
+A private grant token binds drop, throw and rotation input to the sending connection.
+The server computes the carry point from the avatar's eye, command aim, authored carry
+marker and body size. A server ray clamps that point to walls, including for a headless
+avatar. Secondary plus mouse or right stick rotates a manually rotatable body. The owner
+accumulates one vector per physics tick. The server accepts one finite vector of length
+at most 48 per tick and uses the authored rotation speed. Throw uses the server mass,
+force limits, stamina threshold and stamina drain. Break distance, avatar death, seat
+entry, level departure and disconnect release the grant. The owner's grab binding drops
+the body. Its own pickup action still works while carried.
+
+**Seats and vehicles.** A seat's ordinary MP2 interaction enters, swaps or exits. An auto
+seat uses its server area overlap. Manual area restrictions are checked for each actor.
+The seat row contains `occupant`, the durable player id or an empty string. The avatar
+snapshot carries the seat id and its seated basis. The server attaches the actor to the
+sit marker and the mannequin uses the prefab's sitting animation. Owner look is immediate.
+The server clamps the composed body and neck yaw and head pitch to the authored seat limits.
+The occupant can exit using the seat binding. In network sessions `AUTO` exit uses the
+authored leave marker, falling back to the original position if there is no marker.
+
+A vehicle has one driver. It consumes that occupant's validated movement vector from the
+ordinary command stream. Old command revisions are discarded at seat transitions and
+out-of-range driver axes reject the packet. Forward/back controls acceleration and
+left/right controls turning. A separate passenger sittable can follow the same vehicle
+as a child. Releasing the driver seat clears its drive input and momentum.
+
+**Snap slots.** The server's snap area matches the expected scene or its nonempty authored
+object name, releases the entering body's carrier and freezes it at `SnapPosition`. The
+slot's MP2 row carries `occupied` and `object` (body id). A second overlap cannot claim
+the occupied slot. Grabbing or destroying the snapped body releases its slot. Restoring a
+slot baseline updates its marker and prompt without playing a placement sound.
+
+**Authoring.** Place a `RigidBody3D` under the bound level, with matching content and a
+unique authored path or persistent id on each peer. The level registry indexes plain
+bodies as well as `CogitoObject` and `FloatableBody3D`. The spawn service registers runtime
+pickup bodies automatically. A custom spawn service must first create the matching object
+on each peer and register the same server-issued id with `world.entities.register_runtime`.
+Attach a direct `CogitoCarryableComponent` child to the interactable rigid body to allow
+grabs. An authored `CogitoBodyDrag` on a rigid body uses this same contract. For a seat,
+use `CogitoSittable` with its `BasicInteraction`, sit marker, look marker and optional area
+and exit marker. For driving, use `CogitoVehicle` and point `vehicle_node` at the
+level-local vehicle body. The vehicle itself is the default network target. A custom
+gameplay callback outside the body's physics loop must check its branch authority.
+
+**Bandwidth.** Motion traffic grows with the number of awake bodies inside each observer's
+interest radius. Sleep eliminates repeated rows. Reliable interest entry and world baselines
+add bursts. The process harness prints received RPC payload bytes per second per file-bus
+client during the physics scenario, including player snapshots, world events and inventory.
+These measurements exclude ENet, IP and link headers.
+
 ## Current limitations
 
 - One active level is supported. Translation includes network latency. Prediction, rollback and coordinated travel remain future work.
 - There is no lag compensation. The server tests targets where they are when the command is consumed. A moving target may have left the crosshair by then. Ballistic replicas can briefly overshoot until the authoritative impact arrives.
-- MP4 covers carrying, seats and general rigid-body physics. Recovered projectiles become independent pickups. Attachment to a moving struck body and synchronized debris are outside MP3. Low-rate pickup poses can visibly step during a fall.
+- Recovered projectiles become independent rigid pickups. Attachment to moving hit targets, procedural debris and individual NPC ragdoll bones need their own lifecycle and pose replication. NPC death and ragdoll dragging belong to MP6.
 - Private item-use HUD updates cover immediate attribute changes. Hits run the existing server damage/death callbacks. MP5 owns continuous attribute and death-state replication, death UI and respawn. Breakage and NPC reactions without an MP2 state adapter remain server-local. Element spread and persistent elemental visuals need MP7. Quest inventory flags retain their offline evaluation until MP8 defines a network quest subject.
 - Inventory retention lasts for one server process. MP9 covers saving world objects and player profiles to disk. The offline save format is unchanged.
 - NPCs and other gameplay subsystems still need their own replication. A linked custom object needs its own state adapter to appear on observers. Use level-authored motion/visual tracks for replica animations. Method, nested-animation and audio tracks on door/switch replica players are removed at bind.
@@ -452,6 +532,6 @@ can publish their result with the MP2 state adapter contract above.
 GODOT_BIN=/usr/bin/godot NICE='nice -n 19' bash tools/check.sh multiplayer
 ```
 
-The loopback ENet harness runs a dedicated server with two clients, then a listen host with one client. Separate temporary user directories preserve the MP0 identity, rejection, disconnect and restart checks. In a small arena it also checks stationary avatars, forward and turning distances, observation by the opposite peer, the late-join pose and removal. Clients drop every tenth command datagram after encoding its redundant history. A jump tap lands on a dropped datagram and the server and observer must see the jump height. The interaction checks also exercise a closed and open collision doorway, duplicate requests, rejection at distance, a button-linked door, wrong/right keypad codes a turnwheel-linked door, a lockpick-locked door and movement by another player during an owner-only cutscene. A third client verifies a silent baseline. In the listen topology the host opens the first door and the client opens the linked door. The same scenarios race an authored pickup, move a runtime drop between players, trade through a shared container and purchase from a vendor. The dedicated scenario also reopens the container on a late joiner and checks inventory after reconnect. The combat fixture checks bounded automatic shots against hitboxes, owner-private magazines, observed fire, projectile impact and recovery, light state and a silent late join. In the listen topology both players shoot the opposite player’s target. Each topology has a 70 s deadline. Select one with `python tools/check_multiplayer.py --scenario dedicated` or `--scenario listen`. Add `--file-transport` to exercise the same RPCs in separate processes with a local file queue.
+The loopback ENet harness runs a dedicated server with two clients, then a listen host with one client. Separate temporary user directories preserve the MP0 identity, rejection, disconnect and restart checks. In a small arena it also checks stationary avatars, forward and turning distances, observation by the opposite peer, the late-join pose and removal. Clients drop every tenth command datagram after encoding its redundant history. A jump tap lands on a dropped datagram and the server and observer must see the jump height. The interaction checks also exercise a closed and open collision doorway, duplicate requests, rejection at distance, a button-linked door, wrong/right keypad codes a turnwheel-linked door, a lockpick-locked door and movement by another player during an owner-only cutscene. A third client verifies a silent baseline. In the listen topology the host opens the first door and the client opens the linked door. The same scenarios race an authored pickup, move a runtime drop between players, trade through a shared container and purchase from a vendor. The dedicated scenario also reopens the container on a late joiner and checks inventory after reconnect. The combat fixture checks bounded automatic shots against hitboxes, owner-private magazines, observed fire, projectile impact and recovery, light state and a silent late join. In the listen topology both players shoot the opposite player’s target. The MP4 scenario races the same box, carries it through the open doorway, throws it and checks the final position within 3.5 cm on both peers. It contests and releases a seat, drives a chair and snaps the box for a late joiner. Listen mode repeats the carry in both directions. Each topology has a 103 s deadline. Select one with `python tools/check_multiplayer.py --scenario dedicated` or `--scenario listen`. Add `--file-transport` to exercise the same RPCs in separate processes with a local file queue.
 
 The regular gdUnit run includes the socket-free codec, jitter, wrap, interpolation, level interest, role, actor-lifecycle, entity identity, validation, concurrent commits, private interfaces, plate and baseline tests in `tests/net/`.

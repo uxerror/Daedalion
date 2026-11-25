@@ -32,6 +32,17 @@ func bind_network_players() -> void:
 	if marker:
 		if marker == CogitoSceneManager.get_player():
 			CogitoSceneManager.register_player(null)
+		if marker is CogitoPlayerAdvanced and marker.is_node_ready():
+			# Opening a session in a running solo level replaces the original controller.
+			var held: Variant = marker.player_interaction_component.carrying.carried_object
+			if is_instance_valid(held):
+				held.leave()
+			var seat: CogitoSittable = marker.current_seat
+			if is_instance_valid(seat) and seat.player_node == marker:
+				seat._stand_up(false)
+				seat.player_node = null
+				seat.occupant_id = ""
+				marker.current_seat = null
 		_network_start = marker.transform
 		marker.free()
 	if is_node_ready():

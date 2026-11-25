@@ -5,6 +5,7 @@ class_name CogitoSittable
 signal object_state_updated(interaction_text: String) #used to display correct interaction prompts
 signal player_sit_down()
 signal player_stand_up()
+signal net_changed(event: StringName)
 
 #region Variables
 ## Name that will displayed when interacting. Leave blank to hide
@@ -168,7 +169,7 @@ func _ready():
 	if disable_carry:
 		carryable_components = get_child_carryable_components()
 		
-	if is_sat_on_start and player_node:
+	if is_sat_on_start and player_node and not CogitoNet.is_online():
 		interact(player_node.player_interaction_component)
 		BasicInteraction.is_disabled = false
 	
@@ -224,10 +225,12 @@ func _sit_down(play_sound: bool = true):
 	
 	is_occupied = true
 	player_sit_down.emit()
+	if has_meta(&"cogito_net_world"):
+		net_changed.emit(&"sit")
 
 
 func _stand_up(play_sound: bool = true):
-	if animation_player:
+	if animation_player and animation_player.is_inside_tree():
 		animation_player.play(animation_on_leave)
 	
 	#stand up audio
@@ -257,6 +260,8 @@ func _stand_up(play_sound: bool = true):
 	
 	is_occupied = false
 	player_stand_up.emit()
+	if has_meta(&"cogito_net_world"):
+		net_changed.emit(&"stand")
 
 
 func switch():
@@ -289,6 +294,12 @@ func set_state():
 
 
 func _on_sit_area_body_entered(body):
+	if has_meta(&"cogito_net_world"):
+		if sit_area_behaviour == SitAreaBehaviour.AUTO and body is CogitoPlayerAdvanced:
+			var pic: PlayerInteractionComponent = body.player_interaction_component
+			if pic.network_interactions and multiplayer.is_server() and not body.is_sitting:
+				pic.network_interactions.get_parent().seats.use(self, pic)
+		return
 	if body is CogitoPlayer and (not is_occupied or body == player_node):
 		player_node = body
 		player_in_sit_area = true
@@ -309,6 +320,8 @@ func _on_sit_area_body_entered(body):
 
 
 func _on_sit_area_body_exited(body):
+	if has_meta(&"cogito_net_world"):
+		return
 	if body == player_node:
 		player_in_sit_area = false
 		if player_node.is_sitting:
@@ -329,10 +342,16 @@ var interact_cooldown = 0.0
 
 
 func interact(player_interaction_component):
-	
 	var actor: CogitoPlayer = player_interaction_component.player
-	if not actor or (is_occupied and is_instance_valid(player_node) and actor != player_node):
-		return
+	if _net_interact(player_interaction_component):
+		pass # Online: the server's seat registry decided.
+	elif not actor or (is_occupied and is_instance_valid(player_node) and actor != player_node):
+		pass
+	else:
+		_interact_local(player_interaction_component, actor)
+
+
+func _interact_local(player_interaction_component, actor: CogitoPlayer) -> void:
 	player_node = actor
 	#Prevent entering fallen chair
 	if !is_occupied and _is_fallen():
@@ -443,3 +462,55 @@ func find_rigid_body() -> RigidBody3D:
 			return current as RigidBody3D
 		current = current.get_parent()
 	return null
+
+
+## Area restrictions are checked per server actor during the MP2 commit.
+func net_bind_authority() -> void:
+	player_node = null
+	BasicInteraction.is_disabled = false
+
+
+## Replica overlap callbacks never select a driver or move an avatar.
+func net_bind_replica() -> void:
+	net_bind_authority()
+
+
+## The reliable seat row also covers occupied seats outside body interest.
+func net_state() -> Dictionary:
+	return {"occupant": occupant_id}
+
+
+## Restore occupancy and visuals without firing sit/stand gameplay signals.
+func apply_net_state(state: Dictionary, _silent: bool) -> void:
+	occupant_id = state.occupant
+	is_occupied = not occupant_id.is_empty()
+	interaction_text = tr(interaction_text_when_on if is_occupied else interaction_text_when_off)
+	BasicInteraction.interaction_text = interaction_text
+	if enable_on_sit:
+		enable_on_sit.disabled = not is_occupied
+	if disable_carry:
+		for component in carryable_components:
+			component.is_disabled = is_occupied
+	for node in nodes_to_show_when_on:
+		node.visible = is_occupied
+	for node in nodes_to_hide_when_on:
+		node.visible = not is_occupied
+
+
+## Live seat sound is independent of late-join occupancy.
+func present_net_event(event: StringName) -> void:
+	if audio_stream_player_3d:
+		audio_stream_player_3d.stream = sit_sound if event == &"sit" else stand_sound
+		if audio_stream_player_3d.stream:
+			audio_stream_player_3d.play()
+
+
+## Online, seats are granted by the server's seat registry. Returns true when handled.
+func _net_interact(player_interaction_component) -> bool:
+	if not has_meta(&"cogito_net_world"):
+		return false
+	if multiplayer.is_server() and player_interaction_component.network_interactions:
+		player_interaction_component.network_interactions.get_parent().seats.use(
+			self, player_interaction_component
+		)
+	return true

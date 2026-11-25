@@ -35,6 +35,14 @@
 
 [ext_resource type="PackedScene" path="res://addons/cogito/Components/Properties/CogitoProperties.tscn" id="target_props"]
 
+[ext_resource type="PackedScene" path="res://addons/cogito/PackedScenes/carriable_box.tscn" id="carry"]
+[ext_resource type="PackedScene" path="res://addons/cogito/PackedScenes/snap_slot_metalbar.tscn" id="snap"]
+[ext_resource type="PackedScene" path="res://addons/cogito/DemoScenes/DemoPrefabs/cogito_vehicle.tscn" id="seat"]
+[ext_resource type="PackedScene" path="res://addons/cogito/DemoScenes/DemoPrefabs/chair_desk.tscn" id="vehicle"]
+
+[ext_resource type="Script" path="res://addons/cogito/CogitoNPC/cogito_body_drag.gd" id="drag"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Components/Interactions/CarryableComponent.tscn" id="grab"]
+
 [sub_resource type="Resource" id="empty_box"]
 resource_local_to_scene = true
 script = ExtResource("inventory")
@@ -261,3 +269,31 @@ material_properties = 1
 [node name="Hitbox" type="Node" parent="East" node_paths=PackedStringArray("health_attribute")]
 script = ExtResource("hitbox")
 health_attribute = NodePath("../Health")
+
+[node name="CarryBox" parent="." instance=ExtResource("carry")]
+position = Vector3(-32, 1, -28)
+metadata/cogito_persistent_id = "physics:box"
+
+[node name="Slot" parent="." instance=ExtResource("snap")]
+position = Vector3(6, 1.3, -22)
+expected_object = ExtResource("carry")
+
+[node name="Seat" parent="." instance=ExtResource("seat")]
+position = Vector3(12, 1, -20)
+disable_on_jump = false
+sit_marker_displacement = 0.0
+
+[node name="Vehicle" parent="." instance=ExtResource("vehicle")]
+position = Vector3(13.6, 1, -20)
+disable_on_jump = false
+freeze = true
+
+[node name="Draggable" type="RigidBody3D" parent="."]
+position = Vector3(-28, 1, -28)
+freeze = true
+script = ExtResource("drag")
+
+[node name="Shape" type="CollisionShape3D" parent="Draggable"]
+shape = SubResource("panel")
+
+[node name="CarryableComponent" parent="Draggable" instance=ExtResource("grab")]

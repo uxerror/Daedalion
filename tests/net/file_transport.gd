@@ -15,6 +15,7 @@ class FilePeer:
 	var outgoing := {}
 	var incoming: Array = []
 	var serial := 0
+	var received_bytes := 0
 
 	func _init(folder: String, number: int) -> void:
 		directory = folder
@@ -78,7 +79,9 @@ class FilePeer:
 		return OK
 
 	func _get_packet_script() -> PackedByteArray:
-		return incoming.pop_front()[3]
+		var packet: PackedByteArray = incoming.pop_front()[3]
+		received_bytes += packet.size()
+		return packet
 
 	func _get_available_packet_count() -> int:
 		return incoming.size()

@@ -21,6 +21,11 @@ func _ready():
 
 
 func _physics_process(delta):
+	if has_meta(&"cogito_net_world"):
+		var driving: bool = is_occupied and player_node and player_node.current_seat == self
+		if multiplayer.is_server() and driving:
+			_drive_command(delta)
+		return
 
 	if player_node and player_node.is_sitting and player_node.current_seat == self:
 		handle_input(delta)
@@ -64,3 +69,15 @@ func apply_momentum(delta):
 	velocity += acceleration
 	velocity *= momentum_damping
 	acceleration = Vector3.ZERO
+
+
+func _drive_command(delta: float) -> void:
+	var command: CogitoPlayerCommand = player_node.current_command
+	var target := vehicle_node as Node3D if vehicle_node else self
+	var axes := command.move if command.has_control else Vector2.ZERO
+	acceleration = target.global_basis.z * -axes.y * move_speed * delta
+	rotation_momentum -= axes.x * rotation_speed
+	apply_momentum(delta)
+	target.global_translate(velocity * delta)
+	target.rotate_y(rotation_momentum * delta)
+	vehicle_moved.emit()

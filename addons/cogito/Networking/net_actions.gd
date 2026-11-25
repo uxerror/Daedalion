@@ -30,6 +30,12 @@ static func supported(node: Node, component: InteractionComponent) -> bool:
 		return is_instance_valid(component.pickup) and component.pickup.get_parent() == node
 	if (
 		component is PickupComponent
+		or (
+			component is CogitoCarryableComponent
+			and node is RigidBody3D
+			and component.get_parent() == node
+		)
+		or (node is CogitoSittable and component == node.BasicInteraction)
 		or component is BackpackComponent
 		or (node is CogitoContainer and component.get_script() == BASIC)
 		or component is ReadableComponent
@@ -189,7 +195,11 @@ static func commit(
 		return {"ok": false, "reason": "Wrong code", "view": "wrong_code"}
 	var players: Node = pic.network_interactions.get_parent()
 	var pickup := component is PickupComponent or component is ExtendedPickupInteraction
-	if pickup or component is BackpackComponent:
+	if component is CogitoCarryableComponent:
+		reply = players.carry.grab(component, pic)
+	elif node is CogitoSittable and component == node.BasicInteraction:
+		reply = players.seats.use(node, pic)
+	elif pickup or component is BackpackComponent:
 		reply = players.spawner.collect(component, pic, action.action_id == &"hold")
 	elif node is CogitoButton and node.get_parent().has_method("net_trade"):
 		reply = node.get_parent().net_trade(pic, action.action_id == &"sell")
