@@ -46,7 +46,7 @@ var _ammo_quickslot_inventory : CogitoInventory
 func use(target) -> bool:
 	# Target should always be player? Null check to override using the CogitoSceneManager, which stores a reference to current player node
 	if CogitoNet.is_online() or (target is CogitoPlayer and target.network_movement_only):
-		return false
+		return _request_equip(target)
 	if target == null:
 		CogitoGlobals.debug_log(true,"WieldableItemPD.gd", "Bad target pass. Setting target to " + CogitoSceneManager.get_player().name )
 		target = CogitoSceneManager.get_player()
@@ -75,6 +75,16 @@ func use(target) -> bool:
 		CogitoGlobals.debug_log(true,"WieldableItemPD.gd", player_interaction_component.name + " is taking out wieldable " + name )
 		take_out()
 		return true
+
+
+func _request_equip(target: Node) -> bool:
+	if not target is CogitoPlayer or not target.has_meta(&"inventory_endpoint"):
+		return false
+	for stack in target.inventory_data.inventory_slots:
+		if stack and stack.inventory_item == self:
+			target.inventory_data.use_slot_data(stack.origin_index)
+			return true
+	return false
 
 
 # Functions for WIELDABLES
@@ -201,18 +211,16 @@ func switch_to_ammo_type(index: int) -> bool:
 ## The set is built once per item and its counts follow the inventory of passed_player_interaction_component
 ## (stored as player_interaction_component, like use() does).
 func get_quickslot_set(passed_player_interaction_component: PlayerInteractionComponent = null) -> CogitoQuickslotSet:
-	if (
-		passed_player_interaction_component
-		and passed_player_interaction_component.network_interactions
-	):
-		return null
 	if passed_player_interaction_component:
 		player_interaction_component = passed_player_interaction_component
 	if !ammo_quickslot_set or ammo_types.size() <= 1:
 		return null
 	if !_ammo_quickslot_set:
 		_ammo_quickslot_set = CogitoAmmoQuickslotEntry.create_set(self)
-	_watch_ammo_quickslot_inventory()
+	if player_interaction_component and player_interaction_component.network_interactions:
+		_ammo_quickslot_set.select(current_ammo_type)
+	else:
+		_watch_ammo_quickslot_inventory()
 	return _ammo_quickslot_set
 
 

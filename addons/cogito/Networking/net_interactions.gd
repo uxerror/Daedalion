@@ -9,7 +9,7 @@ const WORLD := preload("net_world_state.gd")
 const AVATAR := preload("net_avatar.gd")
 const SESSION := preload("net_session.gd")
 const DEVICES := preload("net_devices.gd")
-const UNSUPPORTED := "Unavailable online (MP3b weapons, MP4 carry and seats)"
+const UNSUPPORTED := "Unavailable online (MP4 carry and seats, MP5 death and respawn)"
 ## Retries older than this many requests per peer get "Old request" instead of a cached reply.
 const RESULT_CACHE := 64
 const DOUBLE_PRESS_MSEC := 300
@@ -542,3 +542,8 @@ func close_view(pic: PlayerInteractionComponent) -> void:
 			component.close(pic)
 		elif component.get_parent() is CogitoKeypad:
 			component.get_parent().close(pic)
+
+
+## True while the server holds a private interface grant for this actor.
+func has_view(peer: int) -> bool:
+	return _views.has(peer)

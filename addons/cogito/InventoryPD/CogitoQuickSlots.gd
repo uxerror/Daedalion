@@ -110,6 +110,8 @@ func on_inventory_updated(passed_inv: CogitoInventory) -> void:
 	for i in quickslot_containers.size():
 		var slot_data : InventorySlotPD = passed_inv.assigned_quickslots[i]
 		inventory_set.bind(i, CogitoItemQuickslotEntry.new(slot_data, passed_inv) if slot_data else null)
+	if player_interaction_component and player_interaction_component.network_interactions:
+		refresh_view_sets()
 
 
 func unbind_quickslot(quickslot_to_unbind: CogitoQuickslotContainer) -> void:
@@ -208,6 +210,9 @@ func get_view_context_set(view: CogitoQuickslotView) -> CogitoQuickslotSet:
 func get_wieldable_set() -> CogitoQuickslotSet:
 	if !player_interaction_component:
 		return null
+	if player_interaction_component.network_interactions:
+		var item := player_interaction_component.wieldables.equipped_wieldable_item
+		return item.get_quickslot_set(player_interaction_component) if item else null
 	var wieldable : CogitoWieldable = player_interaction_component.wieldables.equipped_wieldable_node
 	if !is_instance_valid(wieldable) or wieldable.is_queued_for_deletion():
 		return null

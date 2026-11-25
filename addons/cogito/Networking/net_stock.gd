@@ -62,6 +62,20 @@ func id_of(slot: InventorySlotPD) -> int:
 	return _ids.get(slot, 0) if slot else 0
 
 
+## Mint an id for a newly inserted stack even if an equip precedes the first inventory scan.
+func ensure_id(slot: InventorySlotPD) -> int:
+	if not _ids.has(slot):
+		_serial += 1
+		_ids[slot] = _serial
+	return _ids[slot]
+
+
+## Resolve the owner's private equipment id to the same mutable stack used by the UI.
+func equipped_stack() -> InventorySlotPD:
+	var row: Array = snapshot.get("rows", {}).get(snapshot.get("equipped", 0), [])
+	return data.inventory_slots[row[1]] if not row.is_empty() else null
+
+
 func _capture() -> Dictionary:
 	var rows := {}
 	var live := {}
@@ -69,10 +83,7 @@ func _capture() -> Dictionary:
 		var stack := data.inventory_slots[i]
 		if not stack or live.has(stack):
 			continue
-		var id := id_of(stack)
-		if not id:
-			_serial += 1
-			id = _serial
+		var id := ensure_id(stack)
 		live[stack] = id
 		stack.origin_index = i
 		var item := stack.inventory_item

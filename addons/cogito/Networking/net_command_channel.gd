@@ -3,8 +3,13 @@ extends RefCounted
 
 const REDUNDANCY := 4
 const MAX_EDGES := 32
-const MAX_FRAME := CogitoPlayerCommand.HEADER_SIZE + MAX_EDGES
-const MOVEMENT_MASK := (1 << (CogitoPlayerCommand.Action.FREE_LOOK + 1)) - 1
+const GENERATION_BYTES := 4
+const MAX_FRAME := CogitoPlayerCommand.HEADER_SIZE + MAX_EDGES + GENERATION_BYTES
+const ACTION := CogitoPlayerCommand.Action
+const MOVEMENT_MASK := (1 << (ACTION.FREE_LOOK + 1)) - 1
+const TRIGGER_MASK := (1 << ACTION.PRIMARY) | (1 << ACTION.SECONDARY)
+const WIELD_MASK := TRIGGER_MASK | (1 << ACTION.RELOAD) | (1 << ACTION.CHANGE_AMMO)
+const WIRE_MASK := MOVEMENT_MASK | WIELD_MASK
 
 var _history: Array[PackedByteArray] = []
 
@@ -18,8 +23,12 @@ func clear() -> void:
 func packet(command: CogitoPlayerCommand) -> PackedByteArray:
 	var frame := command.encode().slice(0, CogitoPlayerCommand.HEADER_SIZE)
 	var flags := CogitoPlayerCommand.TOGGLE_CROUCH | CogitoPlayerCommand.SUPPRESSED
-	frame.encode_u32(24, frame.decode_u32(24) & (MOVEMENT_MASK | flags))
-	frame.append_array(_movement_edges(command.edges))
+	frame.encode_u32(24, frame.decode_u32(24) & (WIRE_MASK | flags))
+	frame.encode_float(12, wrapf(command.yaw, -PI, PI))
+	frame.append_array(_wire_edges(command.edges))
+	var end := frame.size()
+	frame.resize(end + GENERATION_BYTES)
+	frame.encode_u32(end, command.wield_generation)
 	_history.append(frame)
 	if _history.size() > REDUNDANCY:
 		_history.pop_front()
@@ -30,7 +39,7 @@ func packet(command: CogitoPlayerCommand) -> PackedByteArray:
 	return data
 
 
-## Rejects malformed packets atomically and limits wire input to locomotion.
+## Rejects malformed packets atomically and limits wire input to movement and wield actions.
 static func decode(data: PackedByteArray) -> Array[CogitoPlayerCommand]:
 	var result: Array[CogitoPlayerCommand] = []
 	if data.size() > REDUNDANCY * (MAX_FRAME + 1):
@@ -39,26 +48,45 @@ static func decode(data: PackedByteArray) -> Array[CogitoPlayerCommand]:
 	while offset < data.size():
 		var size := int(data[offset])
 		offset += 1
-		if size > MAX_FRAME or offset + size > data.size() or result.size() == REDUNDANCY:
+		if size < CogitoPlayerCommand.HEADER_SIZE + GENERATION_BYTES or size > MAX_FRAME:
 			return []
-		var command := CogitoPlayerCommand.decode(data.slice(offset, offset + size))
+		if offset + size > data.size() or result.size() == REDUNDANCY:
+			return []
+		var end := offset + size - GENERATION_BYTES
+		var command := CogitoPlayerCommand.decode(data.slice(offset, end))
 		if not command:
+			return []
+		command.wield_generation = data.decode_u32(end)
+		if _invalid_wield_aim(command):
 			return []
 		command.yaw = wrapf(command.yaw, -PI, PI)
 		command.pitch = clampf(command.pitch, -PI / 2, PI / 2)
 		command.neck_yaw = clampf(command.neck_yaw, -PI, PI)
-		command.held &= MOVEMENT_MASK
-		command.edges = _movement_edges(command.edges)
+		command.held &= WIRE_MASK
+		command.edges = _wire_edges(command.edges)
 		result.append(command)
 		offset += size
 	return result
 
 
-static func _movement_edges(edges: PackedByteArray) -> PackedByteArray:
-	var movement := PackedByteArray()
+static func _wire_edges(edges: PackedByteArray) -> PackedByteArray:
+	var filtered := PackedByteArray()
 	for edge in edges:
-		if (edge & ~CogitoPlayerCommand.RELEASE) <= CogitoPlayerCommand.Action.FREE_LOOK:
-			movement.append(edge)
-			if movement.size() == MAX_EDGES:
+		if WIRE_MASK & (1 << (edge & ~CogitoPlayerCommand.RELEASE)):
+			filtered.append(edge)
+			if filtered.size() == MAX_EDGES:
 				break
-	return movement
+	return filtered
+
+
+static func _invalid_wield_aim(command: CogitoPlayerCommand) -> bool:
+	# Allow for the nearest float32 representation of pi at the wire boundary.
+	if absf(command.yaw) <= PI + 1e-6 and absf(command.pitch) <= PI / 2 + 1e-6:
+		if absf(command.neck_yaw) <= PI + 1e-6:
+			return false
+	if command.held & WIELD_MASK:
+		return true
+	for edge in command.edges:
+		if WIELD_MASK & (1 << (edge & ~CogitoPlayerCommand.RELEASE)):
+			return true
+	return false

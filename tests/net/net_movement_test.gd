@@ -88,3 +88,19 @@ func test_interpolation_extrapolation_and_discontinuities() -> void:
 	var forced := _frame(52, 101)
 	forced.revision = 1
 	assert_bool(timeline.push(forced)).is_true()
+
+
+func test_wield_command_has_generation_and_rejects_forged_aim() -> void:
+	var cmd := CogitoPlayerCommand.new()
+	cmd.wield_generation = 17
+	cmd.held = 1 << CogitoPlayerCommand.Action.PRIMARY
+	cmd.add_edge(CogitoPlayerCommand.Action.RELOAD)
+	var packet := CHANNEL.new().packet(cmd)
+	var frame := CHANNEL.decode(packet)[0]
+	assert_int(frame.wield_generation).is_equal(17)
+	assert_int(frame.held).is_equal(cmd.held)
+	assert_int(frame.edges[0]).is_equal(CogitoPlayerCommand.Action.RELOAD)
+	for offset in [13, 17, 21]:
+		var forged := packet.duplicate()
+		forged.encode_float(offset, 20.0)
+		assert_array(CHANNEL.decode(forged)).is_empty()

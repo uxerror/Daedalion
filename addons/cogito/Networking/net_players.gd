@@ -5,6 +5,9 @@ extends Node
 ## The local controller has its initial pose, or has been removed.
 signal local_changed(actor: CogitoPlayer)
 
+const COMBAT := preload("net_combat_events.gd")
+const PROJECTILES := preload("net_projectiles.gd")
+const PROFILE := preload("net_wield_profile.gd")
 const INVENTORY := preload("net_inventory.gd")
 const CONTAINERS := preload("net_containers.gd")
 const SPAWNER := preload("net_spawner.gd")
@@ -31,6 +34,9 @@ var interactions := INTERACTIONS.new()
 var inventory := INVENTORY.new()
 var containers := CONTAINERS.new()
 var spawner := SPAWNER.new()
+var combat := COMBAT.new()
+var projectiles := PROJECTILES.new()
+var _profiles := {}
 var _bindings := {}
 var _session: SESSION
 var _prefab: PackedScene
@@ -47,6 +53,10 @@ var _elapsed := 0.0
 
 
 func _ready() -> void:
+	combat.name = "Combat"
+	add_child(combat)
+	projectiles.name = "Projectiles"
+	add_child(projectiles)
 	inventory.name = "Inventory"
 	add_child(inventory)
 	containers.name = "Containers"
@@ -101,6 +111,7 @@ func _exit_tree() -> void:
 
 
 func _level_exiting() -> void:
+	projectiles.clear()
 	clear()
 	interactions.clear()
 	world.clear()
@@ -208,6 +219,12 @@ func _create(id: String, life: int, start: Transform3D, initial_pose: Dictionary
 		_prefab = load(AVATAR.PREFAB)
 	avatar.spawn(_prefab, _level, id, start, local, multiplayer.is_server())
 	avatar.actor.player_interaction_component.network_interactions = interactions
+	avatar.wield.actor = avatar.actor
+	avatar.wield.players = self
+	avatar.wield.player_id = id
+	avatar.wield.life = life
+	avatar.wield.owner_peer = _peer_by_id[id]
+	avatar.actor.set_meta(&"net_wield", avatar.wield)
 	inventory.attach(avatar.actor, id, _peer_by_id[id], life)
 	if not initial_pose.is_empty():
 		avatar.receive(initial_pose)
@@ -221,6 +238,8 @@ func _create(id: String, life: int, start: Transform3D, initial_pose: Dictionary
 func _send_spawn(peer: int, id: String) -> void:
 	var avatar := _avatars[id]
 	var frame := SNAPSHOT.capture(avatar.actor, _tick, avatar.revision)
+	var wield := avatar.wield
+	frame.wield = [wield.public_item, wield.light_on, wield.aiming]
 	_spawn.rpc_id(peer, _level_key, id, avatar.lifetime, frame)
 
 
@@ -231,6 +250,7 @@ func _spawn(key: String, id: String, life: int, frame: Dictionary) -> void:
 	if _avatars.has(id):
 		return
 	_create(id, life, Transform3D(Basis.IDENTITY, frame.position), frame)
+	_wield_state(id, life, frame.wield[0], frame.wield[1], frame.wield[2])
 
 
 func _remove(id: String) -> void:
@@ -250,6 +270,7 @@ func _remove(id: String) -> void:
 		if avatar.actor.player_hud.is_inventory_visible():
 			avatar.actor.player_hud.set_inventory_visibility(false)
 	containers.forget(peer)
+	avatar.wield.clear()
 	inventory.detach(peer, avatar.actor)
 	avatar.despawn()
 	if local:
@@ -285,9 +306,49 @@ func mark_teleport(id: String) -> void:
 			avatar.source.clear()
 
 
+## Load an authored simulation profile once per definition per session.
+func wield_profile(path: String) -> PROFILE:
+	if not _profiles.has(path):
+		var profile := PROFILE.new()
+		profile.configure(load(path) as WieldableItemPD)
+		_profiles[path] = profile
+	return _profiles[path]
+
+
+## Admitted remote peers that have installed this level's event baseline.
+func observers() -> Array[int]:
+	var peers: Array[int] = []
+	for peer: int in _ready_levels:
+		if peer_in_level(peer) and world.ready_for_events(peer):
+			peers.append(peer)
+	return peers
+
+
+## Equip state shares ordered channel 0 with avatar spawns.
+func publish_wield(id: String) -> void:
+	var avatar := avatar_for(id)
+	if not avatar:
+		return
+	var w := avatar.wield
+	for peer: int in _ready_levels:
+		if _visible(peer, id):
+			_wield_state.rpc_id(peer, id, avatar.lifetime, w.public_item, w.light_on, w.aiming)
+
+
+@rpc("authority", "call_remote", "reliable", 0)
+func _wield_state(id: String, life: int, path: String, on: bool, ads: bool) -> void:
+	var avatar := avatar_for(id)
+	if avatar and avatar.lifetime == life:
+		avatar.wield.apply_public(path, on, ads)
+
+
 func _physics_process(delta: float) -> void:
 	if _avatars.is_empty():
 		return
+	if local_actor and inventory.local:
+		var own := _avatars[_session.local_id].wield
+		local_actor.current_command.wield_generation = inventory.local.snapshot.get("generation", 0)
+		own.predict(local_actor.current_command, delta)
 	if not multiplayer.is_server():
 		if local_actor and local_actor.last_consumed_sequence >= 0:
 			var packet := command_channel.packet(local_actor.current_command)
@@ -295,6 +356,12 @@ func _physics_process(delta: float) -> void:
 				var avatar := _avatars[_session.local_id]
 				_commands.rpc_id(1, avatar.lifetime, avatar.revision, packet)
 		return
+	for avatar in _avatars.values():
+		avatar.wield.tick(delta)
+		if local_actor and avatar.actor == local_actor:
+			avatar.wield.reconcile(
+				local_actor.last_consumed_sequence, avatar.wield.accepted_sequence
+			)
 	_tick += 1
 	_elapsed += delta
 	var interval := 1.0 / clampi(snapshot_hz, 1, Engine.physics_ticks_per_second)
@@ -309,7 +376,10 @@ func _physics_process(delta: float) -> void:
 		var batch := []
 		for id in _avatars:
 			if _visible(peer, id):
-				batch.append(poses[id])
+				var pose: Array = poses[id]
+				if _peer_by_id[id] == peer:
+					pose = pose + [_avatars[id].wield.accepted_sequence]
+				batch.append(pose)
 		if not batch.is_empty():
 			_poses.rpc_id(peer, batch)
 
@@ -327,14 +397,16 @@ func _commands(life: int, revision: int, data: PackedByteArray) -> void:
 @rpc("authority", "call_remote", "unreliable", 1)
 func _poses(batch: Array) -> void:
 	for pose: Array in batch:
-		_receive_pose(pose[0], pose[1], pose[2])
+		_receive_pose(pose[0], pose[1], pose[2], pose[3] if pose.size() > 3 else -1)
 
 
-func _receive_pose(id: String, life: int, frame: Dictionary) -> void:
+func _receive_pose(id: String, life: int, frame: Dictionary, accepted := -1) -> void:
 	var avatar := avatar_for(id)
 	if avatar and avatar.timeline and avatar.lifetime == life:
 		var previous_revision := avatar.revision
 		avatar.receive(frame)
+		if avatar.actor == local_actor:
+			avatar.wield.reconcile(frame.ack, accepted)
 		if avatar.actor == local_actor and avatar.revision != previous_revision:
 			command_channel.clear()
 

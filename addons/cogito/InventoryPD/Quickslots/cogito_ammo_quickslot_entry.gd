@@ -83,12 +83,23 @@ func activate(context: Object) -> bool:
 	var pic := _get_player_interaction_component(context)
 	if !pic:
 		return false
+	if pic.network_interactions:
+		return _request_ammo(pic)
 	var wieldable := get_equipped_wieldable(pic)
 	if wieldable:
 		if is_current():
 			return false
 		return wieldable.change_ammo_to(ammo_index)
 	return _equip_with_this_ammo(pic)
+
+
+func _request_ammo(pic: PlayerInteractionComponent) -> bool:
+	var slot := _find_item_slot(pic.get_inventory())
+	if not slot or not pic.player.has_meta(&"inventory_endpoint"):
+		return false
+	var endpoint: Node = pic.player.get_meta(&"inventory_endpoint")
+	endpoint.submit("ammo", [slot.origin_index, endpoint.local.id_of(slot), ammo_index])
+	return true
 
 
 ## The wieldable node of item if the player has it equipped, otherwise null.

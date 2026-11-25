@@ -8,6 +8,7 @@ const GRID := preload("net_grid.gd")
 const ACTIONS := preload("net_actions.gd")
 const SCHEMAS := {
 	"use": 2,
+	"ammo": 3,
 	"move": 5,
 	"drop": 3,
 	"combine": 3,
@@ -144,10 +145,13 @@ func _refresh(peer: int, publish := true) -> void:
 	if not model:
 		return
 	var actor := model.data.owner as CogitoPlayer
-	var delta := model.refresh({"money": _values(actor.player_currencies)})
+	var extra: Dictionary = actor.get_meta(&"net_wield").private_fields(model)
+	extra.money = _values(actor.player_currencies)
+	var delta := model.refresh(extra)
 	if delta.is_empty() or not publish:
 		return
 	if peer == 1 and actor.player_hud is CogitoPlayerHudManager:
+		actor.player_interaction_component.wieldables.update_equipped()
 		_refresh_hud(actor, model)
 	if peer != 1 and get_parent().world.ready_for_events(peer) and get_parent().peer_in_level(peer):
 		_state.rpc_id(peer, actor.get_meta(&"inventory_life"), model.revision, delta, false)
@@ -198,6 +202,8 @@ func _state(life: int, revision: int, fields: Dictionary, full: bool) -> void:
 	if fields.has("attributes") and fields.size() == 1:
 		return
 	local.apply(fields, revision, full)
+	var slot := local.equipped_stack()
+	local.data.owner.get_meta(&"net_wield").set_owner_item(slot.inventory_item if slot else null)
 	var hud := local.data.owner.player_hud as CogitoPlayerHudManager
 	if hud and hud.inventory_interface.quick_slots.inventory_reference == local.data:
 		hud.inventory_interface.quick_slots.on_inventory_updated(local.data)
@@ -205,13 +211,13 @@ func _state(life: int, revision: int, fields: Dictionary, full: bool) -> void:
 
 ## Execute an authored use with the server-resolved actor and send private affected HUD values.
 func use_item(actor: CogitoPlayer, item: InventoryItemPD) -> String:
-	if not is_instance_valid(actor) or not multiplayer.is_server():
-		return "No avatar in level"
-	var peer: int = get_parent().peer_for_actor(actor)
+	var peer := 0
+	if is_instance_valid(actor) and multiplayer.is_server():
+		peer = get_parent().peer_for_actor(actor)
 	if not peer:
 		return "No avatar in level"
 	if item is WieldableItemPD:
-		return "Weapons await MP3b"
+		return "Select an inventory stack"
 	if not item.has_method("use"):
 		return "Item cannot be used"
 	var before := _values(actor.player_attributes)
@@ -221,11 +227,24 @@ func use_item(actor: CogitoPlayer, item: InventoryItemPD) -> String:
 	for key: String in before:
 		if before[key] == after.get(key):
 			after.erase(key)
-	if not after.is_empty() and peer > 1:
+	send_attributes(actor, after.keys())
+	return ""
+
+
+## Send immediate combat attribute updates through the same silent owner-only HUD path.
+func send_attributes(actor: CogitoPlayer, keys: Array) -> void:
+	var peer: int = get_parent().peer_for_actor(actor)
+	if peer <= 1 or not get_parent().world.ready_for_events(peer):
+		return
+	var pairs := {}
+	for key: String in keys:
+		var attr: CogitoAttribute = actor.player_attributes.get(key)
+		if attr:
+			pairs[key] = PackedFloat64Array([attr.value_current, attr.value_max])
+	if not pairs.is_empty():
 		var model: STOCK = _live[peer]
 		var life: int = actor.get_meta(&"inventory_life")
-		_state.rpc_id(peer, life, model.revision, {"attributes": after}, false)
-	return ""
+		_state.rpc_id(peer, life, model.revision, {"attributes": pairs}, false)
 
 
 ## Run an authored auto-consume on the authority after the triggering inventory commit.
@@ -350,6 +369,8 @@ func _operate(peer: int, model: STOCK, op: String, args: Array) -> String:
 		return ""
 	if not valid_stack(model, args):
 		return "Stack changed"
+	if op == "ammo":
+		return inv.owner.get_meta(&"net_wield").select_ammo(inv.inventory_slots[args[0]], args[2])
 	return _stack_op(model, op, args)
 
 
@@ -367,7 +388,11 @@ func _stack_op(model: STOCK, op: String, args: Array) -> String:
 	var ok := false
 	match op:
 		"use":
-			var reason := use_item(inv.owner, stack.inventory_item)
+			var reason: String
+			if stack.inventory_item is WieldableItemPD:
+				reason = inv.owner.get_meta(&"net_wield").equip(stack)
+			else:
+				reason = use_item(inv.owner, stack.inventory_item)
 			if reason.is_empty() and stack.inventory_item.has_method("is_consumable"):
 				GRID.spend(inv, stack, 1)
 			return reason

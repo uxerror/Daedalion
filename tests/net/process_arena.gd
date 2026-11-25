@@ -15,6 +15,9 @@ var _presentations := 0
 var _cutscene_starts := 0
 var _wheel_start := {}
 var _pickup_request := {}
+var _fires := 0
+var _launches := 0
+var _impacts := 0
 
 
 class LossChannel:
@@ -39,9 +42,20 @@ class Driver:
 	var progress := DRIVE_TICKS
 	var jumped := false
 	var doorway_ticks := 0
+	var combat_lane := false
+	var trigger_ticks := 0
 
 	func sample(actor: CogitoPlayer, sequence: int) -> CogitoPlayerCommand:
 		var command := super.sample(actor, sequence)
+		if combat_lane:
+			command.yaw = 0
+			command.neck_yaw = 0
+			command.pitch = 0
+			if trigger_ticks:
+				command.add_edge(CogitoPlayerCommand.Action.PRIMARY)
+				command.held = 1 << CogitoPlayerCommand.Action.PRIMARY
+				trigger_ticks -= 1
+			return command
 		if doorway_ticks > 0:
 			doorway_ticks -= 1
 			command.yaw = 0.0
@@ -71,6 +85,13 @@ func _ready() -> void:
 	CogitoNet.player_world.bind_level(self, Transform3D(Basis.IDENTITY, Vector3.UP), "arena")
 	CogitoNet.player_world.interactions.result_received.connect(_result)
 	CogitoNet.player_world.world.presented.connect(_presented)
+	CogitoNet.player_world.combat.presented.connect(_combat_event)
+	CogitoNet.player_world.projectiles.launched.connect(
+		func(_id: int, _node: Node3D): _launches += 1
+	)
+	CogitoNet.player_world.projectiles.ended.connect(
+		func(_id: int, impact: bool): _impacts += int(impact)
+	)
 	if not CogitoNet.is_server():
 		_loss = LossChannel.new()
 		CogitoNet.player_world.command_channel = _loss
@@ -130,6 +151,7 @@ func _physics_process(_delta: float) -> void:
 		"cut_used": $Cutscene.has_been_triggered,
 	}
 	data.merge(_inventory_sample())
+	data.merge(_combat_sample())
 	print("NET POS ", JSON.stringify(data))
 
 
@@ -212,6 +234,9 @@ func _inventory_order(order: Dictionary) -> void:
 		return
 	var slot := slots[0]
 	var args := [slot.origin_index, model.id_of(slot)]
+	if order.action == "use":
+		api.submit("use", args)
+		return
 	if order.action == "drop":
 		args.append(1)
 	else:
@@ -220,6 +245,53 @@ func _inventory_order(order: Dictionary) -> void:
 			[target.data.inventory_slots.find(null), 1, 0, box.token, box.local.revision]
 		)
 	api.submit(order.action, args)
+
+
+func _combat_event(_actor: CogitoPlayerAdvanced, event: StringName, _point: Vector3) -> void:
+	_fires += int(event == &"fire")
+
+
+func _combat_sample() -> Dictionary:
+	var wielded := {}
+	var ammo := {}
+	var players := CogitoNet.player_world
+	for record in CogitoNet.players():
+		var avatar := players.avatar_for(record.player_id)
+		if not avatar:
+			continue
+		wielded[record.display_name] = [avatar.wield.public_item.get_file(), avatar.wield.light_on]
+		var guns := avatar.actor.inventory_data.find_slots("Laser Rifle")
+		if not guns.is_empty():
+			ammo[record.display_name] = guns[0].inventory_item.charge_current
+	return {
+		"wield": wielded,
+		"ammo": ammo,
+		"shots": _fires,
+		"flights": _launches,
+		"impacts": _impacts,
+		"west": $West/Health.value_current,
+		"east": $East/Health.value_current,
+		"dart": players.world.entities.live_object("runtime:2") != null,
+	}
+
+
+func _combat_stage(first: String) -> void:
+	var players := CogitoNet.player_world
+	for record in CogitoNet.players():
+		var actor := players.avatar_for(record.player_id).actor
+		actor.position = Vector3(-24 if record.display_name == first else -19, 0.1, 0)
+		actor.velocity = Vector3.ZERO
+		players.mark_teleport(record.player_id)
+		for asset: String in ["LaserRifle", "Flashlight", "Dart"]:
+			var stack := InventorySlotPD.new()
+			stack.inventory_item = load(
+				"res://addons/cogito/InventoryPD/Items/Cogito_%s.tres" % asset
+			)
+			if asset == "Dart" and record.display_name != first:
+				continue
+			GRID.insert(actor.inventory_data, stack, 1, false)
+		actor.inventory_data.find_slots("Laser Rifle")[0].inventory_item.charge_current = 2
+		players.inventory.flush_actor(actor)
 
 
 func _result(result: Dictionary) -> void:
@@ -232,6 +304,26 @@ func _presented(_id: String, _revision: int, _event: StringName) -> void:
 
 func _execute(order: Dictionary) -> void:
 	match order.op:
+		"combat_stage":
+			_combat_stage(order.first)
+		"fire":
+			_driver.combat_lane = true
+			_driver.trigger_ticks = order.ticks
+			if _loss:
+				_loss.muted = false
+		"near_dart":
+			var players := CogitoNet.player_world
+			var dart := players.world.entities.live_object("runtime:2") as Node3D
+			for record in CogitoNet.players():
+				if record.display_name == order.who:
+					var actor := players.avatar_for(record.player_id).actor
+					actor.position = dart.position + Vector3(0.4, 0.0, 0.8)
+					actor.position.y = 0.1
+					players.mark_teleport(record.player_id)
+		"take_dart":
+			var players := CogitoNet.player_world
+			var dart := players.world.entities.live_object("runtime:2")
+			players.interactions.submit(dart.get_node("PickupComponent"), &"interact")
 		"inventory_stage":
 			_inventory_stage(order)
 		"inventory":

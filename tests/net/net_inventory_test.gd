@@ -111,9 +111,9 @@ func test_combine_swap_and_wieldable_use(_timeout := 15000) -> void:
 	api.result_received.connect(func(reply: Dictionary): responses.append(reply))
 	var revision := api.local.revision
 	_retry(host, "use", [gun.origin_index, api.local.id_of(gun)])
-	assert_str(responses.back().reason).is_equal("Weapons await MP3b")
-	assert_int(api.local.revision).is_equal(revision)
-	assert_bool(gun.inventory_item.is_being_wielded).is_false()
+	assert_str(responses.back().reason).is_empty()
+	assert_int(api.local.revision).is_equal(revision + 1)
+	assert_bool(gun.inventory_item.is_being_wielded).is_true()
 
 
 func _near(server: Facade, who: Facade, pos: Vector3) -> void:

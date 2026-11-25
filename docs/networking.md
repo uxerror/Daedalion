@@ -1,6 +1,6 @@
 # Multiplayer sessions
 
-Daedalion 1.4 MP3a gives each admitted identity a server-owned Advanced player and private inventory. The server simulates world interactions, pickups, shared containers and vendor transactions. The offline demo still starts from the main menu.
+Daedalion 1.4 MP3 gives each admitted identity a server-owned Advanced player and private inventory. The server simulates world interactions, pickups, shared containers, vendor transactions and equipped items. Hitscan, melee and ballistic impacts resolve in the shooter’s server world. The offline demo still starts from the main menu.
 
 ## Try the Laboratory
 
@@ -136,7 +136,7 @@ Reliable spawn RPCs use the stable session endpoint `Session/Players`. A client 
 | Another player on a client | Snapshot playback updates the mannequin, including body yaw, head pitch and crouch height. The locomotion chart and device sampling are inactive. |
 | Client-owned avatar on either server | A per-avatar network source supplies commands to the same Advanced physics controller used offline. |
 
-The project uses 60 physics ticks per second by default. Commands use unreliable ordered channel 1. A packet contains the last four MP1a frames with byte lengths. Only movement actions go on the wire. The receiver checks lengths, action IDs and finite values, normalizes the move vector, wraps yaw and clamps pitch. It resolves the avatar from the RPC sender. Each controller consumes at most one new sequence per physics tick. The receive queue holds up to 24 frames, starts with a two-tick jitter window, skips unrecovered gaps, and expires to neutral after 12 ticks without a fresh frame. The packet budget is four per avatar per server tick. Wire sequences are uint32 and extend to the nearest sequence around the next expected tick using signed modular distance. This assumes consecutive accepted sequences differ by less than half the number space. ENet's adaptive packet throttle is disabled on every connection (`throttle_configure(5000, PACKET_THROTTLE_SCALE, 0)`): under RTT jitter it silently discards runs of unreliable sends on the sender side, longer than the four-frame redundancy can recover.
+The project uses 60 physics ticks per second by default. Commands use unreliable ordered channel 1. A packet contains the last four MP1a frames with byte lengths. Protocol 6 includes movement, primary, secondary, reload and change-ammo actions. Each frame ends with the owner’s last observed equip generation (uint32). The receiver checks lengths, action IDs and finite values, normalizes the move vector, wraps yaw and clamps pitch for movement. A combat frame with yaw or neck yaw outside ±π, or pitch outside ±π/2, invalidates the packet. It resolves the avatar from the RPC sender. Each controller consumes at most one new sequence per physics tick. The receive queue holds up to 24 frames, starts with a two-tick jitter window, skips unrecovered gaps, and expires to neutral after 12 ticks without a fresh frame. The packet budget is four per avatar per server tick. Wire sequences are uint32 and extend to the nearest sequence around the next expected tick using signed modular distance. This assumes consecutive accepted sequences differ by less than half the number space. ENet's adaptive packet throttle is disabled on every connection (`throttle_configure(5000, PACKET_THROTTLE_SCALE, 0)`): under RTT jitter it silently discards runs of unreliable sends on the sender side, longer than the four-frame redundancy can recover.
 
 `CogitoNet.snapshot_hz` defaults to 25. After physics the server sends one batch on unreliable channel 1 per ready peer per snapshot tick. The batch contains the poses of every avatar sharing that observer’s `CogitoLevel` root. Each pose includes server tick, input acknowledgement, position, velocity, yaw, neck yaw, pitch, head height and posture/moving/seat state. The owner keeps local aim during ordinary updates. Remote playback uses a 100 ms buffer and extrapolates velocity for at most 50 ms. A position discontinuity over 4 m clears the history. After forcing a server teleport, look or in-place respawn, call `CogitoNet.player_world.mark_teleport(player_id)`. The next pose revision resets local look and invalidates buffered input from before the change. A new incarnation starts with empty history.
 
@@ -305,7 +305,8 @@ is 0 or 1. The first cell and quickslot both have index 0.
 | `move` | source, id, destination, quantity, rotated | Move, swap, split or merge if both footprints and the quantity fit. |
 | `combine` | source, id, target cell | Consume one of each ingredient and insert the authored recipe result. |
 | `drop` | source, id, quantity | Create the authored pickup in front of the server avatar and debit its stack. |
-| `use` | source, id | Invoke the item with the server actor. Successful consumables spend one. |
+| `use` | source, id | Invoke the item with the server actor. Selecting a wieldable equips its stack, switches to it, or puts it away if already equipped. |
+| `ammo` | source, id, ammo index | Select the authored pistol ammo type, equip that stack and start reloading after a change. |
 | `bind` / `unbind` | source, id, quickslot / quickslot | Assign or clear the owner's binding. |
 | `put`, `take`, `external_move` | source, id, destination, quantity, rotated, token, container revision | Move to, from or within the granted container. |
 | `take_all`, `close` | token, container revision | Take fitting quantities or release the grant. |
@@ -318,8 +319,7 @@ contains neither player inventories nor container contents.
 **Item use.** The server calls `use(actor)` with the resolved player and returns changed
 attribute current/maximum pairs to that owner. HUD displays receive `attribute_restored`.
 Consumables, keys, ammo hints, currency items and combine recipes use their authored
-behavior. Wieldable activation and in-place reloading return the weapon availability hint.
-Their stacks can still move, retain charge, enter a container and drop.
+behavior. Holding the use action over a wieldable can pick it up and equip it. Holding over compatible ammo can transfer units into reserve and start a timed reload if they fit.
 
 **Pickups and loot.** A press goes through MP2 reach, sight and revision checks. Extended
 pickups offer `press` and `hold`. The authority also processes its avatar's auto-pickup
@@ -362,11 +362,86 @@ and attach a `BasicInteraction` to its collider as in the shipped container scen
 entity id if the authored path can change. A custom interface can read the active stock
 and token from `CogitoNet.player_world.containers` after the private open.
 
+## Wieldables
+
+Selecting an inventory cell, quickslot or wheel entry sends the same revision-checked
+`use(source, stack_id)` transaction. The private inventory baseline and deltas include
+`equipped` (zero for empty hands), `generation` and `reloading`. Use
+`inventory.local.equipped_stack()` for the owner stack. The existing stack row carries
+magazine charge and ammo type. Moving the stack preserves the selection. Removing or
+transferring it cancels reload and clears the selection. Reconnecting retains charges and
+reserve ammo and starts a fresh avatar with empty hands.
+
+`player_world.avatar_for(id).wield` exposes `public_item` (definition resource path),
+`light_on` and `aiming`. The server sends these fields with the initial avatar spawn and
+on changes over reliable channel 0. The mannequin uses a head-mounted spotlight for the
+flashlight. It has no hand prop or third-person weapon animation. The owner's view uses the
+authored first-person model and visual animation tracks.
+
+**Input and timing.** The 60 Hz movement command carries the trigger held state and ordered
+action edges with the same yaw, pitch, sequence and redundant history as movement.
+This supports the automatic rifle without per-shot reliable requests. The server resolves
+the sender's avatar and equip generation. A delayed trigger from a previous selection cannot
+fire the next item. The server uses the rifle's authored firing delay, the pistol and melee
+action clip durations and the flashlight toggle interval. Reload runs for the authored
+reload clip duration. At completion the server counts matching reserve stacks, debits
+units according to their `reload_amount` and fills the magazine up to `charge_max`.
+Change-ammo cycles to an available authored type and starts a reload. The quickslot submenu can select the exact type. Unloading requires space for the rounds already in the magazine. UI takeover sends
+neutral commands. Server view grants, death, blocked input, element locks, carrying and
+sitting also guard use. The flashlight drains its own stack on server physics ticks. Its
+continuous charge changes share the inventory’s 5 Hz scan.
+
+**Hits and consumables.** The laser and pickaxe raycast from the authoritative Advanced
+eye along its forward axis, excluding the shooter and using the item's range and damage.
+The pickaxe also checks the wielder's stamina. A hit emits the target's existing
+`damage_received(amount, shooter, direction, point)` signal. A player target uses its
+existing attribute damage entry point. Hitbox listeners receive the shooter as instigator.
+MP2-adapted objects such as shootable switches publish their ordinary state changes.
+A drink applies its authored consumable effects to the wielder at the end of the server
+equip delay and spends one unit. Immediate player attribute changes use MP3a’s private
+attribute projection and silent HUD refresh.
+
+**Projectiles.** The toy pistol launches the equipped definition's selected projectile.
+A throwable uses its authored override or its drop scene. Each launch gets a fresh
+session serial, independent of node identity and the offline pistol pool. The server
+integrates gravity and sweeps the flight segment every physics tick. First contact ends
+that flight before damage or pickup creation. Foam rounds and soft darts deal physical
+damage to soft targets. A projectile without material properties, such as the stone round,
+also damages hard targets. Cold/poison buildup and elemental damage use the target's element
+API. Burning and wet darts apply the authored contact reactions on the server. A recoverable
+dart or foam round becomes one MP3a runtime pickup with a separate id and normal pickup
+validation. An expired flight simply despawns.
+
+Ready observers receive reliable epoch-scoped launch and end records on channel 2.
+Launch carries the serial, shooter/incarnation, item definition, ammo index, position,
+velocity and gravity. Observers render a mesh-only flight with no collision or damage
+callbacks. Baselines include currently flying projectiles at their current positions.
+Completed shots and impacts have no baseline record.
+
+**Feedback.** Trigger and reload input can immediately play local sound, muzzle flash
+and viewmodel animation. Aim adjusts the owner's field of view. The owner pose carries
+an acknowledgement used to stop rejected cosmetic playback silently. Accepted fire,
+reload and confirmed impact events reach level observers once. The owner receives the
+confirmed impact position and normal for the authored impact effect and decal. Game
+presentation code can subscribe to `player_world.combat.presented(actor, event, point)`,
+`player_world.projectiles.launched(id, visual)` and `ended(id, impact)`. The dedicated server keeps only simulation data and passes a null visual.
+
+**Authoring.** Give the inventory item an external `WieldableItemPD` definition. Its
+`wieldable_scene` can use or extend one of the six shipped wieldable scripts. Configure
+damage, range, charges, ammo types and animation names as for offline play. The network
+profile reads those exported settings from a detached instance. Keep viewmodel animation
+tracks visual. Use a `CogitoProjectile` scene with mesh geometry for a launch, and a
+pickup scene with a `PickupComponent` for recovery. To add a different behavior, extend
+`net_wield_profile.gd` and the authority action in `net_wield.gd`. Add a recipient-side
+effect only if the existing visual events are insufficient. Game-specific destructibles
+can publish their result with the MP2 state adapter contract above.
+
 ## Current limitations
 
 - One active level is supported. Translation includes network latency. Prediction, rollback and coordinated travel remain future work.
-- MP3b covers wielding, firing, reloading, hitscan and projectile lifecycles. MP4 covers general physics, carrying and seats. Low-rate pickup poses can visibly step during a fall.
-- Private item-use HUD updates cover immediate attribute changes. MP5 owns continuous attributes, damage, death and respawn. Quest inventory flags retain their offline evaluation until MP8 defines a network quest subject.
+- There is no lag compensation. The server tests targets where they are when the command is consumed. A moving target may have left the crosshair by then. Ballistic replicas can briefly overshoot until the authoritative impact arrives.
+- MP4 covers carrying, seats and general rigid-body physics. Recovered projectiles become independent pickups. Attachment to a moving struck body and synchronized debris are outside MP3. Low-rate pickup poses can visibly step during a fall.
+- Private item-use HUD updates cover immediate attribute changes. Hits run the existing server damage/death callbacks. MP5 owns continuous attribute and death-state replication, death UI and respawn. Breakage and NPC reactions without an MP2 state adapter remain server-local. Element spread and persistent elemental visuals need MP7. Quest inventory flags retain their offline evaluation until MP8 defines a network quest subject.
 - Inventory retention lasts for one server process. MP9 covers saving world objects and player profiles to disk. The offline save format is unchanged.
 - NPCs and other gameplay subsystems still need their own replication. A linked custom object needs its own state adapter to appear on observers. Use level-authored motion/visual tracks for replica animations. Method, nested-animation and audio tracks on door/switch replica players are removed at bind.
 - The sender repeats four frames. A burst that loses every copy of an edge can still lose the action. Artificial loss in the process test covers individual packet loss. LAN feel under jitter and mannequin animation need a visual playtest.
@@ -377,6 +452,6 @@ and token from `CogitoNet.player_world.containers` after the private open.
 GODOT_BIN=/usr/bin/godot NICE='nice -n 19' bash tools/check.sh multiplayer
 ```
 
-The loopback ENet harness runs a dedicated server with two clients, then a listen host with one client. Separate temporary user directories preserve the MP0 identity, rejection, disconnect and restart checks. In a small arena it also checks stationary avatars, forward and turning distances, observation by the opposite peer, the late-join pose and removal. Clients drop every tenth command datagram after encoding its redundant history. A jump tap lands on a dropped datagram and the server and observer must see the jump height. The interaction checks also exercise a closed and open collision doorway, duplicate requests, rejection at distance, a button-linked door, wrong/right keypad codes a turnwheel-linked door, a lockpick-locked door and movement by another player during an owner-only cutscene. A third client verifies a silent baseline. In the listen topology the host opens the first door and the client opens the linked door. The same scenarios race an authored pickup, move a runtime drop between players, trade through a shared container and purchase from a vendor. The dedicated scenario also reopens the container on a late joiner and checks inventory after reconnect. Each topology has a 70 s deadline. Select one with `python tools/check_multiplayer.py --scenario dedicated` or `--scenario listen`. Add `--file-transport` to exercise the same RPCs in separate processes with a local file queue.
+The loopback ENet harness runs a dedicated server with two clients, then a listen host with one client. Separate temporary user directories preserve the MP0 identity, rejection, disconnect and restart checks. In a small arena it also checks stationary avatars, forward and turning distances, observation by the opposite peer, the late-join pose and removal. Clients drop every tenth command datagram after encoding its redundant history. A jump tap lands on a dropped datagram and the server and observer must see the jump height. The interaction checks also exercise a closed and open collision doorway, duplicate requests, rejection at distance, a button-linked door, wrong/right keypad codes a turnwheel-linked door, a lockpick-locked door and movement by another player during an owner-only cutscene. A third client verifies a silent baseline. In the listen topology the host opens the first door and the client opens the linked door. The same scenarios race an authored pickup, move a runtime drop between players, trade through a shared container and purchase from a vendor. The dedicated scenario also reopens the container on a late joiner and checks inventory after reconnect. The combat fixture checks bounded automatic shots against hitboxes, owner-private magazines, observed fire, projectile impact and recovery, light state and a silent late join. In the listen topology both players shoot the opposite player’s target. Each topology has a 70 s deadline. Select one with `python tools/check_multiplayer.py --scenario dedicated` or `--scenario listen`. Add `--file-transport` to exercise the same RPCs in separate processes with a local file queue.
 
 The regular gdUnit run includes the socket-free codec, jitter, wrap, interpolation, level interest, role, actor-lifecycle, entity identity, validation, concurrent commits, private interfaces, plate and baseline tests in `tests/net/`.

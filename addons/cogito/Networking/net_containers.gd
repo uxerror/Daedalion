@@ -149,3 +149,8 @@ func _transfer(op: String, player: STOCK, box: STOCK, args: Array) -> String:
 		if GRID.move(src.data, stack, dst.data, args[2], args[3], bool(args[4])):
 			return ""
 	return "Item cannot be moved"
+
+
+## True while the server holds a private interface grant for this actor.
+func has_view(peer: int) -> bool:
+	return _views.has(peer)

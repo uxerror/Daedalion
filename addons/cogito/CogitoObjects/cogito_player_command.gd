@@ -79,6 +79,8 @@ var neck_yaw: float
 var has_control: bool = true
 ## Interpret crouch presses as toggles for this actor.
 var toggle_crouch: bool
+## Online equip generation acknowledged by the owner. Encoded only by the network channel.
+var wield_generation: int
 ## Down state at the sampling boundary, one bit per Action.
 var held: int
 ## Ordered presses and releases preserve two taps or a press/release within one tick.

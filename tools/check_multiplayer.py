@@ -396,6 +396,39 @@ class Scenario:
                         s["inventories"][first]["items"].get("Health Potion") == 1)
         return a.samples[-1]["inventories"][first]
 
+    def combat(self, a, b, first, second):
+        def equip(role, owner, name, asset):
+            self.order(role, op="inventory", action="use", item=name)
+            for viewer in (a, b, self.server):
+                self.sample(viewer, lambda s: s["wield"][owner][0] == f"Cogito_{asset}.tres")
+
+        self.order(self.server, op="combat_stage", first=first)
+        for role, owner in ((a, first), (b, second)):
+            self.sample(role, lambda s: s["ammo"].get(owner) == 2)
+        equip(a, first, "Laser Rifle", "LaserRifle")
+        self.order(a, op="fire", ticks=24)
+        self.sample(self.server, lambda s: s["west"] == 98 and s["ammo"][first] == 0)
+        self.sample(a, lambda s: s["ammo"][first] == 0)
+        observed = self.sample(b, lambda s: s["shots"] == 2)
+        if observed["ammo"] != {second: 2}:
+            raise CheckFailed(f"observer received another inventory: {observed['ammo']}")
+        if self.server is a:
+            equip(b, second, "Laser Rifle", "LaserRifle")
+            self.order(b, op="fire", ticks=1)
+            self.sample(self.server, lambda s: s["east"] == 99 and s["ammo"][second] == 1)
+            self.sample(b, lambda s: s["ammo"][second] == 1)
+        equip(a, first, "Dart", "Dart")
+        self.order(a, op="fire", ticks=1)
+        self.sample(b, lambda s: s["flights"] == 1 and s["impacts"] == 1 and s["dart"])
+        self.sample(self.server, lambda s: s["west"] == 97)
+        self.order(self.server, op="near_dart", who=second)
+        self.order(b, op="take_dart")
+        self.sample(b, lambda s: not s["dart"] and s["inventories"][second]["items"].get("Dart") == 1)
+        equip(a, first, "Flashlight", "Flashlight")
+        self.order(a, op="fire", ticks=1)
+        self.sample(b, lambda s: s["wield"][first][1])
+        return self.sample(a, lambda s: s["wield"][first][1])["inventories"][first]
+
     def dedicated(self):
         self.start(dedicated=True)
         first = self.fixture("Ada", "client")
@@ -413,7 +446,8 @@ class Scenario:
         self.drive(second, "Ben", roster, [self.server, first])
         self.panels(first, second, "Ada", "Ben")
         self.devices(first, second, "Ada", "Ben")
-        holdings = self.inventories(first, second, "Ada", "Ben")
+        self.inventories(first, second, "Ada", "Ben")
+        holdings = self.combat(first, second, "Ada", "Ben")
         late = self.fixture("Cy", "client")
         self.state(late, ["Ada", "Ben", "Cy"])
         self.state(first, ["Ada", "Ben", "Cy"])
@@ -423,6 +457,9 @@ class Scenario:
                 or baseline["keydoor_locked"] or baseline["events"] or not baseline["wheel_open"]
                 or not baseline["picked"] or not baseline["cut_used"] or baseline["cutscene_starts"]):
             raise CheckFailed(f"incorrect late-join world baseline: {baseline}")
+        if (baseline["wield"]["Ada"] != ["Cogito_Flashlight.tres", True]
+                or baseline["flights"] or baseline["shots"] or baseline["impacts"]):
+            raise CheckFailed(f"incorrect combat baseline: {baseline}")
         if baseline["loose"] or baseline["drop"]:
             raise CheckFailed("picked objects appeared on late join")
         self.order(self.server, op="inventory_stage", place="box", first="Cy")
@@ -453,7 +490,7 @@ class Scenario:
         if self.state(restored, ["Ada"]) != (ada, {"Ada": ada}):
             raise CheckFailed("server restart changed identity")
         self.stop(restored)
-        print("PASS dedicated + 2 clients: movement, collision, interaction retry, keypad, turnwheel, lockpick, private cutscene, pickup race, drops, container, purchase, late join, inventory reconnect, restart")
+        print("PASS dedicated + 2 clients: movement, collision, interaction retry, keypad, turnwheel, lockpick, private cutscene, pickup race, drops, container, purchase, rifle, dart recovery, flashlight, late join, inventory reconnect, restart")
 
     def listen(self):
         self.start(dedicated=False)
@@ -468,11 +505,12 @@ class Scenario:
         self.panels(self.server, client, "Host")
         self.devices(self.server, client, "Host", "Ada")
         self.inventories(self.server, client, "Host", "Ada")
+        self.combat(self.server, client, "Host", "Ada")
         self.stop(client)
         self.state(self.server, ["Host"])
         self.pose(self.server, ["Host"])
         self.stop(self.server)
-        print("PASS listen host + 1 client: movement, interactions in both directions, turnwheel, lockpick, private cutscene, container trade, purchase, host identity, departure")
+        print("PASS listen host + 1 client: movement, interactions in both directions, turnwheel, lockpick, private cutscene, container trade, purchase, bidirectional shots, dart recovery, flashlight, host identity, departure")
 
 
 def main():

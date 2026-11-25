@@ -1,6 +1,7 @@
 extends RefCounted
 ## One incarnation of an Advanced avatar. Only replicas have a pose timeline.
 
+const WIELD := preload("net_wield.gd")
 const INPUT := preload("net_input_source.gd")
 const SNAPSHOT := preload("net_snapshot.gd")
 const MOVING := CogitoPlayerAdvanced.MovingState
@@ -10,6 +11,8 @@ const PREFAB := "res://addons/cogito/PackedScenes/cogito_player_advanced.tscn"
 var actor: CogitoPlayerAdvanced
 ## Unique server number for this spawn.
 var lifetime: int
+## Stack authority or public presentation for this incarnation.
+var wield := WIELD.new()
 ## Server-issued forced-pose revision used by both wire channels.
 var revision := 0
 ## Snapshot history on clients, including the server's last input acknowledgement.

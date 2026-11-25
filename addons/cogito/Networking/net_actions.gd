@@ -19,8 +19,6 @@ static func hud_reason(reason: String) -> String:
 		reason = "Unavailable"
 	if reason.begins_with("Unavailable online"):
 		return "Unavailable online"
-	if reason == "Weapons await MP3b":
-		return "Weapon use is not available yet"
 	if reason == "Posture blocks interaction":
 		return "Can't interact in this position"
 	return reason
@@ -28,9 +26,10 @@ static func hud_reason(reason: String) -> String:
 
 ## Explicit opt in keeps all other solo component entry points inert online.
 static func supported(node: Node, component: InteractionComponent) -> bool:
+	if component is ExtendedPickupInteraction:
+		return is_instance_valid(component.pickup) and component.pickup.get_parent() == node
 	if (
 		component is PickupComponent
-		or component is ExtendedPickupInteraction
 		or component is BackpackComponent
 		or (node is CogitoContainer and component.get_script() == BASIC)
 		or component is ReadableComponent

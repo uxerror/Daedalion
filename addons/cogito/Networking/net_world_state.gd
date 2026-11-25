@@ -165,6 +165,7 @@ func _ack(key: String, epoch: int, nonce: int) -> void:
 		_send_change(peer, change)
 	_pending.erase(peer)
 	get_parent().inventory.baseline(peer)
+	get_parent().projectiles.baseline(peer)
 
 
 func _changed(event: StringName, id: String) -> void:

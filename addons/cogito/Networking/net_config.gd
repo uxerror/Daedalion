@@ -1,7 +1,7 @@
 extends RefCounted
 ## Session configuration shared by programmatic startup and the dedicated CLI.
 
-const PROTOCOL_VERSION := 5
+const PROTOCOL_VERSION := 6
 const DEMO_LEVEL := "res://addons/cogito/DemoScenes/COGITO_4_Laboratory.tscn"
 const ENET_CEILING := 4095
 const DEFAULT_PORT := 7777

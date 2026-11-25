@@ -29,6 +29,12 @@
 [ext_resource type="Script" path="res://addons/cogito/Components/LootComponent.gd" id="loot_source"]
 [ext_resource type="PackedScene" path="res://addons/cogito/PackedScenes/loot_chest.tscn" id="bag"]
 
+[ext_resource type="Script" path="res://addons/cogito/CogitoObjects/cogito_static_interactable.gd" id="target"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Attributes/cogito_health_attribute.gd" id="health"]
+[ext_resource type="Script" path="res://addons/cogito/Components/HitboxComponent.gd" id="hitbox"]
+
+[ext_resource type="PackedScene" path="res://addons/cogito/Components/Properties/CogitoProperties.tscn" id="target_props"]
+
 [sub_resource type="Resource" id="empty_box"]
 resource_local_to_scene = true
 script = ExtResource("inventory")
@@ -215,3 +221,43 @@ metadata/cogito_persistent_id = "level:box"
 
 [node name="Vendor" parent="." instance=ExtResource("vendor")]
 position = Vector3(35, 0, 0)
+
+[node name="West" type="StaticBody3D" parent="."]
+position = Vector3(-24, 1.5, -6)
+script = ExtResource("target")
+
+[node name="Shape" type="CollisionShape3D" parent="West"]
+shape = SubResource("slab")
+
+[node name="Health" type="Node" parent="West"]
+script = ExtResource("health")
+attribute_name = "health"
+value_max = 100.0
+value_start = 100.0
+
+[node name="CogitoProperties" parent="West" instance=ExtResource("target_props")]
+material_properties = 1
+
+[node name="Hitbox" type="Node" parent="West" node_paths=PackedStringArray("health_attribute")]
+script = ExtResource("hitbox")
+health_attribute = NodePath("../Health")
+
+[node name="East" type="StaticBody3D" parent="."]
+position = Vector3(-19, 1.5, -6)
+script = ExtResource("target")
+
+[node name="Shape" type="CollisionShape3D" parent="East"]
+shape = SubResource("slab")
+
+[node name="Health" type="Node" parent="East"]
+script = ExtResource("health")
+attribute_name = "health"
+value_max = 100.0
+value_start = 100.0
+
+[node name="CogitoProperties" parent="East" instance=ExtResource("target_props")]
+material_properties = 1
+
+[node name="Hitbox" type="Node" parent="East" node_paths=PackedStringArray("health_attribute")]
+script = ExtResource("hitbox")
+health_attribute = NodePath("../Health")

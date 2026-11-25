@@ -167,6 +167,9 @@ func _instantiate(id: String, spec: Dictionary) -> Node3D:
 	if node is CogitoProjectile:
 		# Some authored ammo drops reuse the projectile prefab as their pickup model.
 		node.set_meta(&"cogito_item_drop", true)
+		if not multiplayer.is_server():
+			for props in node.find_children("*", "CogitoProperties", true, false):
+				props.free()
 	if node is RigidBody3D and not multiplayer.is_server():
 		node.freeze = true
 		node.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
@@ -229,7 +232,7 @@ func collect(
 	var node := component.get_parent()
 	var world: Node = get_parent().world
 	var id: String = world.entities.id_for(node)
-	if not multiplayer.is_server() or id.is_empty():
+	if not multiplayer.is_server() or id.is_empty() or node.is_queued_for_deletion():
 		return {"ok": false, "reason": "Item already taken"}
 	var inv := pic.get_inventory()
 	var remaining := 0
@@ -243,9 +246,11 @@ func collect(
 		var stack := pickup.slot_data
 		var item := stack.inventory_item
 		var amount := 0
-		if use and item is AmmoItemPD:
-			return {"ok": false, "reason": "Weapons await MP3b"}
-		if not use and item is CurrencyItemPD and item.add_on_pickup:
+		if use and (item is AmmoItemPD or item is WieldableItemPD):
+			amount = _collect_equipment(pic.player, stack)
+			if not amount:
+				return {"ok": false, "reason": "Item could not be used"}
+		elif not use and item is CurrencyItemPD and item.add_on_pickup:
 			amount = _collect_money(pic, item, stack.quantity)
 		elif use:
 			var reason: String = get_parent().inventory.use_item(pic.player, item)
@@ -303,3 +308,30 @@ func _expand(inv: CogitoInventory, size: Vector2i) -> bool:
 			old[i].origin_index = index
 			moved[old[i]] = true
 	return true
+
+
+func _collect_equipment(actor: CogitoPlayerAdvanced, source: InventorySlotPD) -> int:
+	var wield: Variant = actor.get_meta(&"net_wield")
+	var item := source.inventory_item
+	var count := 1
+	if item is AmmoItemPD:
+		count = mini(source.quantity, wield.ammo_needed(item))
+	elif actor.is_sitting or actor.player_interaction_component.carrying.is_carrying:
+		return 0
+	elif not get_parent().wield_profile(STOCK.definition(item).resource_path).kind:
+		return 0
+	var before := {}
+	for slot in actor.inventory_data.find_slots(item.name):
+		before[slot] = slot.quantity
+	if count <= 0 or not GRID.insert(actor.inventory_data, source, count, false):
+		return 0
+	if item is AmmoItemPD:
+		wield.start_reload()
+	else:
+		var slots := actor.inventory_data.find_slots(item.name)
+		for slot in slots:
+			if int(before.get(slot, 0)) < slot.quantity:
+				if slot != wield.stack:
+					wield.equip(slot)
+				break
+	return count
