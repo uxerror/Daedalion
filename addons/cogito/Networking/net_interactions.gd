@@ -9,7 +9,7 @@ const WORLD := preload("net_world_state.gd")
 const AVATAR := preload("net_avatar.gd")
 const SESSION := preload("net_session.gd")
 const DEVICES := preload("net_devices.gd")
-const UNSUPPORTED := "Unavailable online (MP5 damage and death, MP6 NPCs)"
+const UNSUPPORTED := "Unavailable online (MP6 NPCs, MP7 elements)"
 ## Retries older than this many requests per peer get "Old request" instead of a cached reply.
 const RESULT_CACHE := 64
 const DOUBLE_PRESS_MSEC := 300
@@ -188,6 +188,7 @@ func make_request(
 				"level_key": world.entities.level_key,
 				"epoch": world.entities.epoch,
 				"request_id": _next_id,
+				"life": get_parent().local_actor.get_meta(&"inventory_life"),
 				"expected_revision": world.revisions[address.entity_id],
 				"action_id": String(action),
 				"phase": phase,
@@ -212,15 +213,15 @@ func _request(request: Dictionary) -> void:
 
 
 func _envelope(request: Dictionary) -> bool:
-	if request.size() > 9:
+	if request.size() > 10:
 		return false
 	for key: String in ["level_key", "entity_id", "component_key", "action_id", "phase"]:
 		if not request.get(key) is String or request[key].length() > 512:
 			return false
-	for key: String in ["request_id", "epoch", "expected_revision"]:
+	for key: String in ["request_id", "epoch", "expected_revision", "life"]:
 		if not request.get(key) is int:
 			return false
-	return request.request_id > 0 and (request.size() == 8 or request.has("payload"))
+	return request.request_id > 0 and (request.size() == 9 or request.has("payload"))
 
 
 func _server_request(peer: int, request: Dictionary) -> void:
@@ -242,6 +243,10 @@ func _commit_request(peer: int, request: Dictionary) -> void:
 	if not world.entities.matches(request.level_key, request.epoch):
 		_deliver(peer, _response(request, {"ok": false, "reason": "Wrong level epoch"}))
 		return
+	var avatar: AVATAR = get_parent().avatar_for(record.player_id)
+	if avatar and avatar.lifetime != request.life:
+		_deliver(peer, _response(request, {"ok": false, "reason": "Stale life"}))
+		return
 	var cache: Dictionary = _results.get_or_add(peer, {})
 	if cache.has(request.request_id):
 		_deliver(peer, cache[request.request_id])
@@ -250,7 +255,6 @@ func _commit_request(peer: int, request: Dictionary) -> void:
 		_deliver(peer, _response(request, {"ok": false, "reason": "Old request"}))
 		return
 	_last_id[peer] = request.request_id
-	var avatar: AVATAR = get_parent().avatar_for(record.player_id)
 	var result := {"ok": false, "reason": "No avatar in level"}
 	if avatar and get_parent().peer_in_level(peer):
 		result = _evaluate(peer, avatar.actor.player_interaction_component, request)
@@ -338,10 +342,10 @@ func _actor_guard(
 ) -> String:
 	if request.expected_revision != world.revisions[request.entity_id]:
 		return "Stale revision"
-	if not pic.player.can_act() or pic.player.is_dead:
-		return "Posture blocks interaction"
+	if pic.player.is_dead:
+		return "Player is dead"
 	var seated_use: bool = pic.player.is_sitting and component.get_parent() is CogitoSittable
-	if not seated_use and pic._is_interaction_blocked(component):
+	if not pic.player.can_act() or (not seated_use and pic._is_interaction_blocked(component)):
 		return "Posture blocks interaction"
 	var private_view := (
 		component is ReadableComponent
@@ -467,7 +471,7 @@ func _hint(key: String, epoch: int, hint: Array) -> void:
 func _response(request: Dictionary, result: Dictionary) -> Dictionary:
 	var response := result.duplicate()
 	response.action_id = request.action_id
-	for field: String in ["level_key", "epoch", "request_id", "entity_id", "component_key"]:
+	for field: String in ["level_key", "epoch", "life", "request_id", "entity_id", "component_key"]:
 		response[field] = request[field]
 	return response
 
@@ -488,7 +492,7 @@ func _result(result: Dictionary) -> void:
 		return
 	_last_displayed = result.request_id
 	var actor: CogitoPlayer = get_parent().local_actor
-	if not actor:
+	if not actor or actor.is_dead or actor.get_meta(&"inventory_life") != result.life:
 		return
 	var pic := actor.player_interaction_component
 	_present_hints(pic, result)

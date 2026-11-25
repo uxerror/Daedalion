@@ -603,7 +603,10 @@ static func deal_elemental_damage(target: Node, amount: float, element: Element,
 		amount *= props.get_damage_multiplier(element)
 	if amount <= 0.0:
 		return 0.0
-	if typed:
+	if target is CogitoPlayer and target.network_movement_only:
+		if not target.receive_elemental_damage(amount, element, source, hit_direction, hit_position):
+			return 0.0
+	elif typed:
 		target.receive_elemental_damage(amount, element, source, hit_direction, hit_position)
 	else:
 		target.damage_received.emit(amount, source, hit_direction, hit_position)

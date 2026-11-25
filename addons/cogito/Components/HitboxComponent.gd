@@ -25,7 +25,12 @@ func _ready() -> void:
 
 func damage(damage_amount: float, object: Node3D = null, _hit_direction:= Vector3.ZERO, _hit_position:= Vector3.ZERO):
 	if health_attribute:
-		health_attribute.subtract(damage_amount)
+		var victim := health_attribute.get_parent() as CogitoPlayer
+		if victim and victim.network_movement_only:
+			if not victim.decrease_attribute(health_attribute.attribute_name, damage_amount, object):
+				return
+		else:
+			health_attribute.subtract(damage_amount)
 	
 	if spawn_at_global_collision:
 		var spawned_object = spawn_at_global_collision.instantiate()

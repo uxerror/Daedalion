@@ -11,6 +11,9 @@ const PREFAB := "res://addons/cogito/PackedScenes/cogito_player_advanced.tscn"
 var actor: CogitoPlayerAdvanced
 ## Unique server number for this spawn.
 var lifetime: int
+## Public meter for nameplates and observer UI.
+var health_fraction := 0.0
+var attributes := preload("net_attributes.gd").new()
 ## Stack authority or public presentation for this incarnation.
 var wield := WIELD.new()
 ## Server-issued forced-pose revision used by both wire channels.
@@ -52,12 +55,25 @@ func spawn(
 	actor.set_meta(&"multiple_quickslot_binds", bar.allow_multiple_quickslot_binds)
 	actor.is_local_presentation = local
 	actor.network_movement_only = true
+	actor.set_meta(&"net_player_id", id)
+	var meter := actor.get_node_or_null("LightMeterAttribute")
+	if meter is CogitoLightmeter:
+		meter.get_node("SubViewport").free()
+		if actor.find_children("*", "CogitoVisibilityAttribute", false, false).is_empty():
+			var visibility := (
+				preload("../Components/Attributes/VisibilityAttribute.tscn").instantiate()
+			)
+			actor.add_child(visibility)
+			visibility.owner = actor
+	if not server:
+		for attr: CogitoAttribute in actor.find_children("*", "CogitoAttribute", false, false):
+			attr.network_frozen = true
+			attr.set_block_signals(true)
+			attr.process_mode = Node.PROCESS_MODE_DISABLED
 	if server and not local:
 		source = INPUT.new()
 		actor.input_source = source
 	if not local:
-		# The solo light meter owns another camera in a SubViewport.
-		actor.get_node("LightMeterAttribute").free()
 		var skeleton := actor.get_node("Rig/Skeleton3D") as Skeleton3D
 		var look := HeadLook.new()
 		look.head = actor.get_node("Body/Neck/Head")
@@ -77,6 +93,11 @@ func spawn(
 		ray.process_mode = Node.PROCESS_MODE_DISABLED
 	var template := actor.inventory_data
 	root.add_child(actor)
+	if not server:
+		for attr: CogitoAttribute in actor.player_attributes.values():
+			attr.set_block_signals(false)
+			for child in attr.find_children("*", "", true, false):
+				child.process_mode = Node.PROCESS_MODE_DISABLED
 	if server and template and template != actor.inventory_data:
 		# Private mutable starter resources still match the level's authored key/item definition.
 		for i in template.inventory_slots.size():
@@ -114,7 +135,9 @@ func present(delta: float) -> void:
 ## Applies the snapshot to the body, animated rig and first-person eye height.
 func apply_pose(frame: Dictionary, weight: float, force_look: bool) -> void:
 	var local := actor.is_local_presentation
-	actor.position = actor.position.lerp(frame.position, weight)
+	actor.position = (
+		frame.position if weight >= 1.0 else actor.position.lerp(frame.position, weight)
+	)
 	actor.velocity = frame.velocity
 	actor.current_moving_state = frame.moving
 	actor.current_body_posture_state = frame.posture

@@ -390,12 +390,14 @@ func _reload_options():
 # Signal from Pause Menu
 func _on_pause_menu_resume() -> void:
 	_reload_options()
-	if not CogitoNet.is_online():
+	if network_movement_only and is_dead:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	elif not network_movement_only and not CogitoNet.is_online():
 		resume()
 
 
 func _on_pause_menu_pause() -> void:
-	if not CogitoNet.is_online():
+	if not network_movement_only and not CogitoNet.is_online():
 		pause()
 
 
@@ -420,8 +422,8 @@ func _handle_menu() -> void:
 	
 	if is_showing_ui: #Behaviour when pressing ESC/menu while external UI is open (Readables, Keypad, etc)
 		menu_pressed.emit(player_interaction_component)
-	elif !is_in_unpausable_state and !is_dead:
-		if !currently_tweening:
+	elif (network_movement_only and is_dead) or (not is_in_unpausable_state and not is_dead):
+		if not currently_tweening or is_dead:
 			if pause_menu:
 				var current_pause_menu = pause_menu.instantiate()
 				current_pause_menu.pause_menu_closed.connect(_on_pause_menu_resume)
@@ -691,6 +693,10 @@ func _physics_process(delta):
 		command.has_control = false
 	else:
 		command = input_source.sample(self, next_sequence)
+	if network_movement_only and is_dead:
+		if is_local_presentation and command and ACTION.MENU in command.edges:
+			_handle_command_edge(ACTION.MENU, 0)
+		return
 	if network_input_blocked and command:
 		command = neutral_command(command.sequence)
 		command.has_control = false
@@ -715,6 +721,10 @@ func _physics_process(delta):
 func _handle_command_edge(edge: int, index: int) -> void:
 	var action := edge & ~CogitoPlayerCommand.RELEASE
 	var pressed := (edge & CogitoPlayerCommand.RELEASE) == 0
+	if network_movement_only and is_dead:
+		if is_local_presentation and pressed and action == ACTION.MENU:
+			_handle_menu()
+		return
 	if action <= ACTION.BACK and pressed and actor_elements and actor_elements.is_frozen():
 		actor_elements.struggle()
 	if action == ACTION.CROUCH and pressed and current_command.toggle_crouch and not is_movement_locked_by_elements():

@@ -12,17 +12,17 @@ class_name CogitoLightmeter
 ##Interpolation used for get_average_color function. Default for Lightmeter is Lanczos, change for better performance
 @export var interpolation_method: Image.Interpolation = Image.INTERPOLATE_LANCZOS
 
-@onready var sub_viewport := $SubViewport
-@onready var light_detection := $SubViewport/LightDetection
-@onready var texture_rect := $SubViewport/LightDetection/TextureRect
-@onready var color_rect := $SubViewport/LightDetection/ColorRect
+@onready var sub_viewport := get_node_or_null("SubViewport")
+@onready var light_detection := get_node_or_null("SubViewport/LightDetection")
+@onready var texture_rect := get_node_or_null("SubViewport/LightDetection/TextureRect")
+@onready var color_rect := get_node_or_null("SubViewport/LightDetection/ColorRect")
 @onready var timer: Timer = $Timer
 @onready var previous_position : Vector3 = get_parent().global_position
 
 
 func _ready() -> void:
 	# Skip initialization in headless mode
-	if DisplayServer.get_name() == "headless":
+	if not sub_viewport or DisplayServer.get_name() == "headless":
 		set_process(false)
 		return
 	

@@ -87,3 +87,18 @@ func test_identity_registration_restart_replay_and_forgery() -> void:
 	assert_str(restarted.authenticate(player_id, nonce, proof)).is_empty()
 	var other := restarted.respond({}, fresh, true)
 	assert_str(restarted.authenticate(player_id, fresh, other)).is_empty()
+
+
+func test_damage_and_respawn_configuration() -> void:
+	var defaults := NetConfig.server_config({}, true)
+	assert_bool(defaults.friendly_fire).is_true()
+	assert_float(defaults.respawn_delay).is_equal(10.0)
+	var cli := NetConfig.parse_cli(["--friendly-fire", "false", "--respawn-delay", "0"])
+	assert_bool(cli.friendly_fire).is_false()
+	assert_float(cli.respawn_delay).is_zero()
+	for delay: Variant in [-1, INF, NAN, "1"]:
+		(
+			assert_bool(NetConfig.server_config({"respawn_delay": delay}, false).has("reason"))
+			. is_true()
+		)
+	assert_bool(NetConfig.parse_cli(["--friendly-fire", "sometimes"]).has("reason")).is_true()

@@ -1,5 +1,6 @@
 extends Area3D
 
+signal net_changed(event: StringName)
 signal apply_attribute_effect()
 
 ## Enter the player attribute that is effected within the zone.
@@ -22,67 +23,68 @@ signal apply_attribute_effect()
 ## Used to activate / deactivate this zone on runtime.
 @export var is_active: bool = true
 
-var is_within_zone: bool
-var player
-var delay_time: float
-var hint_count: int
-var hint_delay_time: float
+var _occupants := {}
 
 
-func _on_body_entered(body):
-	if body is CogitoPlayer:
-		if !player:
-			player = body
-		if effect_amount > 0 and hint_message != "":
-			body.player_interaction_component.send_hint(hint_icon, hint_message)
-		is_within_zone = true
-		delay_time = 0 if skip_delay_on_zone_enter else effect_delay
-		hint_delay_time = hint_rate
-		hint_count = 0
+func _ready() -> void:
+	set_process(false)
 
 
-func _on_body_exited(body):
-	if body is CogitoPlayer:
-		is_within_zone = false
-
-
-func interact(_player_interaction_component: PlayerInteractionComponent):
-	if is_active:
-		monitoring = false
-		is_active = false
-	else:
-		monitoring = true
-		is_active = true
-
-
-func _process(delta):
-	if effect_amount == 0.0 or !is_active:
+func _on_body_entered(body: Node3D) -> void:
+	if not body is CogitoPlayer or (body.network_movement_only and not body.multiplayer.is_server()):
 		return
-	
-	if is_within_zone:
-		# Run the timer out before changing the attribute value
-		delay_time -= delta
-		if delay_time > 0:
-			return
-		delay_time = effect_delay
-		
-		# Instantly change the attribute by the effect amount if running a delay
-		# Otherwise, change the effect amount over time using the frame delta
-		var amount = effect_amount if effect_delay > 0 else effect_amount * delta
-		
+	if _occupants.has(body):
+		return
+	body.tree_exiting.connect(_on_body_exited.bind(body), CONNECT_ONE_SHOT)
+	set_process(true)
+	_occupants[body] = {
+		"delay": 0.0 if skip_delay_on_zone_enter else effect_delay,
+		"hints": 0.0,
+	}
+	if effect_amount > 0 and hint_message != "":
+		body.player_interaction_component.send_hint(hint_icon, hint_message)
+
+
+func _on_body_exited(body: Node3D) -> void:
+	if _occupants.erase(body):
+		var cleanup := _on_body_exited.bind(body)
+		if body.tree_exiting.is_connected(cleanup):
+			body.tree_exiting.disconnect(cleanup)
+		set_process(not _occupants.is_empty())
+
+
+func interact(_player_interaction_component: PlayerInteractionComponent) -> void:
+	is_active = not is_active
+	monitoring = is_active
+	net_changed.emit(&"toggle")
+
+
+## MP2 baseline for an authored switchable zone.
+func net_state() -> Dictionary:
+	return {"active": is_active}
+
+
+## Install presentation state without evaluating replica occupants.
+func apply_net_state(state: Dictionary, _silent: bool) -> void:
+	is_active = state.active
+
+
+func _process(delta: float) -> void:
+	if not is_active:
+		return
+	for player: CogitoPlayer in _occupants:
+		var clock: Dictionary = _occupants[player]
+		clock.delay -= delta
+		if clock.delay > 0 or effect_amount == 0:
+			continue
+		clock.delay = effect_delay
+		var amount := effect_amount if effect_delay > 0 else effect_amount * delta
 		if increase_attribute:
 			player.increase_attribute(player_attribute, amount, ConsumableItemPD.ValueType.CURRENT)
 		else:
 			player.decrease_attribute(player_attribute, amount)
-		
-		if hint_message != "" and hint_rate > 0:
-			if effect_delay > 0:
-				hint_count += 1
-				if hint_count >= hint_rate:
-					hint_count = 0
-					player.player_interaction_component.send_hint(hint_icon, hint_message)
-			else:
-				hint_delay_time -= delta
-				if hint_delay_time <= 0:
-					hint_delay_time = hint_rate
-					player.player_interaction_component.send_hint(hint_icon, hint_message)
+		if hint_rate > 0 and hint_message != "":
+			clock.hints += 1.0 if effect_delay > 0 else delta
+			if clock.hints >= hint_rate:
+				clock.hints = 0.0
+				player.player_interaction_component.send_hint(hint_icon, hint_message)

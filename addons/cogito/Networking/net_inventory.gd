@@ -178,7 +178,6 @@ func baseline(peer: int) -> void:
 	elif model and get_parent().peer_in_level(peer):
 		_refresh(peer, false)
 		var fields := model.snapshot.duplicate()
-		fields.attributes = _values(model.data.owner.player_attributes)
 		_state.rpc_id(
 			peer, model.data.owner.get_meta(&"inventory_life"), model.revision, fields, true
 		)
@@ -190,17 +189,6 @@ func _state(life: int, revision: int, fields: Dictionary, full: bool) -> void:
 		return
 	if fields.has("money"):
 		_apply_currency(local.data.owner, fields.money)
-	for key: String in fields.get("attributes", {}):
-		var attr: CogitoAttribute = local.data.owner.player_attributes.get(key)
-		if attr:
-			var pair: PackedFloat64Array = fields.attributes[key]
-			var blocked := attr.is_blocking_signals()
-			attr.set_block_signals(true)
-			attr.set_attribute(pair[0], pair[1])
-			attr.set_block_signals(blocked)
-			attr.attribute_restored.emit(attr.attribute_name, pair[0], pair[1])
-	if fields.has("attributes") and fields.size() == 1:
-		return
 	local.apply(fields, revision, full)
 	var slot := local.equipped_stack()
 	local.data.owner.get_meta(&"net_wield").set_owner_item(slot.inventory_item if slot else null)
@@ -220,31 +208,10 @@ func use_item(actor: CogitoPlayer, item: InventoryItemPD) -> String:
 		return "Select an inventory stack"
 	if not item.has_method("use"):
 		return "Item cannot be used"
-	var before := _values(actor.player_attributes)
 	if not item.use(actor):
 		return "Item could not be used"
-	var after := _values(actor.player_attributes)
-	for key: String in before:
-		if before[key] == after.get(key):
-			after.erase(key)
-	send_attributes(actor, after.keys())
+	get_parent().flush_attributes(actor.get_meta(&"net_player_id"))
 	return ""
-
-
-## Send immediate combat attribute updates through the same silent owner-only HUD path.
-func send_attributes(actor: CogitoPlayer, keys: Array) -> void:
-	var peer: int = get_parent().peer_for_actor(actor)
-	if peer <= 1 or not get_parent().world.ready_for_events(peer):
-		return
-	var pairs := {}
-	for key: String in keys:
-		var attr: CogitoAttribute = actor.player_attributes.get(key)
-		if attr:
-			pairs[key] = PackedFloat64Array([attr.value_current, attr.value_max])
-	if not pairs.is_empty():
-		var model: STOCK = _live[peer]
-		var life: int = actor.get_meta(&"inventory_life")
-		_state.rpc_id(peer, life, model.revision, {"attributes": pairs}, false)
 
 
 ## Run an authored auto-consume on the authority after the triggering inventory commit.

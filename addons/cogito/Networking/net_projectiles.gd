@@ -155,22 +155,23 @@ func _step(id: int, flight: Dictionary, start: Vector3, delta: float) -> void:
 	var props := CogitoProperties.get_properties_of(hit.collider)
 	var soft := CogitoProperties.MaterialProperties.SOFT
 	var soft_contact: bool = props and flight.material == soft and props.material_properties == soft
-	if flight.material < 0 or soft_contact:
+	var allowed := true
+	if hit.collider is CogitoPlayer:
+		allowed = get_parent().death.allows_damage(hit.collider, actor)
+	if allowed and (flight.material < 0 or soft_contact):
 		combat.hit(hit.collider, flight.damage, actor, dir, point)
 	# These are the contact reactions from the shipped burning and wet dart scenes.
-	if props:
+	if allowed and props:
 		var flammable := CogitoProperties.ElementalProperties.FLAMMABLE
 		if flight.burning and props.elemental_properties & flammable:
 			props.set_on_fire()
 		if flight.wet:
 			props.make_wet()
-	if flight.element != CogitoProperties.Element.PHYSICAL:
+	if allowed and flight.element != CogitoProperties.Element.PHYSICAL:
 		CogitoProperties.apply_element_to(hit.collider, flight.element, flight.buildup, actor)
 		CogitoProperties.deal_elemental_damage(
 			hit.collider, flight.element_damage, flight.element, actor, dir, point
 		)
-		if flight.element_damage > 0 and hit.collider is CogitoPlayer:
-			get_parent().inventory.send_attributes(hit.collider, ["health"])
 	combat.broadcast(row.shooter, row.life, row.item, &"impact", point, hit.normal)
 	if flight.has("pickup"):
 		get_parent().spawner.spawn_item(flight.pickup, 1, point - dir * 0.12)

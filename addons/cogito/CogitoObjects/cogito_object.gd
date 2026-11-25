@@ -209,6 +209,8 @@ func calculate_damage() -> float:
 func _physics_process(delta: float) -> void:
 	if rigid_body:
 		physics_frame_velocity_scalar = rigid_body.linear_velocity.length()
+		if rigid_body.sleeping and has_meta(&"net_damage_owner") and not has_meta(&"net_carrier"):
+			remove_meta(&"net_damage_owner")
 	
 	if fluid_influence_enabled and rigid_body:
 		fluid_interactor.process(rigid_body.global_transform, rigid_body.mass, rigid_body.gravity_scale)
@@ -250,7 +252,10 @@ func _on_body_entered(body: Node) -> void:
 	if body.has_method("save") and cogito_properties:
 		cogito_properties.start_reaction_threshold_timer(body)
 	
-	if body.has_signal("damage_received") and rigid_body:
+	if body is CogitoPlayer and body.network_movement_only and rigid_body:
+		if physics_frame_velocity_scalar >= minimum_velocity_to_inflict_damage:
+			body.decrease_attribute("health", calculate_damage(), self)
+	elif body.has_signal("damage_received") and rigid_body:
 		if physics_frame_velocity_scalar >= minimum_velocity_to_inflict_damage:
 			var damage_to_deal = calculate_damage()
 			body.damage_received.emit(damage_to_deal, self);

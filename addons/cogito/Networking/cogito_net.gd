@@ -36,6 +36,12 @@ var spawn_policy: Callable:
 		spawn_policy = value
 		if player_world:
 			player_world.spawn_policy = value
+## Set before opening a session. Defaults to the level-scoped CogitoRespawnPolicy.
+var respawn_policy: CogitoRespawnPolicy
+## Optional owner-only Control implementing open_online(actor, seconds, request) and close_online().
+var death_screen_scene: PackedScene
+## Optional server damage filter (attacker_id, victim_id, source) -> bool.
+var damage_policy: Callable
 ## Number of authoritative pose updates per second, capped at the physics tick rate.
 var snapshot_hz := 25:
 	set(value):
@@ -176,6 +182,10 @@ func _attach(
 	player_world.name = "Players"
 	player_world.spawn_policy = spawn_policy
 	player_world.snapshot_hz = snapshot_hz
+	if respawn_policy:
+		player_world.death.policy = respawn_policy
+	player_world.death.screen_scene = death_screen_scene
+	player_world.death.damage_policy = damage_policy
 	player_world.local_changed.connect(local_player_changed.emit)
 	_session.add_child(player_world)
 	_session.attach(api)

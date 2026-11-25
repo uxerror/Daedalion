@@ -141,7 +141,7 @@ func hit_scan_damage(collider, bullet_direction, bullet_position):
 		collider.damage_received.emit(damage, self, bullet_direction,bullet_position)
 	elif collider is CogitoPlayer:
 		var player = collider as CogitoPlayer
-		player.decrease_attribute("health", damage)
+		player.decrease_attribute("health", damage, self)
 
 
 # Function called when wieldable reload is attempted

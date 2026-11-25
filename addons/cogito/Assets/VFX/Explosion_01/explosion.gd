@@ -72,7 +72,7 @@ func _on_body_entered(collider: Node3D) -> void:
 		#TODO This should be done via signals.
 		collider.apply_external_force(damage_dir * damage_force)
 		CogitoGlobals.debug_log(true,"Explosion","Damaging player. Applying vector " + str(damage_dir * damage_force) + " to target. Target.main_velocity = " + str(collider.main_velocity) )
-		collider.decrease_attribute("health", damage_amount)
+		collider.decrease_attribute("health", damage_amount, self)
 
 	if collider.has_signal("damage_received"):
 		if !collider.cogito_properties: # Case where neither projectile nor the object hit have properties defined.

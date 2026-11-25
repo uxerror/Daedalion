@@ -7,7 +7,9 @@ func use(seat: CogitoSittable, pic: PlayerInteractionComponent) -> Dictionary:
 	var actor := pic.player as CogitoPlayerAdvanced
 	var players: Node = pic.network_interactions.get_parent()
 	var peer: int = players.peer_for_actor(actor)
-	if not peer or not players.multiplayer.is_server() or actor.is_dead:
+	if actor.is_dead:
+		return {"ok": false, "reason": "Player is dead"}
+	if not peer or not players.multiplayer.is_server():
 		return {"ok": false, "reason": "Unavailable"}
 	if actor.current_seat == seat:
 		release(actor)

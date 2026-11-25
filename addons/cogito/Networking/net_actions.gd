@@ -5,12 +5,16 @@ const BASIC := preload("../Components/Interactions/BasicInteraction.gd")
 const LOCK := preload("../Components/Interactions/LockInteraction.gd")
 const HOLD := preload("../Components/Interactions/HoldInteraction.gd")
 const DUAL := preload("../Components/Interactions/DualInteraction.gd")
+const HazardZone := preload("../Scripts/hazard_zone.gd")
+const AttributeZone := preload("../Scripts/cogito_attribute_zone.gd")
 const REACH_MARGIN := 0.25
 
 
 ## Protocol diagnostics stay in results. Expected races and short taps need no HUD message.
 static func hud_reason(reason: String) -> String:
 	match reason:
+		"Stale life":
+			return ""
 		"Stale revision", "Old request", "Hold too short", "No matching hold", "Already active":
 			return ""
 		"Wrong level epoch", "Unknown entity or component", "Invalid payload", "Invalid phase":
@@ -30,6 +34,11 @@ static func supported(node: Node, component: InteractionComponent) -> bool:
 		return is_instance_valid(component.pickup) and component.pickup.get_parent() == node
 	if (
 		component is PickupComponent
+		or (
+			(node is HazardZone or node is AttributeZone)
+			and component.get_script() == BASIC
+			and component.get_parent() == node
+		)
 		or (
 			component is CogitoCarryableComponent
 			and node is RigidBody3D

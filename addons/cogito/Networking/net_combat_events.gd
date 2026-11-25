@@ -25,7 +25,6 @@ func hit(
 		target.emit_signal("damage_received", amount, actor, dir, pos)
 	elif target is CogitoPlayer:
 		target.receive_elemental_damage(amount, CogitoProperties.Element.PHYSICAL, actor, dir, pos)
-		get_parent().inventory.send_attributes(target, ["health"])
 
 
 ## Broadcast the accepted event to live observers. Only impact confirmation returns to the owner.

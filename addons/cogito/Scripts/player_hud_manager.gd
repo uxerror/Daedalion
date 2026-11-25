@@ -136,7 +136,8 @@ func instantiate_player_attribute_ui():
 				ui_attribute_area.add_child(spawned_attribute_ui)
 				if attribute.attribute_name == "health":
 					attribute.damage_taken.connect(_on_player_damage_taken)
-					attribute.death.connect(_on_player_death)
+					if not player.network_movement_only:
+						attribute.death.connect(_on_player_death)
 				
 				spawned_attribute_ui.initiate_attribute_ui(attribute)
 

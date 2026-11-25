@@ -18,6 +18,7 @@ var _pickup_request := {}
 var _fires := 0
 var _launches := 0
 var _impacts := 0
+var _respawn_error := ""
 
 
 class LossChannel:
@@ -89,7 +90,11 @@ func _ready() -> void:
 	)
 	_control = OS.get_environment("COGITO_TEST_CONTROL")
 	CogitoNet.player_world.bind_level(self, Transform3D(Basis.IDENTITY, Vector3.UP), "arena")
+	CogitoNet.player_world.death.respawn_rejected.connect(func(why: String): _respawn_error = why)
 	CogitoNet.player_world.interactions.result_received.connect(_result)
+	CogitoNet.player_world.inventory.result_received.connect(
+		func(result: Dictionary): print("NET INVENTORY ", JSON.stringify(result))
+	)
 	CogitoNet.player_world.world.presented.connect(_presented)
 	CogitoNet.player_world.combat.presented.connect(_combat_event)
 	CogitoNet.player_world.projectiles.launched.connect(
@@ -160,6 +165,7 @@ func _physics_process(_delta: float) -> void:
 		data.rx = multiplayer.multiplayer_peer.received_bytes
 	data.merge(_inventory_sample())
 	data.merge(_combat_sample())
+	data.merge(_survival_sample())
 	var box: RigidBody3D = $CarryBox
 	var crate_pos := box.global_position
 	var vehicle_pos: Vector3 = $Vehicle.global_position
@@ -172,6 +178,57 @@ func _physics_process(_delta: float) -> void:
 	data["driver"] = $Vehicle.occupant_id
 	data["vehicle"] = [vehicle_pos.x, vehicle_pos.y, vehicle_pos.z]
 	print("NET POS ", JSON.stringify(data))
+
+
+func _survival_sample() -> Dictionary:
+	var rows := {}
+	var local := CogitoNet.local_player()
+	for record in CogitoNet.players():
+		var avatar := CogitoNet.player_world.avatar_for(record.player_id)
+		if not avatar:
+			continue
+		var row := {"dead": avatar.actor.is_dead, "fraction": avatar.health_fraction}
+		if CogitoNet.is_server() or avatar.actor == local:
+			row.health = avatar.actor.player_attributes.health.value_current
+		rows[record.display_name] = row
+	var screen: CogitoDeathScreen = local.player_hud.get_node("DeathScreen") if local else null
+	return {
+		"vitals": rows,
+		"death_screen": screen != null and screen.visible,
+		"can_respawn": screen != null and screen.visible and not screen.load_button.disabled,
+		"respawn_error": _respawn_error,
+		"paused": get_tree().paused,
+		"menu": local != null and local.find_child("PauseMenu", false, false) != null,
+	}
+
+
+func _survival_stage(order: Dictionary) -> void:
+	var players := CogitoNet.player_world
+	for record in CogitoNet.players():
+		var avatar := players.avatar_for(record.player_id)
+		var actor := avatar.actor
+		var first: bool = record.display_name == order.first
+		if order.place == "hazard":
+			actor.position = $Hazard.position + Vector3.RIGHT * (0.0 if first else 1.2)
+		else:
+			actor.position = Vector3(-19, 0.91, 18 if first else 14)
+		if order.place == "duel":
+			if first:
+				avatar.wield._visible_state(false, false)
+				var guns := actor.inventory_data.find_slots("Laser Rifle")
+				if guns.is_empty():
+					var stack := InventorySlotPD.new()
+					stack.inventory_item = preload(
+						"res://addons/cogito/InventoryPD/Items/Cogito_LaserRifle.tres"
+					)
+					GRID.insert(actor.inventory_data, stack, 1, false)
+					guns = actor.inventory_data.find_slots("Laser Rifle")
+				guns[0].inventory_item.charge_current = 100
+				players.inventory.flush_actor(actor)
+			else:
+				actor.player_attributes.health.value_current = 2
+		actor.velocity = Vector3.ZERO
+		players.mark_teleport(record.player_id)
 
 
 func _contents(inv: CogitoInventory) -> Dictionary:
@@ -323,6 +380,17 @@ func _presented(_id: String, _revision: int, _event: StringName) -> void:
 
 func _execute(order: Dictionary) -> void:
 	match order.op:
+		"survival":
+			_survival_stage(order)
+		"respawn":
+			CogitoNet.player_world.death.request_respawn()
+		"respawn_button":
+			CogitoNet.local_player().player_hud.get_node("DeathScreen").load_button.pressed.emit()
+		"escape":
+			var event := InputEventAction.new()
+			event.action = "menu"
+			event.pressed = true
+			InputRouter.on_input.emit(event)
 		"physics_stage":
 			stage_physics(CogitoNet.player_world, order.place, order.first)
 		"prepare_grab":

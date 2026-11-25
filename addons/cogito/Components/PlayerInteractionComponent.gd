@@ -262,7 +262,7 @@ func perform_action(action: CogitoInteractionAction) -> void:
 func on_death():
 	if network_interactions and network_interactions.multiplayer.is_server():
 		var players: Node = network_interactions.get_parent()
-		players.carry.release(players.peer_for_actor(player), false)
+		players.carry.release(players.peer_for_actor(player))
 		players.seats.release(player)
 	if wieldables.equipped_wieldable_item:
 		wieldables.equipped_wieldable_item.is_being_wielded = false

@@ -66,6 +66,8 @@ func _play_pressed() -> void:
 func _ready() -> void:
 	#Stops game and shows pause menu
 	_pauses_world = not CogitoNet.is_online()
+	if get_parent() is CogitoPlayer and get_parent().network_movement_only:
+		_pauses_world = false
 	if _pauses_world:
 		get_tree().paused = true
 	pause_menu_opened.emit()

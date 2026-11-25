@@ -5,6 +5,7 @@ extends Node
 ## The local controller has its initial pose, or has been removed.
 signal local_changed(actor: CogitoPlayer)
 
+const Attributes := preload("net_attributes.gd")
 const COMBAT := preload("net_combat_events.gd")
 const PROJECTILES := preload("net_projectiles.gd")
 const PROFILE := preload("net_wield_profile.gd")
@@ -40,6 +41,8 @@ var bodies := preload("net_bodies.gd").new()
 var carry := preload("net_carry.gd").new()
 ## Authoritative seat and driver claims.
 var seats := preload("net_seats.gd").new()
+## Server damage, life transitions and private respawn endpoint.
+var death := preload("net_death.gd").new()
 var combat := COMBAT.new()
 var projectiles := PROJECTILES.new()
 var _profiles := {}
@@ -59,6 +62,8 @@ var _elapsed := 0.0
 
 
 func _ready() -> void:
+	death.name = "Death"
+	add_child(death)
 	combat.name = "Combat"
 	add_child(combat)
 	projectiles.name = "Projectiles"
@@ -221,14 +226,7 @@ func _joined(id: String) -> void:
 	if not multiplayer.is_server() or not is_instance_valid(_level) or _avatars.has(id):
 		return
 	_serial += 1
-	var slot := 0
-	var start := _start
-	if spawn_policy.is_valid():
-		start = spawn_policy.call(_level, id, _start)
-	else:
-		while not _clear_position(start.origin):
-			slot += 1
-			start.origin = _start.origin + _start.basis.x * (1.5 * slot)
+	var start := join_transform(id)
 	_create(id, _serial, start)
 	for peer: int in _ready_levels:
 		if _visible(peer, id):
@@ -241,9 +239,25 @@ func _joined(id: String) -> void:
 					_send_spawn(peer, other)
 
 
-func _clear_position(point: Vector3) -> bool:
+## Level-local spawn used on admission and as the respawn fallback.
+func join_transform(id: String) -> Transform3D:
+	var slot := 0
+	var start := _start
+	if spawn_policy.is_valid():
+		start = spawn_policy.call(_level, id, _start)
+	else:
+		while not _clear_position(start.origin, id):
+			slot += 1
+			start.origin = _start.origin + _start.basis.x * (1.5 * slot)
+	return start
+
+
+func _clear_position(point: Vector3, id: String) -> bool:
 	for avatar in _avatars.values():
-		if avatar.actor.position.distance_squared_to(point) < 1.4 * 1.4:
+		if (
+			avatar != avatar_for(id)
+			and avatar.actor.position.distance_squared_to(point) < 1.4 * 1.4
+		):
 			return false
 	return true
 
@@ -272,6 +286,9 @@ func _create(id: String, life: int, start: Transform3D, initial_pose: Dictionary
 		local_actor = avatar.actor
 		local_changed.emit(local_actor)
 		world.acknowledge_local_avatar()
+	if multiplayer.is_server():
+		death.attach(id, avatar.actor)
+		avatar.health_fraction = Attributes.health_fraction(avatar.actor)
 
 
 func _send_spawn(peer: int, id: String) -> void:
@@ -279,6 +296,8 @@ func _send_spawn(peer: int, id: String) -> void:
 	var frame := SNAPSHOT.capture(avatar.actor, _tick, avatar.revision)
 	var wield := avatar.wield
 	frame.wield = [wield.public_item, wield.light_on, wield.aiming]
+	var private := Attributes.capture(avatar.actor) if peer == _peer_by_id[id] else {}
+	frame.vitals = _vitals(id, peer, private)
 	_spawn.rpc_id(peer, _level_key, id, avatar.lifetime, frame)
 
 
@@ -286,9 +305,18 @@ func _send_spawn(peer: int, id: String) -> void:
 func _spawn(key: String, id: String, life: int, frame: Dictionary) -> void:
 	if not is_instance_valid(_level) or _level_key != key or _session.for_id(id).is_empty():
 		return
-	if _avatars.has(id):
-		return
-	_create(id, life, Transform3D(Basis.IDENTITY, frame.position), frame)
+	var avatar := avatar_for(id)
+	if avatar:
+		if life <= avatar.lifetime:
+			return
+		_install_life(avatar, life)
+		avatar.timeline = SNAPSHOT.new()
+		avatar.receive(frame)
+		if avatar.actor == local_actor:
+			_life_ready.rpc_id(1, life)
+	else:
+		_create(id, life, Transform3D(Basis.IDENTITY, frame.position), frame)
+	_apply_vitals(id, life, frame.vitals)
 	_wield_state(id, life, frame.wield[0], frame.wield[1], frame.wield[2])
 
 
@@ -306,6 +334,7 @@ func _remove(id: String) -> void:
 	if not _avatars.has(id):
 		return
 	var avatar := _avatars[id]
+	death.detach(id, avatar.actor)
 	_avatars.erase(id)
 	var local := avatar.actor == local_actor
 	if local:
@@ -396,15 +425,18 @@ func _physics_process(delta: float) -> void:
 		local_actor.current_command.wield_generation = inventory.local.snapshot.get("generation", 0)
 		own.predict(local_actor.current_command, delta)
 	if not multiplayer.is_server():
-		if local_actor and local_actor.last_consumed_sequence >= 0:
+		if local_actor and not local_actor.is_dead and local_actor.last_consumed_sequence >= 0:
 			var packet := command_channel.packet(local_actor.current_command)
 			if not packet.is_empty():
 				var avatar := _avatars[_session.local_id]
 				_commands.rpc_id(1, avatar.lifetime, avatar.revision, packet)
 		return
-	for avatar in _avatars.values():
+	for id in _avatars:
+		var avatar := _avatars[id]
+		flush_attributes(id)
 		if avatar.actor.is_dead:
-			seats.release(avatar.actor)
+			death.check_automatic(id, avatar.lifetime)
+			continue
 		if local_actor:
 			avatar.present_seat(avatar.actor.is_sitting)
 		avatar.wield.tick(delta)
@@ -442,10 +474,12 @@ func _physics_process(delta: float) -> void:
 func _commands(life: int, revision: int, data: PackedByteArray) -> void:
 	if not multiplayer.is_server():
 		return
-	var record := _session.for_peer(multiplayer.get_remote_sender_id())
+	var sender := multiplayer.get_remote_sender_id()
+	var record := _session.for_peer(sender)
 	var avatar := avatar_for(record.get("player_id", ""))
 	if avatar and avatar.lifetime == life and avatar.revision == revision and avatar.source:
-		avatar.source.receive(data, avatar.actor.current_seat is CogitoVehicle)
+		if not death.reject_dead_input(sender):
+			avatar.source.receive(data, avatar.actor.current_seat is CogitoVehicle)
 
 
 @rpc("authority", "call_remote", "unreliable", 1)
@@ -470,3 +504,77 @@ func _process(delta: float) -> void:
 	for avatar in _avatars.values():
 		if avatar.timeline:
 			avatar.present(delta)
+
+
+func _install_life(avatar: AVATAR, life: int) -> void:
+	avatar.lifetime = life
+	avatar.wield.life = life
+	avatar.actor.set_meta(&"inventory_life", life)
+	if avatar.actor == local_actor:
+		command_channel.clear()
+
+
+## Start a new incarnation in place, preserving inventory, equipment and game-owned quest state.
+func renew_life(id: String) -> void:
+	var avatar := _avatars[id]
+	_serial += 1
+	_install_life(avatar, _serial)
+	mark_teleport(id)
+	avatar.health_fraction = Attributes.health_fraction(avatar.actor)
+	avatar.wield.resume_equipped()
+	inventory.flush_actor(avatar.actor)
+	for peer: int in _ready_levels:
+		if _visible(peer, id):
+			_send_spawn(peer, id)
+	if _peer_by_id[id] == 1:
+		inventory.baseline(1)
+
+
+@rpc("any_peer", "call_remote", "reliable", 0)
+func _life_ready(life: int) -> void:
+	var peer := multiplayer.get_remote_sender_id()
+	if multiplayer.is_server() and peer_in_level(peer):
+		var avatar := avatar_for(_session.for_peer(peer).player_id)
+		if avatar.lifetime == life:
+			inventory.baseline(peer)
+
+
+func _vitals(id: String, peer: int, changes: Dictionary) -> Dictionary:
+	var avatar := _avatars[id]
+	var fields := {
+		"dead": avatar.actor.is_dead,
+		"health_fraction": Attributes.health_fraction(avatar.actor),
+	}
+	if peer == _peer_by_id[id]:
+		fields.attributes = changes
+		if avatar.actor.is_dead:
+			fields.remaining = death.remaining(id)
+	return fields
+
+
+## Flush due meters at the end of a synchronous transaction or server physics tick.
+func flush_attributes(id: String, hit := false) -> void:
+	var avatar := _avatars[id]
+	var changes := avatar.attributes.changes(avatar.actor, Time.get_ticks_msec(), hit)
+	if not changes.is_empty():
+		publish_vitals(id, changes)
+
+
+## Send private values only to the owner. Other observers need only health and death transitions.
+func publish_vitals(id: String, changes: Dictionary) -> void:
+	var avatar := _avatars[id]
+	avatar.health_fraction = Attributes.health_fraction(avatar.actor)
+	for peer: int in _ready_levels:
+		if _visible(peer, id) and (peer == _peer_by_id[id] or changes.has("health")):
+			_apply_vitals.rpc_id(peer, id, avatar.lifetime, _vitals(id, peer, changes))
+
+
+@rpc("authority", "call_remote", "reliable", 0)
+func _apply_vitals(id: String, life: int, fields: Dictionary) -> void:
+	var avatar := avatar_for(id)
+	if not avatar or avatar.lifetime != life:
+		return
+	avatar.health_fraction = fields.health_fraction
+	if avatar.actor.is_local_presentation:
+		Attributes.apply(avatar.actor, fields.get("attributes", {}))
+	death.present(avatar.actor, fields.dead, fields.get("remaining", 0.0))

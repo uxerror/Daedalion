@@ -108,7 +108,7 @@ func override_gravity(_external_gravity_force : float, _external_gravity_vector:
 func setup_attributes_and_currencies() -> void:
 	### NEW PLAYER ATTRIBUTE SETUP:
 	# Grabs all attached player attributes
-	for attribute in find_children("","CogitoAttribute",false):
+	for attribute in find_children("", "CogitoAttribute", false, not network_movement_only):
 		player_attributes[attribute.attribute_name] = attribute
 		CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Cogito Attribute found: " + attribute.attribute_name)
 
@@ -122,9 +122,18 @@ func setup_attributes_and_currencies() -> void:
 	visibility_attribute = player_attributes.get("visibility")
 	# Hookup sanity attribute to visibility attribute
 	var sanity_attribute = player_attributes.get("sanity")
-	if sanity_attribute and visibility_attribute:
+	if sanity_attribute and visibility_attribute and not visibility_attribute.network_frozen:
 		visibility_attribute.attribute_changed.connect(sanity_attribute.on_visibility_changed)
-		visibility_attribute.check_current_visibility()
+	if network_movement_only and visibility_attribute and not visibility_attribute.network_frozen:
+		var meter: CogitoAttribute = player_attributes.get("lightmeter")
+		if meter:
+			visibility_attribute.attribute_changed.connect(
+				func(_key: String, current: float, maximum: float, _up: bool):
+					meter.value_current = meter.value_max * current / maxf(maximum, 0.001)
+			)
+	if visibility_attribute and not visibility_attribute.network_frozen:
+		if sanity_attribute or network_movement_only:
+			visibility_attribute.check_current_visibility()
 
 	### CURRENCY SETUP
 	for currency in find_children("", "CogitoCurrency", false):
@@ -147,6 +156,8 @@ func setup_elements() -> void:
 ## False while an element state keeps the player from acting (stunned, frozen). Checked before
 ## interacting, using wieldables and using items.
 func can_act() -> bool:
+	if network_movement_only and is_dead:
+		return false
 	return actor_elements == null or actor_elements.can_act()
 
 
@@ -156,14 +167,22 @@ func get_element_speed_multiplier() -> float:
 
 
 ## Called by CogitoProperties.deal_elemental_damage(): the damage already has resistances applied.
-func receive_elemental_damage(amount: float, element: CogitoProperties.Element, source: Node = null, _hit_direction := Vector3.ZERO, _hit_position := Vector3.ZERO) -> void:
+func receive_elemental_damage(amount: float, element: CogitoProperties.Element, source: Node = null, _hit_direction := Vector3.ZERO, _hit_position := Vector3.ZERO) -> bool:
 	if is_dead:
-		return
-	decrease_attribute("health", amount)
+		return false
+	var applied := decrease_attribute("health", amount, source)
+	if network_movement_only and not applied:
+		return false
 	elemental_damage_received.emit(amount, element, source)
+	return applied
 
 
 func _on_death():
+	if network_movement_only:
+		var api := player_interaction_component.network_interactions
+		if api and api.multiplayer.is_server() and not is_dead:
+			api.get_parent().death.die(self)
+		return
 	player_interaction_component.on_death()
 	is_dead = true
 
@@ -173,6 +192,8 @@ func increase_attribute(attribute_name: String, value: float, value_type: Consum
 	var attribute = player_attributes.get(attribute_name)
 	if not attribute:
 		CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Increase attribute: Attribute not found")
+		return false
+	if attribute.network_frozen:
 		return false
 	if value_type == ConsumableItemPD.ValueType.CURRENT:
 		if attribute.value_current == attribute.value_max:
@@ -186,12 +207,21 @@ func increase_attribute(attribute_name: String, value: float, value_type: Consum
 	return false
 
 
-func decrease_attribute(attribute_name: String, value: float):
+## Subtract on authority. Pass the instigating node for attacks and physical impacts.
+func decrease_attribute(attribute_name: String, value: float, source: Node = null) -> bool:
 	var attribute = player_attributes.get(attribute_name)
 	if not attribute:
 		CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Decrease attribute: " + attribute_name + " - Attribute not found")
-		return
+		return false
+	if network_movement_only:
+		var api := player_interaction_component.network_interactions
+		if not api or not api.get_parent().death.allows_damage(self, source):
+			return false
 	attribute.subtract(value)
+	if network_movement_only and source and attribute_name == "health" and not is_dead:
+		var api := player_interaction_component.network_interactions
+		api.get_parent().flush_attributes(get_meta(&"net_player_id"), true)
+	return true
 
 
 # Use these functions to manipulate player currencies.

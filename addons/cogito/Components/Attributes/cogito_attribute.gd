@@ -21,7 +21,10 @@ const SAVE_GROUP := &"cogito_save_attribute"
 ## Used for UI  /HUD.
 @export var attribute_icon : Texture2D
 ## Maximum value of this attribute. Can be changed/saved during runtime.
-@export var value_max : float
+@export var value_max : float:
+	set(value):
+		if not network_frozen:
+			value_max = value
 ## Value this attribute starts with per default.
 @export var value_start : float
 ## Use this for when you want an attribute value to be unchangeable but still use signals etc. Can also be turned on/off at runtime.
@@ -35,8 +38,14 @@ enum AttributeVisibility {Hud, Hud_and_Interface, Interface_Only, Hidden}
 var last_passed_subtracted_amount: float # Only used when health is depleted for now
 
 
+## Network replicas and dead avatars accept only silent state installation.
+var network_frozen := false
+
+
 var value_current : float:
 	set(value):
+		if network_frozen:
+			return
 		var prev_value = value_current
 		value_current = value
 		if prev_value < value_current:
@@ -59,9 +68,17 @@ func _enter_tree() -> void:
 
 
 func restore_attribute(current: float, maximum: float) -> void:
+	apply_replica_value(value_current if dont_save_current_value else current, maximum)
+
+
+## Install exact current/max values and notify presentation without gameplay side effects.
+func apply_replica_value(current: float, maximum: float) -> void:
 	var was_blocked := is_blocking_signals()
 	set_block_signals(true)
-	set_attribute(value_current if dont_save_current_value else current, maximum)
+	var frozen := network_frozen
+	network_frozen = false
+	set_attribute(current, maximum)
+	network_frozen = frozen
 	set_block_signals(was_blocked)
 	attribute_restored.emit(attribute_name, value_current, value_max)
 
@@ -71,11 +88,15 @@ func _ready() -> void:
 
 # Used when loading/setting an attribute
 func set_attribute(_value_current:float, _value_max:float):
+	if network_frozen:
+		return
 	value_max = _value_max # Set max before current, as current is based on it
 	value_current = clamp(_value_current, 0.0, _value_max)
 
 
 func add(amount):
+	if network_frozen:
+		return
 	if is_locked:
 		attribute_changed.emit(attribute_name,value_current,value_max,true)
 		return
@@ -84,6 +105,8 @@ func add(amount):
 
 
 func subtract(amount):
+	if network_frozen:
+		return
 	if is_locked:
 		attribute_changed.emit(attribute_name,value_current,value_max,false)
 		return

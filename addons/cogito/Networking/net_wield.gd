@@ -33,6 +33,8 @@ var _predicted_sound: AudioStreamPlayer3D
 
 ## Toggle the validated inventory stack. A switched or removed stack cancels pending reload.
 func equip(next: InventorySlotPD) -> String:
+	if actor.is_dead:
+		return "Player is dead"
 	if actor.is_sitting or actor.player_interaction_component.carrying.is_carrying:
 		return "Actor busy"
 	var item := next.inventory_item as WieldableItemPD
@@ -103,6 +105,23 @@ func _visible_state(on: bool, ads: bool) -> void:
 	if light_on != on or aiming != ads:
 		apply_public(public_item, on, ads)
 		players.publish_wield(player_id)
+
+
+## Holster publicly and cancel firing without removing the equipped inventory stack.
+func suspend() -> void:
+	reload_left = 0
+	_cooldown = 0
+	accepted_sequence = -1
+	generation += 1
+	apply_public("", false, false)
+	players.publish_wield(player_id)
+
+
+## Restore the retained public equipment after the incarnation changes.
+func resume_equipped() -> void:
+	if stack:
+		apply_public(STOCK.definition(stack.inventory_item).resource_path, false, false)
+		set_owner_item(stack.inventory_item)
 
 
 ## Release transient state before detaching the inventory and actor.
@@ -207,15 +226,12 @@ func _primary() -> void:
 				)
 			if profile.stamina:
 				actor.stamina_attribute.subtract(profile.stamina)
-				players.inventory.send_attributes(actor, ["stamina"])
 		&"light":
 			_visible_state(not light_on, false)
 		&"drink":
-			var changed: Array = []
 			for effect in profile.effects:
-				if effect.use(actor):
-					changed.append(effect.attribute_name)
-			players.inventory.send_attributes(actor, changed)
+				effect.use(actor)
+			players.flush_attributes(player_id)
 	if profile.kind in [&"pistol", &"rifle"]:
 		item.charge_current -= 1
 	elif profile.kind in [&"drink", &"throw"]:

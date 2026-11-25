@@ -167,7 +167,7 @@ class Scenario:
                     return line
             self.next_line()
 
-    def start(self, dedicated, restart=False):
+    def start(self, dedicated, restart=False, friendly_fire=True):
         for attempt in range(3):
             if not restart:
                 self.port = 17777 if self.file_transport else available_port()
@@ -175,11 +175,13 @@ class Scenario:
                 self.bus = self.directory / f"bus-{len(self.roles):04d}"
                 self.bus.mkdir()
             if dedicated and self.file_transport:
-                self.server = self.fixture("dedicated", "authority")
+                self.server = self.fixture("dedicated", "authority", extra=(
+                    "--friendly-fire", str(friendly_fire).lower()))
             elif dedicated:
                 self.server = self.launch("dedicated", [
                     "--", "--server", "--bind", "127.0.0.1", "--port", str(self.port),
                     "--level", "res://tests/net/process_arena.tscn",
+                    "--respawn-delay", "1.5", "--friendly-fire", str(friendly_fire).lower(),
                     "--max-players", "4", "--save-dir", str(self.directory / "world"),
                 ])
             else:
@@ -502,6 +504,97 @@ class Scenario:
         self.sample(b, lambda s: s["wield"][first][1])
         return self.sample(a, lambda s: s["wield"][first][1])["inventories"][first]
 
+    def hazards(self, a, b, first, second):
+        names = (first, second)
+        initial = self.pose(self.server, names)["vitals"]
+        self.order(self.server, op="survival", place="hazard", first=first)
+        self.sample(self.server, lambda s: all(
+            s["vitals"][n]["health"] < initial[n]["health"] - 1.5 for n in names))
+        self.order(self.server, op="survival", place="clear", first=first)
+        tick = self.server.samples[-1]["tick"]
+        health = self.pose(self.server, names, tick + 12)["vitals"]
+        for owner, name in ((a, first), (b, second)):
+            self.sample(owner, lambda s: abs(s["vitals"][name]["health"] - health[name]["health"]) < 1e-6)
+
+    def duel(self, a, b, first, second, friendly_fire=True):
+        self.order(self.server, op="survival", place="duel", first=first)
+        self.sample(b, lambda s: s["vitals"][second]["health"] == 2)
+        self.sample(a, lambda s: s["ammo"].get(first) == 100)
+        if a.samples[-1]["wield"][first][0] != "Cogito_LaserRifle.tres":
+            for _ in range(3):
+                a.events = deque(line for line in a.events if not line.startswith("NET INVENTORY "))
+                self.order(a, op="inventory", action="use", item="Laser Rifle")
+                line = self.wait_line(a, lambda event: event.startswith("NET INVENTORY "))
+                reply = json.loads(line.removeprefix("NET INVENTORY "))
+                if reply["ok"]:
+                    break
+                if reply["reason"] != "Stale revision":
+                    raise CheckFailed(f"duel equip failed: {reply}")
+            else:
+                raise CheckFailed("duel equip did not obtain a current inventory revision")
+        self.sample(a, lambda s: s["wield"][first][0] == "Cogito_LaserRifle.tres")
+        holdings = b.samples[-1]["inventories"][second]
+        self.order(a, op="fire", ticks=35)
+        self.sample(self.server, lambda s: s["ammo"][first] <= 97)
+        if not friendly_fire:
+            if self.server.samples[-1]["vitals"][second]["health"] != 2:
+                raise CheckFailed("friendly_fire=false allowed player damage")
+            return
+        dead = self.sample(b, lambda s: s["death_screen"] and s["vitals"][second]["dead"])
+        if dead["paused"] or dead["can_respawn"]:
+            raise CheckFailed("private death screen paused the world or unlocked early")
+        self.order(b, op="respawn")
+        self.sample(b, lambda s: s["respawn_error"] == "Respawn delay")
+        self.order(b, op="escape")
+        self.sample(b, lambda s: s["menu"] and not s["paused"])
+        self.order(b, op="escape")
+        self.sample(b, lambda s: not s["menu"] and s["death_screen"])
+        observer = self.sample(a, lambda s: s["vitals"][second]["dead"])
+        if observer["death_screen"]:
+            raise CheckFailed("surviving player received the death screen")
+        origin = observer["actors"][first]
+        self.order(a, op="walk")
+        self.sample(self.server, lambda s: math.dist(s["actors"][first], origin) > 0.5)
+        self.sample(b, lambda s: s["can_respawn"])
+        self.order(b, op="respawn_button")
+        for role in (a, b, self.server):
+            self.sample(role, lambda s: not s["vitals"][second]["dead"] and not s["death_screen"]
+                        and s["vitals"][second]["fraction"] == 1
+                        and math.dist(s["actors"][second], [12, 0.91, 6]) < 0.3)
+        if b.samples[-1]["inventories"][second] != holdings:
+            raise CheckFailed("respawn changed the victim's inventory or wallet")
+
+    def survival(self, listen=False):
+        self.start(dedicated=not listen)
+        first = "Host" if listen else "Ada"
+        a = self.server if listen else self.fixture(first, "client")
+        self.state(a, [first])
+        b = self.fixture("Ben", "client")
+        self.state(b, [first, "Ben"])
+        for role in (a, b, self.server):
+            self.pose(role, [first, "Ben"])
+        self.hazards(a, b, first, "Ben")
+        self.duel(a, b, first, "Ben")
+        if listen:
+            self.duel(b, a, "Ben", first)
+        else:
+            c = self.fixture("Cy", "client")
+            state = self.pose(c, [first, "Ben", "Cy"])
+            if state["vitals"]["Ben"]["dead"] or math.dist(state["actors"]["Ben"], [12, 0.91, 6]) > 0.3:
+                raise CheckFailed("late joiner missed the respawn")
+        print("PASS survival", "listen" if listen else "dedicated")
+
+    def friendly_fire_off(self):
+        self.start(dedicated=True, friendly_fire=False)
+        a = self.fixture("Ada", "client")
+        self.state(a, ["Ada"])
+        b = self.fixture("Ben", "client")
+        self.state(b, ["Ada", "Ben"])
+        self.pose(a, ["Ada", "Ben"])
+        self.pose(b, ["Ada", "Ben"])
+        self.duel(a, b, "Ada", "Ben", friendly_fire=False)
+        print("PASS dedicated friendly_fire=false: accepted rifle fire leaves victim health unchanged")
+
     def dedicated(self):
         self.start(dedicated=True)
         first = self.fixture("Ada", "client")
@@ -522,6 +615,11 @@ class Scenario:
         self.devices(first, second, "Ada", "Ben")
         self.inventories(first, second, "Ada", "Ben")
         holdings = self.combat(first, second, "Ada", "Ben")
+        self.hazards(first, second, "Ada", "Ben")
+        self.duel(first, second, "Ada", "Ben")
+        self.order(first, op="inventory", action="use", item="Flashlight")
+        self.order(first, op="fire", ticks=1)
+        self.sample(second, lambda s: s["wield"]["Ada"] == ["Cogito_Flashlight.tres", True])
         late = self.fixture("Cy", "client")
         self.state(late, ["Ada", "Ben", "Cy"])
         self.state(first, ["Ada", "Ben", "Cy"])
@@ -534,6 +632,10 @@ class Scenario:
         if (baseline["wield"]["Ada"] != ["Cogito_Flashlight.tres", True]
                 or baseline["flights"] or baseline["shots"] or baseline["impacts"]):
             raise CheckFailed(f"incorrect combat baseline: {baseline}")
+        expected = self.server.samples[-1]["vitals"]["Ada"]["fraction"]
+        if (baseline["vitals"]["Ada"]["fraction"] != expected or baseline["vitals"]["Ben"]["dead"]
+                or math.dist(baseline["actors"]["Ben"], [12, 0.91, 6]) > 0.3):
+            raise CheckFailed("incorrect late-join survival baseline")
         if baseline["slot_id"] != "physics:box":
             raise CheckFailed("missing snapped crate on late join")
         self.sample(late, lambda s: math.dist(s["crate"], self.server.samples[-1]["crate"]) < 0.035)
@@ -584,6 +686,9 @@ class Scenario:
         self.devices(self.server, client, "Host", "Ada")
         self.inventories(self.server, client, "Host", "Ada")
         self.combat(self.server, client, "Host", "Ada")
+        self.hazards(self.server, client, "Host", "Ada")
+        self.duel(self.server, client, "Host", "Ada")
+        self.duel(client, self.server, "Ada", "Host")
         self.stop(client)
         self.state(self.server, ["Host"])
         self.pose(self.server, ["Host"])
@@ -593,14 +698,18 @@ class Scenario:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scenario", choices=("dedicated", "listen"))
+    parser.add_argument("--scenario", choices=("dedicated", "listen", "friendly_fire_off"))
     parser.add_argument("--file-transport", action="store_true", help="use a socket-free packet bus")
+    parser.add_argument("--survival-only", action="store_true", help="run only MP5 scenarios")
     args = parser.parse_args()
-    for name in ([args.scenario] if args.scenario else ("dedicated", "listen")):
+    for name in ([args.scenario] if args.scenario else ("dedicated", "listen", "friendly_fire_off")):
         with tempfile.TemporaryDirectory(prefix=f"cogito-{name}-") as directory:
             scenario = Scenario(Path(directory), args.file_transport)
             try:
-                getattr(scenario, name)()
+                if args.survival_only and name != "friendly_fire_off":
+                    scenario.survival(listen=name == "listen")
+                else:
+                    getattr(scenario, name)()
             except (OSError, ValueError, KeyError, CheckFailed) as exc:
                 print(f"FAIL {name}: {exc}", file=sys.stderr)
                 for role in scenario.roles:

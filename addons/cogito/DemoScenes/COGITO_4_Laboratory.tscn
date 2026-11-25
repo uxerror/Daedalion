@@ -1,5 +1,6 @@
 [gd_scene format=4 uid="uid://6hh7o77unixk"]
 
+[ext_resource type="Script" path="res://addons/cogito/CogitoObjects/cogito_respawn_point.gd" id="respawn"]
 [ext_resource type="Script" uid="uid://c2kkj7vhsd1oi" path="res://addons/cogito/SceneManagement/cogito_scene.gd" id="1_kxi7f"]
 [ext_resource type="Texture2D" uid="uid://sdcljx8f5dhj" path="res://addons/cogito/Assets/hdris/kloofendal_48d_partly_cloudy_puresky_2k.hdr" id="2_akrjl"]
 [ext_resource type="PackedScene" uid="uid://otv80grtivvc" path="res://addons/cogito/PackedScenes/cogito_player_advanced.tscn" id="3_ea58p"]
@@ -476,6 +477,14 @@ shadow_opacity = 0.8
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=298177272]
 environment = SubResource("Environment_bftoa")
+
+[node name="Respawn1" type="Marker3D" parent="."]
+position = Vector3(5.14, 0.8, -5.43)
+script = ExtResource("respawn")
+
+[node name="Respawn2" type="Marker3D" parent="."]
+position = Vector3(5.14, 0.8, -7.03)
+script = ExtResource("respawn")
 
 [node name="Player" parent="." unique_id=2025047440 instance=ExtResource("3_ea58p")]
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 5.13854, 0.8, -5.43073)

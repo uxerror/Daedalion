@@ -15,6 +15,8 @@ var _throw_held := false
 func grab(component: CogitoCarryableComponent, pic: PlayerInteractionComponent) -> Dictionary:
 	var players := get_parent()
 	var peer: int = players.peer_for_actor(pic.player)
+	if pic.player.is_dead:
+		return {"ok": false, "reason": "Player is dead"}
 	if not multiplayer.is_server() or not peer or pic.player.is_sitting or pic.carrying.is_carrying:
 		return {"ok": false, "reason": "Actor busy"}
 	var body := component.get_parent()
@@ -29,6 +31,7 @@ func grab(component: CogitoCarryableComponent, pic: PlayerInteractionComponent) 
 	_grants[peer] = {"component": component, "token": _serial, "tick": -1, "stack": previous}
 	component.player_interaction_component = pic
 	body.set_meta(&"net_carrier", peer)
+	body.set_meta(&"net_damage_owner", wield.player_id)
 	if body.has_meta(&"net_snap_slot"):
 		body.get_meta(&"net_snap_slot").release_body(body)
 	var token := _serial
@@ -58,7 +61,7 @@ func _owner(key: String, epoch: int, token: int, address: Dictionary) -> void:
 		return
 	var pic: PlayerInteractionComponent = players.local_actor.player_interaction_component
 	clear_owner(pic)
-	if token > 0:
+	if token > 0 and not pic.player.is_dead:
 		var component: InteractionComponent = players.world.entities.resolve(
 			address.entity_id, address.component_key
 		)
@@ -89,8 +92,13 @@ func _changed(held: bool, peer: int) -> void:
 	var world: Node = get_parent().world
 	world.publish_holder(world.entities.id_for(component.get_parent()), "")
 	var actor := component.player_interaction_component.player
-	if grant.stack and not actor.is_dead and grant.stack in actor.inventory_data.inventory_slots:
-		actor.get_meta(&"net_wield").equip(grant.stack)
+	if grant.stack and grant.stack in actor.inventory_data.inventory_slots:
+		var wield: Variant = actor.get_meta(&"net_wield")
+		if actor.is_dead:
+			# Keep the selection that was holstered for this grant until respawn.
+			wield.stack = grant.stack
+		else:
+			wield.equip(grant.stack)
 	_notify(peer, 0, {})
 
 
@@ -153,8 +161,10 @@ func _request(token: int, op: StringName, motion: Vector2) -> void:
 
 ## Validate ownership and input again at consumption. A consumed grant cannot throw twice.
 func apply_input(peer: int, token: int, op: StringName, motion: Vector2) -> void:
+	if not multiplayer.is_server() or get_parent().death.reject_dead_input(peer):
+		return
 	var grant: Dictionary = _grants.get(peer, {})
-	if grant.get("token") != token or not multiplayer.is_server():
+	if grant.get("token") != token:
 		return
 	var component: CogitoCarryableComponent = grant.component
 	var pic := component.player_interaction_component

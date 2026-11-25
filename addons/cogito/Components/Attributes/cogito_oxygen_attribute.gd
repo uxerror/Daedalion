@@ -77,6 +77,18 @@ func pulse_damage():
 	health_before_suffocation += damage_when_zero
 	
 func recover_health():
+	var life: int = player.get_meta(&"inventory_life", 0)
 	for i in range(0, health_before_suffocation):
+		var same_life: bool = player.get_meta(&"inventory_life", 0) == life
+		if player.network_movement_only and (player.is_dead or not same_life):
+			return
 		player.increase_attribute("health", 1, false) ##a bit choppy and janky but it works, would love to have it be replaced with something smoother
 		await get_tree().create_timer(0.2).timeout
+
+
+## Clear the previous dive's recovery credit and pulse timers on respawn.
+func reset_after_respawn() -> void:
+	health_before_suffocation = 0
+	is_recovering = false
+	pulse_damage_timer.stop()
+	recovery_timer.stop()

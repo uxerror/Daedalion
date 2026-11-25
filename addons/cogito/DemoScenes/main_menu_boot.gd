@@ -25,10 +25,16 @@ func _start_network_demo(args: PackedStringArray) -> void:
 	if port_index >= 0:
 		port = int(args[port_index + 1]) if port_index + 1 < args.size() else 0
 	CogitoNet.session_failed.connect(_failed)
-	var load_level := get_tree().change_scene_to_file.bind(NET_CONFIG.DEMO_LEVEL)
+	var config := NET_CONFIG.parse_cli(args, true) if "--host" in args else {}
+	if config.has("reason"):
+		_failed(config.reason)
+		return
+	var load_level := get_tree().change_scene_to_file.bind(
+		config.get("level", NET_CONFIG.DEMO_LEVEL)
+	)
 	CogitoNet.session_ready.connect(load_level, CONNECT_DEFERRED | CONNECT_ONE_SHOT)
 	if "--host" in args:
-		CogitoNet.host({"port": port, "bind": "0.0.0.0"})
+		CogitoNet.host(config)
 	else:
 		var index := args.find("--join") + 1
 		CogitoNet.join(args[index] if index < args.size() else "", port)

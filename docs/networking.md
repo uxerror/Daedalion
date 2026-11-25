@@ -1,6 +1,6 @@
 # Multiplayer sessions
 
-Daedalion 1.4 MP4 gives each admitted identity a server-owned Advanced player and private inventory. The server simulates world interactions, pickups, shared containers, vendor transactions and equipped items. It also simulates rigid bodies, grants exclusive carry and seat ownership and drives vehicles from their occupant’s movement commands. Hitscan, melee and ballistic impacts resolve in the shooter’s server world. The offline demo still starts from the main menu.
+Daedalion 1.4 MP5 gives each admitted identity a server-owned Advanced player and private inventory. The server simulates world interactions, pickups, shared containers, vendor transactions and equipped items. It also simulates rigid bodies, grants exclusive carry and seat ownership and drives vehicles from their occupant’s movement commands. Hitscan, melee and ballistic impacts resolve in the shooter’s server world. The server owns survival meters, damage, death and individual respawns. Offline death uses the existing save-slot reload screen.
 
 ## Try the Laboratory
 
@@ -83,6 +83,8 @@ port=7777
 max_players=8
 save_dir="user://net/server"
 content_version="my-game-1.0"
+friendly_fire=true
+respawn_delay=10.0
 ```
 
 | Key | Default and meaning | CLI override |
@@ -93,9 +95,11 @@ content_version="my-game-1.0"
 | `save_dir` | `user://net/server`. Give each server its own writable directory. | `--save-dir` |
 | `content_version` | The `version` string from `addons/cogito/plugin.cfg`. Include the plugin config in an export or supply a game release or content hash. Set the same value in client join credentials. | Config file |
 | `level` | Path to the local PackedScene loaded by the dedicated bootstrap. Clients must load the matching level. | `--level` |
+| `friendly_fire` | Boolean, default `true`. Allow one player to damage another. | `--friendly-fire false` or `--friendly-fire true` |
+| `respawn_delay` | Finite, nonnegative seconds, default `10.0`. Zero enables immediate requests. | `--respawn-delay 1.5` |
 | `display_name` | `Host` for the listen player. Clients supply their own name in join credentials, default `Player`. | Config file |
 
-The protocol version is a networking-code constant. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
+The protocol version is 8. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
 
 The dedicated level starts empty and simulates admitted remote avatars. Their first-person cameras, HUDs and light-meter cameras are omitted. The default demo boot prevents the menu subtree from entering the tree. Dedicated startup skips solo save recovery and cleanup, the fade panel, game options, graphics and input-map setup by Cogito's menu autoload. The engine still loads project resources, Cogito settings and the existing autoload nodes, including InputHelper, DebugLine, InputRouter, audio and quest services. Full export stripping is scheduled for MP11.
 
@@ -127,7 +131,7 @@ func open_session() -> Error:
 	return CogitoNet.host({"port": 7777})
 ```
 
-Reliable spawn RPCs use the stable session endpoint `Session/Players`. A client announces its level key after both admission and level setup. The server sends a new observer the **current** poses of existing players. This handshake lets slow loaders receive the same baseline as other observers. Spawn names derive from the durable identity. Commands and poses carry a server-issued incarnation number, so late packets from a departed avatar cannot affect its replacement. Roster removal releases held actions, carry and seat ownership and removes the avatar. Reconnect starts at a fresh spawn.
+Reliable spawn RPCs use the stable session endpoint `Session/Players`. A client announces its level key after both admission and level setup. The server sends a new observer the **current** poses of existing players. This handshake lets slow loaders receive the same baseline as other observers. Spawn names derive from the durable identity. Commands and poses carry a server-issued incarnation number, so late packets from a departed avatar cannot affect its replacement. Roster removal releases held actions, carry and seat ownership and removes the avatar. Reconnect creates a new avatar at the normal join spawn and restores its private attributes. A dead identity remains dead with its existing server deadline.
 
 | Role | Movement and view |
 | --- | --- |
@@ -138,7 +142,7 @@ Reliable spawn RPCs use the stable session endpoint `Session/Players`. A client 
 
 The project uses 60 physics ticks per second by default. Commands use unreliable ordered channel 1. A packet contains the last four MP1a frames with byte lengths. Protocol 6 includes movement, primary, secondary, reload and change-ammo actions. Each frame ends with the owner’s last observed equip generation (uint32). The receiver checks lengths, action IDs and finite values, normalizes the move vector, wraps yaw and clamps pitch for movement. A combat frame with yaw or neck yaw outside ±π, or pitch outside ±π/2, invalidates the packet. It resolves the avatar from the RPC sender. Each controller consumes at most one new sequence per physics tick. The receive queue holds up to 24 frames, starts with a two-tick jitter window, skips unrecovered gaps, and expires to neutral after 12 ticks without a fresh frame. The packet budget is four per avatar per server tick. Wire sequences are uint32 and extend to the nearest sequence around the next expected tick using signed modular distance. This assumes consecutive accepted sequences differ by less than half the number space. ENet's adaptive packet throttle is disabled on every connection (`throttle_configure(5000, PACKET_THROTTLE_SCALE, 0)`): under RTT jitter it silently discards runs of unreliable sends on the sender side, longer than the four-frame redundancy can recover. Both transport hosts also announce unlimited bandwidth explicitly (`host.bandwidth_limit(0, 0)` right after creation); without it Godot 4.7's ENet can cut a peer's throttle limit to 1/32 for whole one-second bandwidth intervals with the same effect (`tests/net/enet_transport_test.gd`).
 
-`CogitoNet.snapshot_hz` defaults to 25. After physics the server sends one batch on unreliable channel 1 per ready peer per snapshot tick. The batch contains the poses of every avatar sharing that observer’s `CogitoLevel` root. Each pose includes server tick, input acknowledgement, position, velocity, yaw, neck yaw, pitch, head height and posture/moving/seat state. The owner keeps local aim during ordinary updates. Remote playback uses a 100 ms buffer and extrapolates velocity for at most 50 ms. A position discontinuity over 4 m clears the history. After forcing a server teleport, look or in-place respawn, call `CogitoNet.player_world.mark_teleport(player_id)`. The next pose revision resets local look and invalidates buffered input from before the change. A new incarnation starts with empty history.
+`CogitoNet.snapshot_hz` defaults to 25. After physics the server sends one batch on unreliable channel 1 per ready peer per snapshot tick. The batch contains the poses of every avatar sharing that observer’s `CogitoLevel` root. Each pose includes server tick, input acknowledgement, position, velocity, yaw, neck yaw, pitch, head height and posture/moving/seat state. The owner keeps local aim during ordinary updates. Remote playback uses a 100 ms buffer and extrapolates velocity for at most 50 ms. A position discontinuity over 4 m clears the history. After forcing a server teleport or look, call `CogitoNet.player_world.mark_teleport(player_id)`. The next pose revision resets local look and invalidates buffered input from before the change. A new incarnation starts with empty history.
 
 Use `CogitoNet.player_world.avatar_for(player_id)` to look up a live binding. Its `actor` is the Advanced node. On a replica, `timeline.latest()` exposes the last received pose including `tick` and `ack`. On the server, `actor.last_consumed_sequence` records the last applied command.
 
@@ -168,7 +172,7 @@ additional `submit_code` action. Prompt text can change or be translated indepen
 The local interaction ray drives the HUD. The existing input and context-menu entry points
 send the chosen action to `Session/Players/Interactions` on reliable channel 2. A request
 contains `level_key`, `epoch`, `request_id`, `entity_id`, `component_key`, `action_id`,
-`expected_revision` and a phase. The only optional field is a schema-checked payload. The
+`expected_revision`, avatar `life` and a phase. The only optional field is a schema-checked payload. The
 requester can select a registered action. Its actor, the callable, inventory changes and the
 resulting world state are all determined on the server.
 
@@ -370,7 +374,8 @@ Selecting an inventory cell, quickslot or wheel entry sends the same revision-ch
 `inventory.local.equipped_stack()` for the owner stack. The existing stack row carries
 magazine charge and ammo type. Moving the stack preserves the selection. Removing or
 transferring it cancels reload and clears the selection. Reconnecting retains charges and
-reserve ammo and starts a fresh avatar with empty hands.
+reserve ammo. A living player rejoins with empty hands. A dead player retains the equipped
+stack for the next respawn.
 
 `player_world.avatar_for(id).wield` exposes `public_item` (definition resource path),
 `light_on` and `aiming`. The server sends these fields with the initial avatar spawn and
@@ -398,8 +403,7 @@ The pickaxe also checks the wielder's stamina. A hit emits the target's existing
 existing attribute damage entry point. Hitbox listeners receive the shooter as instigator.
 MP2-adapted objects such as shootable switches publish their ordinary state changes.
 A drink applies its authored consumable effects to the wielder at the end of the server
-equip delay and spends one unit. Immediate player attribute changes use MP3a’s private
-attribute projection and silent HUD refresh.
+equip delay and spends one unit. Player attribute changes use the owner’s MP5 meter stream and silent HUD refresh.
 
 **Projectiles.** The toy pistol launches the equipped definition's selected projectile.
 A throwable uses its authored override or its drop scene. Each launch gets a fresh
@@ -516,13 +520,47 @@ add bursts. The process harness prints received RPC payload bytes per second per
 client during the physics scenario, including player snapshots, world events and inventory.
 These measurements exclude ENet, IP and link headers.
 
+## Attributes, damage and respawn
+
+On dedicated and listen servers, the authoritative avatar advances all its attributes, including sprint and jump costs, regeneration, underwater oxygen, suffocation and sanity. Each hazard and attribute zone tracks its own occupants, delay and hint counters. Leaving a zone removes that player from that zone. Water checks the individual avatar’s head. Online, authored light zones supply visibility and the light meter on both server types, so the same level works headless. The offline light meter keeps its camera sampling.
+
+| Recipient | Reliable channel 0 payload |
+| --- | --- |
+| Owner | Every attribute’s exact current and maximum on spawn, join and respawn. Changes send sparse pairs, normally at most once per 100 ms per attribute. Attributed health hits, a cumulative health loss of at least one point, and death bypass the cap. Only the dead owner receives the remaining delay. |
+| Same-level observer | Public `health_fraction` (0–1) and `dead` on spawn, health changes and life transitions. Read `player_world.avatar_for(id).health_fraction` and `.actor.is_dead`. |
+| Other levels | No avatar vitals. Server-side simulation continues independently of observers. |
+
+To add a meter, attach a direct `CogitoAttribute` child to the player prefab on every peer and give it a unique `attribute_name`. Its current/max pair joins the owner stream automatically, including when `dont_save_current_value` is enabled. Put gameplay ticks in the component’s processing callbacks. Replicas freeze these callbacks and ordinary mutations. `apply_replica_value(current, maximum)` installs authoritative values and emits only `attribute_restored`. Bind custom HUDs to that notification as well as the normal local `attribute_changed` signal.
+
+Player damage enters through `victim.decrease_attribute(name, amount, source)`. Pass the shooter, melee wielder, projectile instigator or attributed body as the source. The server resolves the durable attacker ID and calls `player_world.death.can_damage(attacker_player_id, victim_player_id, source)`. The default allows self-damage and environment/NPC damage (empty attacker ID). With `friendly_fire=false`, another player’s hits, including impacts from a carried or thrown body, leave the victim’s attributes intact. A dead avatar ignores further damage. Games can assign a team-aware `CogitoNet.damage_policy` callable with the same signature before opening the session.
+
+At zero health the server marks the current incarnation dead once, releases its interaction, carry, seat and driver grants, clears held input and holsters the weapon. The mannequin’s rig tips onto its side. Movement, interaction and combat are rejected while dead. Only the owner sees the death screen and countdown. Esc opens their pause menu, the mouse is released and other players and the server clock continue. The default policy retains inventory, wallet, quickslots, selected equipment and quest state. A weapon holstered to carry a body is re-equipped after respawn.
+
+The button sends a reliable request containing only the owner’s observed incarnation. The server resolves the sender, checks death and the monotonic deadline, and selects a spawn. Success assigns a new incarnation and pose revision, discards the old command and interpolation history, sends a private baseline, closes the death screen and restores gameplay input. An early, duplicate or stale request cannot change state. A reconnect to the same server process retains the original deadline. A stored zero-health profile without a deadline is immediately eligible. Both paths restore the death presentation silently, without charging a second penalty.
+
+### Authoring respawns
+
+Place `CogitoRespawnPoint` markers in the level. Each has an `enabled` switch and a free-form `tag: StringName`. Only enabled markers in the avatar’s own level instance are candidates. In node-path order the default policy picks the first point at least one metre from every other avatar. If all points are occupied it picks the greatest clearance, breaking ties by path. With no candidates it uses the same spawn selection as a joining player.
+
+Configure game hooks alongside `CogitoNet.spawn_policy` before calling `host`, `start_server` or `join`.
+
+```gdscript
+CogitoNet.respawn_policy = preload("res://game/clinic_respawn.tres")
+CogitoNet.death_screen_scene = preload("res://ui/player_death.tscn")
+CogitoNet.damage_policy = team_rules.can_damage
+```
+
+Subclass `CogitoRespawnPolicy` for server rules. Override `select(player_id, level, candidates)` to return a level-local transform, `on_death(player_id)` to apply a penalty once, and `restore_attributes(avatar)` to change recovery. The default restores health, oxygen, stamina and sanity to their maxima. Override `auto_respawn(player_id)` to return true for automatic respawn after the configured delay. The same deadline and life checks apply.
+
+The optional death screen is a `Control` instantiated under the local HUD. Implement `open_online(actor, remaining_seconds, request: Callable)` and `close_online()`. The first method presents the countdown, takes local mouse/input ownership and calls `request.call()` on button activation. The second releases that ownership. The built-in screen also supports Main Menu and Quit. The server exposes private rejection signals on `player_world.death` for custom feedback.
+
 ## Current limitations
 
 - One active level is supported. Translation includes network latency. Prediction, rollback and coordinated travel remain future work.
 - There is no lag compensation. The server tests targets where they are when the command is consumed. A moving target may have left the crosshair by then. Ballistic replicas can briefly overshoot until the authoritative impact arrives.
 - Recovered projectiles become independent rigid pickups. Attachment to moving hit targets, procedural debris and individual NPC ragdoll bones need their own lifecycle and pose replication. NPC death and ragdoll dragging belong to MP6.
-- Private item-use HUD updates cover immediate attribute changes. Hits run the existing server damage/death callbacks. MP5 owns continuous attribute and death-state replication, death UI and respawn. Breakage and NPC reactions without an MP2 state adapter remain server-local. Element spread and persistent elemental visuals need MP7. Quest inventory flags retain their offline evaluation until MP8 defines a network quest subject.
-- Inventory retention lasts for one server process. MP9 covers saving world objects and player profiles to disk. The offline save format is unchanged.
+- Breakage and NPC reactions without an MP2 state adapter remain server-local. Element spread and persistent elemental visuals need MP7. Quest inventory flags retain their offline evaluation until MP8 defines a network quest subject.
+- Inventories, attribute profiles and respawn deadlines are retained for one server process. MP9 covers saving world objects and player profiles to disk. The offline save format is unchanged.
 - NPCs and other gameplay subsystems still need their own replication. A linked custom object needs its own state adapter to appear on observers. Use level-authored motion/visual tracks for replica animations. Method, nested-animation and audio tracks on door/switch replica players are removed at bind.
 - The sender repeats four frames. A burst that loses every copy of an edge can still lose the action. Artificial loss in the process test covers individual packet loss. LAN feel under jitter and mannequin animation need a visual playtest.
 
@@ -532,6 +570,6 @@ These measurements exclude ENet, IP and link headers.
 GODOT_BIN=/usr/bin/godot NICE='nice -n 19' bash tools/check.sh multiplayer
 ```
 
-The loopback ENet harness runs a dedicated server with two clients, then a listen host with one client. Separate temporary user directories preserve the MP0 identity, rejection, disconnect and restart checks. In a small arena it also checks stationary avatars, forward and turning distances, observation by the opposite peer, the late-join pose and removal. Clients drop every tenth command datagram after encoding its redundant history. A jump tap lands on a dropped datagram and the server and observer must see the jump height. The interaction checks also exercise a closed and open collision doorway, duplicate requests, rejection at distance, a button-linked door, wrong/right keypad codes a turnwheel-linked door, a lockpick-locked door and movement by another player during an owner-only cutscene. A third client verifies a silent baseline. In the listen topology the host opens the first door and the client opens the linked door. The same scenarios race an authored pickup, move a runtime drop between players, trade through a shared container and purchase from a vendor. The dedicated scenario also reopens the container on a late joiner and checks inventory after reconnect. The combat fixture checks bounded automatic shots against hitboxes, owner-private magazines, observed fire, projectile impact and recovery, light state and a silent late join. In the listen topology both players shoot the opposite player’s target. The MP4 scenario races the same box, carries it through the open doorway, throws it and checks the final position within 3.5 cm on both peers. It contests and releases a seat, drives a chair and snaps the box for a late joiner. Listen mode repeats the carry in both directions. Each topology has a 103 s deadline. Select one with `python tools/check_multiplayer.py --scenario dedicated` or `--scenario listen`. Add `--file-transport` to exercise the same RPCs in separate processes with a local file queue.
+The loopback ENet harness runs a dedicated server with two clients, then a listen host with one client. Separate temporary user directories preserve the MP0 identity, rejection, disconnect and restart checks. In a small arena it also checks stationary avatars, forward and turning distances, observation by the opposite peer, the late-join pose and removal. Clients drop every tenth command datagram after encoding its redundant history. A jump tap lands on a dropped datagram and the server and observer must see the jump height. The interaction checks also exercise a closed and open collision doorway, duplicate requests, rejection at distance, a button-linked door, wrong/right keypad codes a turnwheel-linked door, a lockpick-locked door and movement by another player during an owner-only cutscene. A third client verifies a silent baseline. In the listen topology the host opens the first door and the client opens the linked door. The same scenarios race an authored pickup, move a runtime drop between players, trade through a shared container and purchase from a vendor. The dedicated scenario also reopens the container on a late joiner and checks inventory after reconnect. The combat fixture checks bounded automatic shots against hitboxes, owner-private magazines, observed fire, projectile impact and recovery, light state and a silent late join. In the listen topology both players shoot the opposite player’s target. The MP4 scenario races the same box, carries it through the open doorway, throws it and checks the final position within 3.5 cm on both peers. It contests and releases a seat, drives a chair and snaps the box for a late joiner. Listen mode repeats the carry in both directions. MP5 adds overlapping hazards, rifle kills, owner-only countdown and Esc, early request rejection, retained inventory and snap-to-marker respawn. A late client checks the surviving player’s public health and the respawned player’s pose. Listen players also kill and respawn each other. A separate friendly-fire-off run fires the rifle at another player and checks health. Each scenario has a 103 s deadline. Select `--scenario dedicated`, `--scenario listen` or `--scenario friendly_fire_off` with `python tools/check_multiplayer.py`. Use `--survival-only` to run the MP5 stages independently. Add `--file-transport` to exercise the same RPCs in separate processes with a local file queue.
 
 The regular gdUnit run includes the socket-free codec, jitter, wrap, interpolation, level interest, role, actor-lifecycle, entity identity, validation, concurrent commits, private interfaces, plate and baseline tests in `tests/net/`.

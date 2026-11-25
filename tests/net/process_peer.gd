@@ -17,7 +17,13 @@ func _ready() -> void:
 		CogitoNet.transport_factory = func(): return preload("file_transport.gd").new()
 	var port := int(_args["--port"])
 	if _args["--role"] == "authority":
-		if CogitoNet.start_server({"port": port, "save_dir": _args["--save-dir"]}) == OK:
+		var config := {
+			"port": port,
+			"save_dir": _args["--save-dir"],
+			"friendly_fire": _args.get("--friendly-fire", "true") == "true",
+			"respawn_delay": 1.5,
+		}
+		if CogitoNet.start_server(config) == OK:
 			print("NET READY port=%d" % port)
 		else:
 			get_tree().quit(1)
@@ -27,6 +33,7 @@ func _ready() -> void:
 			"bind": "127.0.0.1",
 			"display_name": "Host",
 			"max_players": 2,
+			"respawn_delay": 1.5,
 			"save_dir": _args["--save-dir"],
 		}
 		if CogitoNet.host(config) == OK:

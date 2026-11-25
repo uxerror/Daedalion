@@ -43,6 +43,9 @@ func on_health_change(_health_name:String, _health_current:float, _health_max:fl
 
 
 func on_death(_attribute_name:String, _value_current:float, _value_max:float):
+	var actor := get_parent() as CogitoPlayer
+	if actor and actor.network_movement_only and (network_frozen or actor.is_dead):
+		return
 	death.emit()
 	parent_position = get_parent().global_position
 	parent_rotation = get_parent().global_rotation

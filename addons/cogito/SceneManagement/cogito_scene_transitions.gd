@@ -35,6 +35,8 @@ func loading_saved_game(slot: String) -> Error:
 
 
 func restart_after_death() -> Error:
+	if CogitoNet.is_online():
+		return ERR_UNAVAILABLE
 	if not _begin_transition():
 		return ERR_BUSY
 	var latest := _manager.find_latest_loadable_slot()

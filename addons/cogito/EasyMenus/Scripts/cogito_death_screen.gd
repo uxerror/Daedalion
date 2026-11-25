@@ -11,6 +11,10 @@ signal back_to_main_pressed
 
 var playback : AudioStreamPlaybackPolyphonic
 var _pauses_world: bool
+var _actor: CogitoPlayerAdvanced
+var _request: Callable
+var _countdown: Timer
+var _unlock_msec := 0
 
 @onready var label_active_slot: Label = %Label_ActiveSlot
 @onready var load_button: Button = %ReloadButton
@@ -54,7 +58,53 @@ func _play_pressed() -> void:
 
 # Empty Input Event to take over inputs.
 func on_input(event : InputEvent) -> void:
-	pass
+	if _actor and (event.is_action_pressed("menu") or event.is_action_pressed("ui_cancel")):
+		_actor._handle_command_edge(CogitoPlayerCommand.Action.MENU, 0)
+
+
+## Open for one network owner. The countdown is a display estimate of the server deadline.
+func open_online(actor: CogitoPlayerAdvanced, seconds: float, request: Callable) -> void:
+	_actor = actor
+	_request = request
+	_pauses_world = false
+	label_active_slot.hide()
+	%Screenshot_Spot.get_parent().get_parent().get_parent().hide()
+	show()
+	InputRouter.push(on_input)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_unlock_msec = Time.get_ticks_msec() + ceili(seconds * 1000.0)
+	if seconds > 0:
+		_countdown = Timer.new()
+		_countdown.wait_time = 0.05
+		_countdown.ignore_time_scale = true
+		add_child(_countdown)
+		_countdown.timeout.connect(_display_remaining)
+		_countdown.start()
+	_display_remaining()
+
+
+func _display_remaining() -> void:
+	var seconds := maxf(0, (_unlock_msec - Time.get_ticks_msec()) / 1000.0)
+	if seconds == 0 and _countdown:
+		_countdown.stop()
+	load_button.disabled = seconds > 0.0
+	load_button.text = tr("Respawn (%d)") % ceili(seconds) if seconds > 0 else tr("Respawn")
+	if not load_button.disabled and InputRouter.is_input_active(self):
+		load_button.grab_focus()
+
+
+## Called only after a server-approved respawn or local avatar removal.
+func close_online() -> void:
+	if _countdown:
+		_countdown.stop()
+		_countdown.queue_free()
+		_countdown = null
+	InputRouter.remove(on_input)
+	hide()
+	if _actor and InputRouter.is_input_active(_actor):
+		Input.mouse_mode = _actor.gameplay_mouse_mode
+	_actor = null
+	_request = Callable()
 
 
 func open_death_screen() -> void:
@@ -93,7 +143,11 @@ func _on_quit_button_pressed() -> void:
 
 func _on_back_to_main_menu_pressed() -> void:
 	var menu := CogitoGlobals.cogito_settings.main_menu_scene
-	if menu:
+	if menu and _actor:
+		var tree := get_tree()
+		CogitoNet.disconnect_session.call_deferred()
+		tree.change_scene_to_packed.call_deferred(menu)
+	elif menu:
 		if await CogitoSceneManager.load_next_scene(
 			menu.resource_path, "", "temp", CogitoSceneManager.CogitoSceneLoadMode.RESET
 		) != OK:
@@ -101,5 +155,8 @@ func _on_back_to_main_menu_pressed() -> void:
 
 
 func _on_reload_button_pressed() -> void:
+	if _request.is_valid():
+		_request.call()
+		return
 	if await CogitoSceneManager.restart_after_death() != OK:
 		load_button.text = CogitoSceneManager.last_slot_message

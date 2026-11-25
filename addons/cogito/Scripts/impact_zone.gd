@@ -26,9 +26,9 @@ func play_impact_sound():
 	CogitoAudio.play_sound_3d_in(self, impact_sound, global_position)
 
 func _outgoing_body_entered(node: Node3D):
-	if node is CogitoPlayer:
+	if node is CogitoPlayer and (not node.network_movement_only or node.multiplayer.is_server()):
 		var player = node as CogitoPlayer
-		player.decrease_attribute("health", damage_on_impact)
+		player.decrease_attribute("health", damage_on_impact, self)
 		play_impact_sound()
 	
 func _outgoing_area_entered(area: Area3D):

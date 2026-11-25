@@ -317,6 +317,8 @@ func _view(key: String, epoch: int, token: int, event: StringName, data: Diction
 	var actor: CogitoPlayer = _players.local_actor
 	if not actor or not _api.world.entities.matches(key, epoch):
 		return
+	if actor.is_dead and event in [&"open", &"cutscene"]:
+		return
 	var pic := actor.player_interaction_component
 	match event:
 		&"open":
