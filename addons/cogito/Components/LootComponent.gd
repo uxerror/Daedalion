@@ -47,7 +47,8 @@ func _get_configuration_warnings() -> PackedStringArray:
 
 
 func _ready() -> void:
-	call_deferred("_set_up_references")
+	if multiplayer.is_server():
+		call_deferred("_set_up_references")
 
 
 ## Set up references to player in a deferred manner to avoid nulling during tree operation
@@ -73,6 +74,8 @@ func _spawn_loot():
 	var spawned_items: Array[CogitoObject] = []
 	
 	if enabled and amount_of_items_to_drop > 0:
+		if _network_loot(false):
+			return
 		var lootgen = LootGenerator.new()
 		CogitoLevel.spawn_parent(self).add_child(lootgen)
 		items_to_spawn = lootgen.generate(loot_table, amount_of_items_to_drop)
@@ -127,6 +130,8 @@ func _spawn_loot_container():
 	var merged_array: Array[Dictionary]
 	
 	if enabled and amount_of_items_to_drop > 0:
+		if _network_loot(true):
+			return
 		spawned_loot_bag = loot_bag_scene.instantiate()
 		spawned_loot_bag.position = parent_position
 		CogitoLevel.spawn_parent(self).call_deferred("add_child", spawned_loot_bag)
@@ -148,6 +153,30 @@ func _spawn_loot_container():
 		lootgen.call_deferred("queue_free")
 		
 		_populate_the_container(inventory_to_populate, finalized_items)
+
+
+func _network_loot(bag: bool) -> bool:
+	var spawner := LootGenerator.server_spawner(self)
+	if not spawner:
+		return false
+	if multiplayer.is_server():
+		var root := CogitoLevel.root_of(self)
+		var generator := LootGenerator.new()
+		root.add_child(generator)
+		var entries := generator.generate(loot_table, amount_of_items_to_drop)
+		generator.queue_free()
+		if bag:
+			var box: CogitoContainer = spawner.spawn_bag(self, global_position)
+			if box:
+				spawner.fill_loot(box.inventory_data, entries, false)
+		else:
+			for entry in entries:
+				var stack: InventorySlotPD = spawner.roll_stack(entry)
+				var body: Node3D = spawner.spawn_item(stack, stack.quantity, global_position)
+				if body is RigidBody3D:
+					var rng: RandomNumberGenerator = spawner.rng
+					body.apply_central_impulse(Vector3(rng.randf_range(0, 3), 5, rng.randf_range(0, 3)))
+	return true
 
 
 ## Populates the spawned container with the rolled items.

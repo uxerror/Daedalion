@@ -19,8 +19,20 @@ var chance_drops_table: Array[LootDropEntry] = []
 var quest_drops_table: Array[LootDropEntry] = []
 
 
+## Resolve this level's authority even while the dedicated roster is empty.
+static func server_spawner(context: Node) -> Node:
+	var root := CogitoLevel.root_of(context)
+	if root and root.has_meta(&"cogito_net_players"):
+		return root.get_meta(&"cogito_net_players").spawner
+	if CogitoNet.is_online() and CogitoNet.is_server() and CogitoNet.player_world:
+		return CogitoNet.player_world.spawner
+	return null
+
+
 ## Generate loot by passing a loot table and amount of items to generate.
 func generate(loot_table: LootTable, amount: int, debug: bool = false) -> Array[LootDropEntry]:
+	if is_inside_tree() and not multiplayer.is_server():
+		return []
 	debug_prints = debug
 	
 	var input_array: Array[LootDropEntry] = []
@@ -33,13 +45,22 @@ func generate(loot_table: LootTable, amount: int, debug: bool = false) -> Array[
 		if chance_drops_table.size() > 0:
 			input_array.append_array(chance_drops_table)
 			
-		if quest_drops_table.size() > 0:
+		var offline := not is_inside_tree() or multiplayer.multiplayer_peer is OfflineMultiplayerPeer
+		if quest_drops_table.size() > 0 and offline:
 			input_array.append_array(quest_drops_table)
 			
 		output_array = _roll_for_randomized_items(input_array, amount)
 			
 		if guaranteed_drops_table.size() > 0:
-			output_array.append_array(guaranteed_drops_table)
+			if not offline:
+				for entry in guaranteed_drops_table:
+					if (
+						not entry.inventory_item.is_unique
+						or not (_is_unique_found(entry.inventory_item) or output_array.has(entry))
+					):
+						output_array.append(entry)
+			else:
+				output_array.append_array(guaranteed_drops_table)
 			
 	return output_array
 
@@ -80,6 +101,18 @@ func _sort_loot_table(loot_table: LootTable):
 
 ## Checks for given InventoryPD item against player inventory, loot bags, and lootable containers, returns true if there is a copy of a unique item, false if there isn't.
 func _is_unique_found(item: InventoryItemPD):
+	var root := CogitoLevel.root_of(self)
+	if root and root.has_meta(&"cogito_net_players"):
+		if root.get_meta(&"cogito_net_players").inventory.owns(item):
+			return true
+		for box in CogitoLevel.nodes_in_group(self, &"external_inventory"):
+			if not box.inventory_data.find_slots(item.name).is_empty():
+				return true
+		for body in CogitoLevel.nodes_in_group(self, &"spawned_loot_items"):
+			for pickup in body.find_children("*", "PickupComponent", true, false):
+				if pickup.slot_data.inventory_item.name == item.name:
+					return true
+		return false
 	var _loot_bags: Array[Node] = CogitoLevel.nodes_in_group(self, "loot_bag")
 	var _spawned_items: Array[Node] = CogitoLevel.nodes_in_group(self, "spawned_loot_items")
 	_loot_bags.append_array(CogitoLevel.nodes_in_group(self, "lootable_containers"))
@@ -149,7 +182,8 @@ func _count_quest_items(item: InventoryItemPD) -> int:
 ## Rolls for a dictionary entry from loot table entry. Returns an array of dictionary.
 func _roll_for_randomized_items(_items: Array[LootDropEntry], _amount: int) -> Array[LootDropEntry]:
 	## Using engine's own rng component which is requires 4.3+.
-	var _rng = RandomNumberGenerator.new()
+	var spawner := server_spawner(self)
+	var _rng: RandomNumberGenerator = spawner.rng if spawner else RandomNumberGenerator.new()
 	## Array of dictionary that stores the results.
 	var _result: Array[LootDropEntry] = []
 	## InventoryItemPD's of the passed loot table.

@@ -41,6 +41,11 @@ signal object_state_updated(interaction_text:String)
 signal container_closed
 
 
+func _enter_tree() -> void:
+	if inventory_data and not multiplayer.multiplayer_peer is OfflineMultiplayerPeer:
+		inventory_data = preload("../Networking/net_stock.gd").private_copy(inventory_data)
+
+
 func _ready():
 	add_to_group("external_inventory")
 	add_to_group("interactable")
@@ -76,9 +81,16 @@ func set_state():
 	interaction_text = tr(text_when_closed)
 	animation_player = $AnimationPlayer
 	
+	if not multiplayer.is_server():
+		return
 	if not is_filled_with_starter_items:
 		if starter_contents and starter_contents.size() > 0:
 			print("Container contents found, adding to container inventory.")
+			if not multiplayer.multiplayer_peer is OfflineMultiplayerPeer:
+				for stack in starter_contents:
+					preload("../Networking/net_grid.gd").insert(inventory_data, stack, stack.quantity, true)
+				is_filled_with_starter_items = true
+				return
 			var temp_starter_contents = starter_contents.duplicate_deep(2)
 			for slot_data in temp_starter_contents:
 				inventory_data.pick_up_slot_data(slot_data)

@@ -42,6 +42,11 @@ func get_actions(actor: PlayerInteractionComponent) -> Array[CogitoInteractionAc
 			interaction_text, self, interact, not is_disabled, &"submit_code"
 		)
 		actions.append(submit)
+	if (
+		actor and actor.network_interactions and parent_node is CogitoButton
+		and parent_node.get_parent().has_method("net_trade")
+	):
+		actions.append(CogitoInteractionAction.new("Sell", self, interact, not is_disabled, &"sell"))
 	return actions
 
 

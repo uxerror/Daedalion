@@ -42,6 +42,10 @@ func spawn(
 	actor.name = "Player_" + id.sha256_text()
 	actor.position = start.origin
 	actor.get_node("Body").rotation.y = start.basis.get_euler().y
+	# The dedicated avatar loses its HUD on tree entry. Read the authored bar size first.
+	var bar := actor.player_hud.get_node("InventoryInterface/QuickSlots") as CogitoQuickslots
+	actor.set_meta(&"quickslot_count", bar.quickslot_containers.size())
+	actor.set_meta(&"multiple_quickslot_binds", bar.allow_multiple_quickslot_binds)
 	actor.is_local_presentation = local
 	actor.network_movement_only = true
 	if server and not local:
@@ -61,14 +65,12 @@ func spawn(
 		actor.get_node("StateChart").process_mode = Node.PROCESS_MODE_DISABLED
 		actor.collision_layer = 0
 		actor.collision_mask = 0
-	actor.get_node("AutoPickUpZone").free()
+	if not server:
+		actor.get_node("AutoPickUpZone").free()
 	var ray := actor.get_node("Body/Neck/Head/Eyes/Camera/InteractionRaycast") as RayCast3D
 	if not local:
 		ray.enabled = false
 		ray.process_mode = Node.PROCESS_MODE_DISABLED
-	if local:
-		# Keep first-person display, suppress solo inventory/hold/quickslot event handlers.
-		actor.get_node("GUI").process_mode = Node.PROCESS_MODE_DISABLED
 	var template := actor.inventory_data
 	root.add_child(actor)
 	if server and template and template != actor.inventory_data:

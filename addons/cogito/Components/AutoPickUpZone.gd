@@ -47,6 +47,13 @@ func _physics_process(_delta) -> void:
 
 
 func process_pickup_queue() -> void:
+	if player.network_movement_only:
+		is_processing_queue = not pickup_item_pool.is_empty()
+		if is_processing_queue:
+			var body: Variant = pickup_item_pool.pop_back()
+			if is_instance_valid(body) and overlaps_body(body):
+				_attempt_pick_up(body)
+		return
 	if pickup_item_pool.size() > 0:
 		var pickup = get_pickup_from_queue()
 		if is_instance_valid(pickup):
@@ -90,7 +97,20 @@ func _attempt_pick_up(body: Node3D) -> void:
 		
 		var inventory_item: InventoryItemPD = pick_up_component.slot_data.inventory_item
 		if auto_pick_up_items.has(inventory_item) or auto_pick_up_items_by_name.has(inventory_item.name):
-			pick_up_component.interact(_player_interaction_component)
+			if player.network_movement_only:
+				var service: Node = _player_interaction_component.network_interactions
+				if not service or not player.can_act() or player.is_dead:
+					return
+				if player.network_input_blocked or not multiplayer.is_server():
+					return
+				var spawner: Node = service.get_parent().spawner
+				var result: Dictionary = spawner.collect(
+					pick_up_component, _player_interaction_component, false
+				)
+				if not result.ok:
+					return
+			else:
+				pick_up_component.interact(_player_interaction_component)
 			auto_picked_up_item.emit()
 		# Exit loop after detecting a pick up component (should only be one)
 		break

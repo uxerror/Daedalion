@@ -68,9 +68,10 @@ func _ready() -> void:
 	add_to_group("external_inventory")
 	add_to_group("interactable")
 	
-	call_deferred("_set_up_references")
-	call_deferred("_handle_inventory")
-	call_deferred("_handle_respawning")
+	if multiplayer.is_server():
+		call_deferred("_set_up_references")
+		call_deferred("_handle_inventory")
+		call_deferred("_handle_respawning")
 	
 	interaction_nodes = find_children("","InteractionComponent",true)
 	interaction_text = text_when_closed
@@ -81,7 +82,7 @@ func _ready() -> void:
 ## Set up references to player and container in a deferred manner to avoid nulling
 func _set_up_references():
 	var player := CogitoLevel.local_player(self)
-	_player_hud = player.player_hud if player else null
+	_player_hud = player.player_hud if player and not player.network_movement_only else null
 	
 	if self.inventory_data != null:
 		inventory_to_populate = self.inventory_data
@@ -104,7 +105,11 @@ func _handle_inventory():
 	finalized_items = lootgen.generate(loot_table, amount_of_items_to_drop)
 	lootgen.call_deferred("queue_free")
 	
-	_populate_the_container(inventory_to_populate, finalized_items)
+	var spawner := LootGenerator.server_spawner(self)
+	if spawner:
+		spawner.fill_loot(inventory_to_populate, finalized_items, true)
+	else:
+		_populate_the_container(inventory_to_populate, finalized_items)
 
 
 ## Respawn

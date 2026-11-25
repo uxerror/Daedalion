@@ -83,6 +83,11 @@ func _ready() -> void:
 	
 	await get_tree().process_frame
 	var player := CogitoSceneManager.get_player()
+	if (
+		inventory_reference and inventory_reference.owner is CogitoPlayer
+		and inventory_reference.owner.network_movement_only
+	):
+		player = inventory_reference.owner
 	if player:
 		player_interaction_component = player.player_interaction_component
 
@@ -111,6 +116,12 @@ func unbind_quickslot(quickslot_to_unbind: CogitoQuickslotContainer) -> void:
 	# Finding the passed quickslot in the containers and saving it's index.
 	var slot_index : int = quickslot_containers.find(quickslot_to_unbind, 0)
 	
+	if (
+		inventory_reference and is_instance_valid(inventory_reference.owner)
+		and inventory_reference.owner.has_meta(&"inventory_endpoint")
+	):
+		inventory_reference.owner.get_meta(&"inventory_endpoint").submit("unbind", [slot_index])
+		return
 	if slot_index != -1:
 		inventory_set.unbind(slot_index)
 	else:
@@ -224,6 +235,8 @@ func update_inventory_status(is_open: bool):
 
 
 func on_auto_quickslot_new_item(slot_data: InventorySlotPD) -> void:
+	if inventory_reference.owner is CogitoPlayer and inventory_reference.owner.network_movement_only:
+		return
 	if !slot_data.inventory_item.can_auto_slot: # Checking if this item can auto slot.
 		return
 	
@@ -264,6 +277,8 @@ func _on_slot_changed(index: int) -> void:
 # Keeps CogitoInventory.assigned_quickslots (the saved form of the inventory set) in sync with the set.
 func _store_assigned_quickslot(index: int) -> void:
 	if !inventory_reference:
+		return
+	if inventory_reference.owner is CogitoPlayer and inventory_reference.owner.network_movement_only:
 		return
 	if inventory_reference.assigned_quickslots.size() < inventory_set.size():
 		inventory_reference.assigned_quickslots.resize(inventory_set.size())

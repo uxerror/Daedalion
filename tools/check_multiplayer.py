@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise CogitoNet over loopback ENet in fresh Godot processes, after project import."""
 
+import argparse
 import json
 import math
 import os
@@ -19,7 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = "res://tests/net/process_peer.tscn"
-SCENARIO_SECONDS = 45
+SCENARIO_SECONDS = 70
 
 
 class CheckFailed(Exception):
@@ -37,7 +38,7 @@ def available_port():
 
 
 class Role:
-    def __init__(self, directory, args, events, expected_failure):
+    def __init__(self, directory, args, events, expected_failure, bus):
         self.directory = directory
         self.home = directory / "data"
         self.stop_file = directory / "stop"
@@ -57,8 +58,12 @@ class Role:
             os.getenv("GODOT_BIN", "godot"), "--headless", "--path", str(ROOT),
             "--max-fps", "60", *args,
         ]
+        extra_env = {}
+        if bus:
+            extra_env = {"COGITO_FILE_BUS": str(bus),
+                         "COGITO_FILE_ID": str(2 + int(directory.name.split("-", 1)[0]))}
         self.process = subprocess.Popen(
-            cmd, cwd=ROOT, env={**os.environ, "XDG_DATA_HOME": str(self.home),
+            cmd, cwd=ROOT, env={**os.environ, **extra_env, "XDG_DATA_HOME": str(self.home),
                                "COGITO_TEST_CONTROL": str(directory)},
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
             errors="replace", start_new_session=True,
@@ -87,7 +92,9 @@ class Role:
 
 
 class Scenario:
-    def __init__(self, directory):
+    def __init__(self, directory, file_transport=False):
+        self.file_transport = file_transport
+        self.bus = None
         self.directory = directory
         self.roles = []
         self.output = queue.Queue()
@@ -105,7 +112,7 @@ class Scenario:
             target = directory / "data" / source.relative_to(copy_from.home)
             target.parent.mkdir(parents=True)
             shutil.copyfile(source, target)
-        role = Role(directory, args, self.output, expected_failure)
+        role = Role(directory, args, self.output, expected_failure, self.bus)
         self.roles.append(role)
         return role
 
@@ -121,17 +128,17 @@ class Scenario:
     def next_line(self):
         remaining = self.deadline - time.monotonic()
         if remaining <= 0:
-            raise CheckFailed("45 s scenario deadline exceeded")
+            raise CheckFailed("70 s scenario deadline exceeded")
         try:
             role, line = self.output.get(timeout=remaining)
         except queue.Empty:
-            raise CheckFailed("45 s scenario deadline exceeded") from None
+            raise CheckFailed("70 s scenario deadline exceeded") from None
         if line is None:
             role.exited = True
             try:
                 rc = role.process.wait(timeout=max(0, self.deadline - time.monotonic()))
             except subprocess.TimeoutExpired:
-                raise CheckFailed("45 s scenario deadline exceeded during exit") from None
+                raise CheckFailed("70 s scenario deadline exceeded during exit") from None
             if role.bind_failed and role is self.server:
                 raise BindFailed(f"could not bind UDP {self.port}")
             if not role.stopping or (rc != 0 and not role.killed):
@@ -163,8 +170,13 @@ class Scenario:
     def start(self, dedicated, restart=False):
         for attempt in range(3):
             if not restart:
-                self.port = available_port()
-            if dedicated:
+                self.port = 17777 if self.file_transport else available_port()
+            if self.file_transport:
+                self.bus = self.directory / f"bus-{len(self.roles):04d}"
+                self.bus.mkdir()
+            if dedicated and self.file_transport:
+                self.server = self.fixture("dedicated", "authority")
+            elif dedicated:
                 self.server = self.launch("dedicated", [
                     "--", "--server", "--bind", "127.0.0.1", "--port", str(self.port),
                     "--level", "res://tests/net/process_arena.tscn",
@@ -326,6 +338,64 @@ class Scenario:
         if second.samples[-1]["cutscene_starts"] or not first.samples[-1]["cutscene"]:
             raise CheckFailed("cutscene was not private while the observer moved")
 
+    def inventories(self, a, b, first, second):
+        def items(role, name):
+            return role.samples[-1]["inventories"][name]["items"]
+
+        self.sample(a, lambda s: not s["cutscene"])
+        self.order(self.server, op="inventory_stage", place="start", first=first)
+        self.sample(a, lambda s: s["inventories"][first]["items"].get("Battery") == 1)
+        for role in (a, b):
+            self.order(role, op="prepare_pickup")
+        for role in (a, b):
+            self.order(role, op="race")
+        replies = [json.loads(self.wait_line(role, lambda line: line.startswith("NET RESULT "))
+                              .removeprefix("NET RESULT ")) for role in (a, b)]
+        if sum(reply["ok"] for reply in replies) != 1:
+            raise CheckFailed(f"pickup race did not have one winner: {replies}")
+        for role in (a, b, self.server):
+            self.sample(role, lambda s: not s["loose"])
+        for role, name in [(a, first), (b, second)]:
+            if items(role, name) != items(self.server, name):
+                raise CheckFailed("pickup race owner disagrees with server")
+        if sum(items(self.server, name).get("Lockpick", 0) for name in (first, second)) != 1:
+            raise CheckFailed("pickup race did not conserve the stack")
+
+        self.order(a, op="inventory", action="drop", item="Battery")
+        for role in (b, self.server):
+            self.sample(role, lambda s: s["drop"])
+        self.sample(self.server, lambda s: s["settled"])
+        self.order(self.server, op="inventory_stage", place="drop", first=first)
+        self.order(b, op="collect_drop")
+        result = self.wait_line(b, lambda line: line.startswith("NET RESULT "))
+        if not json.loads(result.removeprefix("NET RESULT "))["ok"]:
+            raise CheckFailed(f"runtime pickup failed: {result}")
+        for role in (b, self.server):
+            self.sample(role, lambda s: not s["drop"] and
+                        s["inventories"][second]["items"].get("Battery") == 1)
+        self.sample(a, lambda s: "Battery" not in s["inventories"][first]["items"])
+        self.order(self.server, op="inventory_stage", place="box", first=first)
+        for role in (a, b):
+            self.use(role, "SharedBox/BasicInteraction")
+        self.order(a, op="inventory", action="put", item="Key")
+        for role in (b, self.server):
+            self.sample(role, lambda s: s["box"] == {"Key": 1})
+        self.order(b, op="inventory", action="take", item="Key")
+        for role in (a, b, self.server):
+            self.sample(role, lambda s: s["box"] == {})
+        if items(b, second).get("Key") != 1 or "Key" in items(a, first):
+            raise CheckFailed("shared container did not transfer the key")
+        for role in (a, b):
+            self.order(role, op="close_box")
+
+        self.order(self.server, op="inventory_stage", place="vendor", first=first)
+        self.use(a, "Vendor/GenericButton/BasicInteraction")
+        for role in (a, self.server):
+            self.sample(role, lambda s: s["stock"] == 2 and
+                        s["inventories"][first]["wallet"] == 15 and
+                        s["inventories"][first]["items"].get("Health Potion") == 1)
+        return a.samples[-1]["inventories"][first]
+
     def dedicated(self):
         self.start(dedicated=True)
         first = self.fixture("Ada", "client")
@@ -343,6 +413,7 @@ class Scenario:
         self.drive(second, "Ben", roster, [self.server, first])
         self.panels(first, second, "Ada", "Ben")
         self.devices(first, second, "Ada", "Ben")
+        holdings = self.inventories(first, second, "Ada", "Ben")
         late = self.fixture("Cy", "client")
         self.state(late, ["Ada", "Ben", "Cy"])
         self.state(first, ["Ada", "Ben", "Cy"])
@@ -352,6 +423,12 @@ class Scenario:
                 or baseline["keydoor_locked"] or baseline["events"] or not baseline["wheel_open"]
                 or not baseline["picked"] or not baseline["cut_used"] or baseline["cutscene_starts"]):
             raise CheckFailed(f"incorrect late-join world baseline: {baseline}")
+        if baseline["loose"] or baseline["drop"]:
+            raise CheckFailed("picked objects appeared on late join")
+        self.order(self.server, op="inventory_stage", place="box", first="Cy")
+        self.use(late, "SharedBox/BasicInteraction")
+        self.sample(late, lambda s: s["box"] == {})
+        self.order(late, op="close_box")
         self.stop(late)
         self.state(first, roster)
         self.state(second, roster)
@@ -364,6 +441,7 @@ class Scenario:
         again = self.fixture("Ada", "client", copy_from=first)
         if self.state(again, roster) != (ada, roster) or self.state(second, roster) != (ben, roster):
             raise CheckFailed("client restart changed identities")
+        self.sample(again, lambda s: s["inventory_ready"] and s["inventories"].get("Ada") == holdings)
         self.stop(again)
         self.state(second, ["Ben"])
         self.stop(second)
@@ -375,7 +453,7 @@ class Scenario:
         if self.state(restored, ["Ada"]) != (ada, {"Ada": ada}):
             raise CheckFailed("server restart changed identity")
         self.stop(restored)
-        print("PASS dedicated + 2 clients: movement, collision, interaction retry, keypad, turnwheel, lockpick, private cutscene, silent late join, identity, restart")
+        print("PASS dedicated + 2 clients: movement, collision, interaction retry, keypad, turnwheel, lockpick, private cutscene, pickup race, drops, container, purchase, late join, inventory reconnect, restart")
 
     def listen(self):
         self.start(dedicated=False)
@@ -389,17 +467,22 @@ class Scenario:
         self.drive(client, "Ada", roster, [self.server, client])
         self.panels(self.server, client, "Host")
         self.devices(self.server, client, "Host", "Ada")
+        self.inventories(self.server, client, "Host", "Ada")
         self.stop(client)
         self.state(self.server, ["Host"])
         self.pose(self.server, ["Host"])
         self.stop(self.server)
-        print("PASS listen host + 1 client: movement, interactions in both directions, turnwheel, lockpick, private cutscene, host identity, departure")
+        print("PASS listen host + 1 client: movement, interactions in both directions, turnwheel, lockpick, private cutscene, container trade, purchase, host identity, departure")
 
 
 def main():
-    for name in ("dedicated", "listen"):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--scenario", choices=("dedicated", "listen"))
+    parser.add_argument("--file-transport", action="store_true", help="use a socket-free packet bus")
+    args = parser.parse_args()
+    for name in ([args.scenario] if args.scenario else ("dedicated", "listen")):
         with tempfile.TemporaryDirectory(prefix=f"cogito-{name}-") as directory:
-            scenario = Scenario(Path(directory))
+            scenario = Scenario(Path(directory), args.file_transport)
             try:
                 getattr(scenario, name)()
             except (OSError, ValueError, KeyError, CheckFailed) as exc:

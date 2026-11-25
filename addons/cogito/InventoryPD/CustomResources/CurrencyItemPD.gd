@@ -12,10 +12,19 @@ class_name CurrencyItemPD
 
 func use(target) -> bool:
 	# Target should always be player? Null check to override using the CogitoSceneManager, which stores a reference to current player node
+	if CogitoNet.is_online() and (not target is CogitoPlayer or not target.multiplayer.is_server()):
+		return false
 	if target == null or target.is_in_group("external_inventory"):
 		CogitoGlobals.debug_log(true, "CurrencyItemPD", "Bad target pass. Setting target to" + str(CogitoSceneManager.get_player()) )
 		target = CogitoSceneManager.get_player()
 		
+	if target is CogitoPlayer and target.network_movement_only:
+		var wallet: CogitoCurrency = target.player_currencies.get(currency_name)
+		if not wallet or wallet.is_locked:
+			return false
+		var total := wallet.value_current + currency_change_amount
+		if total < 0 or total > wallet.value_max:
+			return false
 	if target.increase_currency(currency_name, currency_change_amount):
 		if hint_text_on_use != "":
 			target.player_interaction_component.send_hint(hint_icon_on_use,hint_text_on_use)

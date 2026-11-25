@@ -1,5 +1,9 @@
 extends Node3D
 
+signal net_changed(event: StringName)
+
+const NET_VENDOR := preload("../Networking/net_vendor.gd")
+
 ##How much stock the vendor starts with
 
 @export var starting_amount : int = 3
@@ -36,19 +40,16 @@ func _ready():
 		printerr("spawn_delay exceeded button press cooldown time. It has been set to " + str(spawn_delay))
 	currency_check.connect("transaction_success", Callable(self, "_on_transaction_success"))
 	
-	await get_tree().process_frame
-	var player_node = CogitoSceneManager.get_player()
-	player_interaction_component = (player_node as CogitoPlayer).player_interaction_component
-	for attribute in player_node.find_children("", "CogitoCurrency", false):
-		if attribute is CogitoCurrency and attribute.currency_name == currency_check.currency_name:
-			currency_attribute = attribute
-			break
 
 
-func _on_transaction_success() -> void:
-	# communicate the event
-	player_interaction_component.send_hint(currency_attribute.currency_icon, purchased_hint_text)
-	
+
+## The purchaser supplied by the button owns both currency and presentation.
+func _on_transaction_success(purchaser: Node) -> void:
+	if has_meta(&"cogito_net_world"):
+		return
+	var wallet: CogitoCurrency = purchaser.player_currencies.get(currency_check.currency_name)
+	purchaser.player_interaction_component.send_hint(wallet.currency_icon, purchased_hint_text)
+
 	# update vendor
 	amount_remaining -= 1
 	_update_vendor_state()
@@ -56,6 +57,27 @@ func _on_transaction_success() -> void:
 	# dispense object
 	is_dispensing = true
 	_delayed_object_spawn()
+
+
+## Buy or sell through the server-resolved button.
+func net_trade(pic: PlayerInteractionComponent, selling: bool) -> Dictionary:
+	var result := NET_VENDOR.trade(self, pic, selling)
+	if result.ok:
+		net_changed.emit(&"stock")
+		var hint := "Sold item" if selling else purchased_hint_text
+		pic.send_hint(null, hint)
+	return result
+
+
+## Public vendor stock. Wallets travel in the owner's inventory channel.
+func net_state() -> Dictionary:
+	return {"stock": amount_remaining}
+
+
+## Update the remote display without dispensing an item.
+func apply_net_state(state: Dictionary, _silent: bool) -> void:
+	amount_remaining = state.stock
+	_update_vendor_state()
 
 
 func _delayed_object_spawn() -> void:

@@ -15,10 +15,12 @@ static func hud_reason(reason: String) -> String:
 			return ""
 		"Wrong level epoch", "Unknown entity or component", "Invalid payload", "Invalid phase":
 			return "Unavailable"
-		"No avatar in level", "Disabled action", "Ambiguous action", "Hold required":
-			return "Unavailable"
-	if reason.begins_with("Unavailable online") or reason == "Currency transactions require MP3":
+	if reason in ["No avatar in level", "Disabled action", "Ambiguous action", "Hold required"]:
+		reason = "Unavailable"
+	if reason.begins_with("Unavailable online"):
 		return "Unavailable online"
+	if reason == "Weapons await MP3b":
+		return "Weapon use is not available yet"
 	if reason == "Posture blocks interaction":
 		return "Can't interact in this position"
 	return reason
@@ -27,7 +29,11 @@ static func hud_reason(reason: String) -> String:
 ## Explicit opt in keeps all other solo component entry points inert online.
 static func supported(node: Node, component: InteractionComponent) -> bool:
 	if (
-		component is ReadableComponent
+		component is PickupComponent
+		or component is ExtendedPickupInteraction
+		or component is BackpackComponent
+		or (node is CogitoContainer and component.get_script() == BASIC)
+		or component is ReadableComponent
 		or component is SpinnerInteraction
 		or component is LockpickInteraction
 	):
@@ -150,12 +156,18 @@ static func _panel_guard(node: Node, pic: PlayerInteractionComponent) -> String:
 	var unavailable_now: bool
 	var item: InventoryItemPD
 	if node is CogitoButton:
+		if node.get_parent().has_method("net_trade"):
+			return "Unavailable" if node.cooldown > 0 else ""
 		unavailable_now = (
 			node.cooldown > 0 or (not node.allows_repeated_interaction and node.has_been_used)
 		)
 		item = node.required_item
 		if node.currency_check and node.currency_check.currency_cost != 0:
-			return "Currency transactions require MP3"
+			var check: CurrencyCheck = node.currency_check
+			var wallet: CogitoCurrency = pic.player.player_currencies.get(check.currency_name)
+			if not wallet or wallet.is_locked or wallet.value_current < check.currency_cost:
+				var hint := check.not_enough_currency_hint
+				return hint if hint else "Insufficient funds"
 	else:
 		unavailable_now = not node.allows_repeated_interaction and node.is_on
 		if node.required_item_slot:
@@ -176,6 +188,28 @@ static func commit(
 	var reply := {"ok": true}
 	if node is CogitoKeypad and action.action_id == &"submit_code" and payload != node.passcode:
 		return {"ok": false, "reason": "Wrong code", "view": "wrong_code"}
+	var players: Node = pic.network_interactions.get_parent()
+	var pickup := component is PickupComponent or component is ExtendedPickupInteraction
+	if pickup or component is BackpackComponent:
+		reply = players.spawner.collect(component, pic, action.action_id == &"hold")
+	elif node is CogitoButton and node.get_parent().has_method("net_trade"):
+		reply = node.get_parent().net_trade(pic, action.action_id == &"sell")
+		if reply.ok:
+			node.net_vended(pic)
+	elif node is CogitoContainer:
+		reply = players.containers.open(node, component, pic.player)
+	else:
+		return _device_commit(node, action, pic, payload)
+	if reply.ok and component.attribute_check:
+		component.check_attribute(pic)
+	return reply
+
+
+static func _device_commit(
+	node: Node, action: CogitoInteractionAction, pic: PlayerInteractionComponent, payload: Variant
+) -> Dictionary:
+	var reply := {"ok": true}
+	var component := action.component
 	# BasicInteraction applies its own attribute effects inside interact().
 	var basic_call: bool = component.get_script() == BASIC and not node is CogitoKeypad
 	if component.attribute_check and not basic_call:

@@ -43,6 +43,11 @@ func _ready():
 	find_interaction_nodes()
 	find_cogito_properties()
 	
+	if has_meta(&"cogito_item_drop"):
+		if lifespan:
+			lifespan.stop()
+		can_pick_up = true
+		return
 	if lifespan:
 		lifespan.timeout.connect(on_timeout)
 		
@@ -63,6 +68,8 @@ func on_timeout():
 
 ## Checking collision event for property tags.
 func _on_body_entered(collider: Node):
+	if has_meta(&"cogito_item_drop"):
+		return
 	_apply_impact_element(collider)
 	
 	if rigid_body and noise_magnitude_when_impacting > 0:

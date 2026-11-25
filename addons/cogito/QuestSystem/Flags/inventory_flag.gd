@@ -8,6 +8,8 @@ class_name InventoryFlag
 ## Quest flags are not used for this method, instead this flag checks against the current player's inventory.
 func check(_flags: Dictionary) -> bool:
 	# Look the player up every time: a cached one is freed when the scene changes.
+	if CogitoNet.is_online():
+		return false
 	var player := CogitoSceneManager.get_player()
 	if not player or not player.inventory_data or not expected_item:
 		return false

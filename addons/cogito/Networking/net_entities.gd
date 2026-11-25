@@ -70,7 +70,14 @@ func bind(level: Node, key: String, generation: int) -> void:
 
 
 func _needs_parent_address(node: Node) -> bool:
-	return node is ReadableComponent or node is SpinnerInteraction or node is LockpickInteraction
+	return (
+		node is ReadableComponent
+		or node is SpinnerInteraction
+		or node is LockpickInteraction
+		or node is PickupComponent
+		or node is BackpackComponent
+		or node is InteractionComponent and node.get_parent() is CogitoContainer
+	)
 
 
 func _has_addressable_child(node: Node) -> bool:
@@ -78,6 +85,17 @@ func _has_addressable_child(node: Node) -> bool:
 		if _needs_parent_address(child):
 			return true
 	return false
+
+
+## Register server-minted runtime addresses through the same component lookup used by MP2.
+func register_runtime(id: String, node: Node) -> void:
+	objects[id] = node
+	_ids[node] = id
+	var components := {}
+	for child: InteractionComponent in node.find_children("*", "InteractionComponent", true, false):
+		components[str(node.get_path_to(child))] = child
+		_owners[child] = node
+	_components[id] = components
 
 
 ## Reject a removed, queued or reparented object even if the content was present at bind.

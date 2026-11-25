@@ -13,8 +13,15 @@ func _ready() -> void:
 	CogitoNet.session_failed.connect(_failed)
 	CogitoNet.player_joined.connect(_roster_changed)
 	CogitoNet.player_left.connect(_roster_changed)
+	if OS.has_environment("COGITO_FILE_BUS"):
+		CogitoNet.transport_factory = func(): return preload("file_transport.gd").new()
 	var port := int(_args["--port"])
-	if _args["--role"] == "host":
+	if _args["--role"] == "authority":
+		if CogitoNet.start_server({"port": port, "save_dir": _args["--save-dir"]}) == OK:
+			print("NET READY port=%d" % port)
+		else:
+			get_tree().quit(1)
+	elif _args["--role"] == "host":
 		var config := {
 			"port": port,
 			"bind": "127.0.0.1",
@@ -40,7 +47,7 @@ func _admitted_session() -> void:
 
 
 func _roster_changed(_id: String) -> void:
-	if not _admitted or not CogitoNet.is_online():
+	if not _admitted or not CogitoNet.is_online() or CogitoNet.is_dedicated():
 		return
 	var roster := CogitoNet.players()
 	var local_id := CogitoNet.local_player_id()

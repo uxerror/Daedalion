@@ -106,6 +106,11 @@ func interact(_player_interaction_component:PlayerInteractionComponent):
 func press():
 	if is_inside_tree() and not multiplayer.is_server():
 		return
+	if has_meta(&"cogito_net_world") and get_parent().has_method("net_trade"):
+		var actor := player_interaction_component
+		if actor and get_parent().net_trade(actor, false).ok:
+			net_vended(actor)
+		return
 	# only run the currency check once the press is validated and triggered
 	# otherwise you can charge for a transaction and still not press the button
 	if currency_check and currency_check.currency_cost != 0:
@@ -195,6 +200,16 @@ func save():
 		
 	}
 	return state_dict
+
+## Record a successful online vendor operation after its wallet and stock commit.
+func net_vended(pic: PlayerInteractionComponent) -> void:
+	player_interaction_component = pic
+	_net_pressed = true
+	cooldown = press_cooldown_time
+	pressed.emit()
+	pressed_ref.emit(self)
+	net_changed.emit(&"press")
+
 
 ## Current press and one-use latch for this level instance.
 func net_state() -> Dictionary:

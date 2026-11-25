@@ -1,6 +1,6 @@
 # Multiplayer sessions
 
-Daedalion 1.4 MP2 spawns a server-owned Advanced player for each admitted identity and synchronizes interactions with authored world objects. The offline demo still starts from the main menu.
+Daedalion 1.4 MP3a gives each admitted identity a server-owned Advanced player and private inventory. The server simulates world interactions, pickups, shared containers and vendor transactions. The offline demo still starts from the main menu.
 
 ## Try the Laboratory
 
@@ -148,8 +148,7 @@ Listen hosts and dedicated servers validate interactions with doors, including k
 buttons, switches, keypads, spinners, turnwheels and lockpicks. Pressure plates and cutscene
 zones detect occupants on the server. Readable, keypad and device interfaces belong to one viewer. Another player can continue moving or
 interacting while a panel is open. Inventory changes, including consumption of a disposable
-key, take place in the acting avatar’s server inventory. A remote player’s inventory UI does
-not yet reflect those changes.
+key, take place in the acting avatar’s server inventory. The owner’s HUD and inventory receive the resulting private update.
 
 ### Addresses and requests
 
@@ -232,7 +231,7 @@ the device. Dismissing a private view also releases input and restores its owner
   remaining count reach the picker. A break removes one item from one server stack. A new
   pick requires a fresh press. Success unlocks the registered `doors_to_unlock` and emits
   `lockpick_success` on the server. The public lockpick state contains only `disabled`.
-  The inventory screen awaits MP3 replication.
+  Losing a pick also updates the owner’s inventory and quickslots.
 - **Cutscene.** An authoritative area entry consumes the once flag at start. The entering
   avatar's peer plays the authored camera animation and owns the input context. The server
   consumes that avatar's movement sequences as neutral for the clip duration. The owning
@@ -280,11 +279,96 @@ object. Extending the wire schema requires a matching change to the server valid
 `actor.send_hint(icon, text)` addresses the acting peer. Offline controllers continue to call
 `interact(actor)` and `perform_action(action)` directly.
 
+## Inventories and shared items
+
+Protocol 5 adds `Session/Players/Inventory` and `Session/Players/Containers` on reliable
+channel 2. Once the client acknowledges the level baseline and has its local avatar, it
+receives a private inventory baseline. The listen player uses the authoritative resource
+directly. An inventory revision covers grid size, cells, wallet and quickslot assignments.
+The server assigns each stack an integer id scoped to its inventory. Moving it preserves the
+id. Splitting it creates a new id. Replica rows carry an item definition, origin cell,
+quantity, rotation and, for wieldables, charge and ammo selection. All occupied cells and
+bound quickslots point at the same local stack. An empty delta row removes a stack.
+
+The existing inventory panel, HUD, quickslot bar and wheel read this model. Dragging keeps
+a local preview until the player chooses a destination. A custom interface can use
+`CogitoNet.player_world.inventory.make_request(op, args)` and `dispatch(request)`, or
+`submit(op, args)`. Subscribe to `result_received(result)` for the private outcome. Each
+request carries exactly `request_id`, `life` (avatar incarnation), `revision`, `op` and
+`args`. The server resolves the actor from the sender and validates the current model.
+Arguments below are nonnegative integers bounded by the actual grid, stack or bar.
+`source` is a cell in the source inventory, `id` is its observed stack id, and `rotated`
+is 0 or 1. The first cell and quickslot both have index 0.
+
+| Operation | Positional args | Effect |
+| --- | --- | --- |
+| `move` | source, id, destination, quantity, rotated | Move, swap, split or merge if both footprints and the quantity fit. |
+| `combine` | source, id, target cell | Consume one of each ingredient and insert the authored recipe result. |
+| `drop` | source, id, quantity | Create the authored pickup in front of the server avatar and debit its stack. |
+| `use` | source, id | Invoke the item with the server actor. Successful consumables spend one. |
+| `bind` / `unbind` | source, id, quickslot / quickslot | Assign or clear the owner's binding. |
+| `put`, `take`, `external_move` | source, id, destination, quantity, rotated, token, container revision | Move to, from or within the granted container. |
+| `take_all`, `close` | token, container revision | Take fitting quantities or release the grant. |
+
+Retries with the same positive id return the cached outcome. The server remembers the
+last 64 results per connection and rejects older requests. A rejected mutation sends the
+owner a fresh baseline and refreshes any granted container. The public world baseline
+contains neither player inventories nor container contents.
+
+**Item use.** The server calls `use(actor)` with the resolved player and returns changed
+attribute current/maximum pairs to that owner. HUD displays receive `attribute_restored`.
+Consumables, keys, ammo hints, currency items and combine recipes use their authored
+behavior. Wieldable activation and in-place reloading return the weapon availability hint.
+Their stacks can still move, retain charge, enter a container and drop.
+
+**Pickups and loot.** A press goes through MP2 reach, sight and revision checks. Extended
+pickups offer `press` and `hold`. The authority also processes its avatar's auto-pickup
+area. An inventory can accept part of a stack. The remaining world quantity reaches all
+level observers. An exhausted authored pickup leaves a removal record for late joiners.
+Runtime drops use a server-minted `runtime:<number>` id. The spawn record identifies an
+item definition whose authored `drop_scene` supplies the prefab, or a registered level
+loot component whose `loot_bag_scene` supplies the bag. Player commands carry only slot
+and quantity information. The server simulates the rigid body and publishes changed poses
+at up to 5 Hz, including the final pose. Movement preserves the pickup's interaction revision
+so a falling item remains eligible for a request. Replicas freeze the body. Loot tables, bag timers
+and respawns run on the authority even with an empty roster.
+
+**Containers and vendors.** An MP2 open grants that player a container token. Several
+players can hold grants to the same box. A transfer checks the token, reach and both
+revisions before editing the two inventories. Each viewer receives changes to the box.
+Take-all sends capacity hints to the actor. The vending machine's ordinary button buys one
+unit of the product in its authored pickup scene. Its `sell` action accepts the same product
+at the button's authored unit cost. Stock is public. The buyer's item and wallet are private.
+`CurrencyCheck.transaction_success(purchaser)` identifies the player who completed the
+transaction, including on ordinary paid buttons.
+
+**Reconnect.** The active server retains inventories, currencies and quickslot bindings by
+durable player id. An identity receives its starter items on its first spawn in that server
+run. Rejoin restores the profile and creates a new incarnation, request cache and view grant.
+
+### Authoring items and containers
+
+Save each inventory item definition as an authored `InventoryItemPD` resource with an icon
+and ship it on every peer. Set its stack size and grid footprint. To make it droppable, set
+`drop_scene` to a pickup scene with a `PickupComponent` holding its authored slot. Give
+custom use logic a synchronous `use(actor) -> bool` method. Return success after committing
+the effect and use the supplied actor for attributes, currency and hints. Mutable custom
+fields beyond the built-in stack row need an extension to the stock codec. Put initial
+player stacks in the game's starter list.
+
+Derive a container from `CogitoContainer`, supply its inventory dimensions and cells,
+and attach a `BasicInteraction` to its collider as in the shipped container scene. Set
+`starter_contents` or use a lootable container with an authored loot table. Supply a stable
+entity id if the authored path can change. A custom interface can read the active stock
+and token from `CogitoNet.player_world.containers` after the private open.
+
 ## Current limitations
 
-- MP2 synchronizes players and the listed authored objects in one active level. Translation includes network latency. Client prediction, rollback, independent travel and reconnect state restoration are future stages.
-- Inventory and currency transactions, pickups, weapon use and vendors await MP3. Carrying and seats await MP4. Unsupported interactions stay inert online. Direct server grants of authored items can be used to exercise keyed doors.
-- NPCs, damage, death, movable props, quests, runtime spawns and network saves still need subsystem replication. A linked custom object needs its own state adapter to appear on observers. Use level-authored motion/visual tracks for replica animations. Method, nested-animation and audio tracks on door/switch replica players are removed at bind.
+- One active level is supported. Translation includes network latency. Prediction, rollback and coordinated travel remain future work.
+- MP3b covers wielding, firing, reloading, hitscan and projectile lifecycles. MP4 covers general physics, carrying and seats. Low-rate pickup poses can visibly step during a fall.
+- Private item-use HUD updates cover immediate attribute changes. MP5 owns continuous attributes, damage, death and respawn. Quest inventory flags retain their offline evaluation until MP8 defines a network quest subject.
+- Inventory retention lasts for one server process. MP9 covers saving world objects and player profiles to disk. The offline save format is unchanged.
+- NPCs and other gameplay subsystems still need their own replication. A linked custom object needs its own state adapter to appear on observers. Use level-authored motion/visual tracks for replica animations. Method, nested-animation and audio tracks on door/switch replica players are removed at bind.
 - The sender repeats four frames. A burst that loses every copy of an edge can still lose the action. Artificial loss in the process test covers individual packet loss. LAN feel under jitter and mannequin animation need a visual playtest.
 
 ## Verification
@@ -293,6 +377,6 @@ object. Extending the wire schema requires a matching change to the server valid
 GODOT_BIN=/usr/bin/godot NICE='nice -n 19' bash tools/check.sh multiplayer
 ```
 
-The loopback ENet harness runs a dedicated server with two clients, then a listen host with one client. Separate temporary user directories preserve the MP0 identity, rejection, disconnect and restart checks. In a small arena it also checks stationary avatars, forward and turning distances, observation by the opposite peer, the late-join pose and removal. Clients drop every tenth command datagram after encoding its redundant history. A jump tap lands on a dropped datagram and the server and observer must see the jump height. The interaction checks also exercise a closed and open collision doorway, duplicate requests, rejection at distance, a button-linked door, wrong/right keypad codes a turnwheel-linked door, a lockpick-locked door and movement by another player during an owner-only cutscene. A third client verifies a silent baseline. In the listen topology the host opens the first door and the client opens the linked door. Each topology has a 45 s deadline.
+The loopback ENet harness runs a dedicated server with two clients, then a listen host with one client. Separate temporary user directories preserve the MP0 identity, rejection, disconnect and restart checks. In a small arena it also checks stationary avatars, forward and turning distances, observation by the opposite peer, the late-join pose and removal. Clients drop every tenth command datagram after encoding its redundant history. A jump tap lands on a dropped datagram and the server and observer must see the jump height. The interaction checks also exercise a closed and open collision doorway, duplicate requests, rejection at distance, a button-linked door, wrong/right keypad codes a turnwheel-linked door, a lockpick-locked door and movement by another player during an owner-only cutscene. A third client verifies a silent baseline. In the listen topology the host opens the first door and the client opens the linked door. The same scenarios race an authored pickup, move a runtime drop between players, trade through a shared container and purchase from a vendor. The dedicated scenario also reopens the container on a late joiner and checks inventory after reconnect. Each topology has a 70 s deadline. Select one with `python tools/check_multiplayer.py --scenario dedicated` or `--scenario listen`. Add `--file-transport` to exercise the same RPCs in separate processes with a local file queue.
 
 The regular gdUnit run includes the socket-free codec, jitter, wrap, interpolation, level interest, role, actor-lifecycle, entity identity, validation, concurrent commits, private interfaces, plate and baseline tests in `tests/net/`.

@@ -15,6 +15,8 @@ signal inventory_open(is_true: bool)
 @onready var assign_prompt: Control = $InfoPanel/MarginContainer/VBoxContainer/HBoxAssign
 @onready var use_prompt: Control = $InfoPanel/MarginContainer/VBoxContainer/HBoxUse
 @onready var cogito_tab_menu: CogitoTabMenu = $CogitoTabMenu
+## net_inventory_ui.gd cursor, set by an online session; null offline.
+@onready var network_cursor: RefCounted = null
 
 ## Sound that plays as a generic error.
 @export var sound_error : AudioStream
@@ -91,7 +93,11 @@ func open_inventory():
 
 func close_inventory():
 	if is_inventory_open:
-		if grabbed_slot_data != null: # If the player was holding/moving items, these will be added back to the inventory.
+		if network_cursor:
+			network_cursor.cancel(self)
+			if external_inventory_owner:
+				network_cursor.external("close")
+		elif grabbed_slot_data != null: # If the player was holding/moving items, these will be added back to the inventory.
 			# If there is space, return the item. If not, drop the item (short circuit if drop_item_on_close is false). If the item can't be dropped, reset the inventory to a previously valid state
 			var is_space = get_parent().player.inventory_data.pick_up_slot_data(grabbed_slot_data)
 			if not is_space and (not drop_item_on_close or not _drop_item(grabbed_slot_data)):
@@ -111,6 +117,8 @@ func close_inventory():
 		
 		if external_inventory_owner:
 			external_inventory_owner.close()
+			if network_cursor:
+				clear_external_inventory()
 
 		grabbed_slot_node.hide()
 		info_panel.hide()
@@ -256,6 +264,9 @@ func get_external_inventory():
 	
 
 func _on_take_all_pressed():
+	if network_cursor:
+		network_cursor.external("take_all")
+		return
 	external_inventory_owner.inventory_data.take_all_items(get_parent().player.inventory_data)
 
 
@@ -271,7 +282,12 @@ func clear_external_inventory():
 
 
 func set_player_inventory_data(inventory_data : CogitoInventory):
-	inventory_data.owner = CogitoSceneManager.get_player()  # Setting player inventory owner reference to player node
+	if get_parent().player is CogitoPlayer and get_parent().player.network_movement_only:
+		if not network_cursor:
+			network_cursor = preload("../../Networking/net_inventory_ui.gd").new()
+		network_cursor.endpoint = get_parent().player.get_meta(&"inventory_endpoint", null)
+	else:
+		inventory_data.owner = CogitoSceneManager.get_player()
 	
 	if !inventory_data.inventory_button_press.is_connected(on_inventory_button_press):
 		inventory_data.inventory_button_press.connect(on_inventory_button_press.bind(inventory_ui))
@@ -292,6 +308,10 @@ func on_inventory_button_press(inventory_data: CogitoInventory, index: int, acti
 	slot_in_focus = local_inventory_ui.slot_array[index]
 	input_event = null
 	
+	if network_cursor:
+		network_cursor.press(self, inventory_data, index, action)
+		return
+
 	match [grabbed_slot_data, action]:
 		[_, "inventory_rotate_item"]:
 			rotate_item()
@@ -383,6 +403,9 @@ func update_grabbed_slot():
 
 
 func _on_bind_grabbed_slot_to_quickslot(quickslotcontainer: CogitoQuickslotContainer):
+	if network_cursor:
+		network_cursor.bind_slot(self, quick_slots.quickslot_containers.find(quickslotcontainer))
+		return
 	if grabbed_slot_data:
 		input_event = null
 		CogitoGlobals.debug_log(true, "inventory_interface.gd", "Binding to quickslot container: " + str(grabbed_slot_data) + " -> " + str(quickslotcontainer) )
@@ -414,6 +437,9 @@ func mouse_button_check(event):
 	if event.button_index == MOUSE_BUTTON_LEFT:
 		if !grabbed_slot_data:
 			return
+		if network_cursor:
+			network_cursor.drop(self)
+			return
 		if !grabbed_slot_data.inventory_item.is_droppable:
 			error_log("This item isn't droppable.")
 			return
@@ -437,6 +463,9 @@ func error_log(error: String):
 
 func _on_visibility_changed():
 	if not visible and grabbed_slot_data:
+		if network_cursor:
+			network_cursor.cancel(self)
+			return
 		drop_slot_data.emit(grabbed_slot_data)
 		grabbed_slot_data = null
 		update_grabbed_slot()

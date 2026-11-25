@@ -19,6 +19,22 @@
 [ext_resource type="PackedScene" path="res://addons/cogito/DemoScenes/DemoPrefabs/SpinnerKnob.tscn" id="spinner"]
 [ext_resource type="Script" path="res://addons/cogito/Scripts/cogito_cutscene_trigger.gd" id="cut"]
 
+[ext_resource type="PackedScene" path="res://addons/cogito/PackedScenes/Pickups/pickup_lockpick.tscn" id="pickup"]
+[ext_resource type="PackedScene" path="res://addons/cogito/PackedScenes/container.tscn" id="box"]
+[ext_resource type="PackedScene" path="res://addons/cogito/DemoScenes/DemoPrefabs/vending_machine.tscn" id="vendor"]
+
+[ext_resource type="Script" path="res://addons/cogito/InventoryPD/cogito_inventory.gd" id="inventory"]
+[ext_resource type="Script" path="res://addons/cogito/InventoryPD/CustomResources/InventorySlotPD.gd" id="slot"]
+
+[ext_resource type="Script" path="res://addons/cogito/Components/LootComponent.gd" id="loot_source"]
+[ext_resource type="PackedScene" path="res://addons/cogito/PackedScenes/loot_chest.tscn" id="bag"]
+
+[sub_resource type="Resource" id="empty_box"]
+resource_local_to_scene = true
+script = ExtResource("inventory")
+inventory_size = Vector2i(4, 1)
+inventory_slots = Array[ExtResource("slot")]([null, null, null, null])
+
 [sub_resource type="BoxShape3D" id="zone"]
 size = Vector3(2, 3, 2)
 
@@ -182,3 +198,20 @@ libraries = {&"": SubResource("library")}
 
 [node name="Shape" type="CollisionShape3D" parent="Cutscene"]
 shape = SubResource("zone")
+
+[node name="LootSource" type="Node3D" parent="."]
+script = ExtResource("loot_source")
+loot_bag_scene = ExtResource("bag")
+
+[node name="LooseItem" parent="." instance=ExtResource("pickup")]
+position = Vector3(31, 1, 0)
+freeze = true
+metadata/cogito_persistent_id = "level:loose"
+
+[node name="SharedBox" parent="." instance=ExtResource("box")]
+inventory_data = SubResource("empty_box")
+position = Vector3(31, 0.3, -1.5)
+metadata/cogito_persistent_id = "level:box"
+
+[node name="Vendor" parent="." instance=ExtResource("vendor")]
+position = Vector3(35, 0, 0)

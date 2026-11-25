@@ -5,6 +5,9 @@ extends Node
 ## The local controller has its initial pose, or has been removed.
 signal local_changed(actor: CogitoPlayer)
 
+const INVENTORY := preload("net_inventory.gd")
+const CONTAINERS := preload("net_containers.gd")
+const SPAWNER := preload("net_spawner.gd")
 const INTERACTIONS := preload("net_interactions.gd")
 const WORLD := preload("net_world_state.gd")
 const SESSION := preload("net_session.gd")
@@ -24,6 +27,10 @@ var local_actor: CogitoPlayerAdvanced
 var world := WORLD.new()
 ## Reliable gameplay requests and private results for this session.
 var interactions := INTERACTIONS.new()
+## Private player inventories, viewer grants and level-local runtime objects.
+var inventory := INVENTORY.new()
+var containers := CONTAINERS.new()
+var spawner := SPAWNER.new()
 var _bindings := {}
 var _session: SESSION
 var _prefab: PackedScene
@@ -40,6 +47,12 @@ var _elapsed := 0.0
 
 
 func _ready() -> void:
+	inventory.name = "Inventory"
+	add_child(inventory)
+	containers.name = "Containers"
+	add_child(containers)
+	spawner.name = "Spawner"
+	add_child(spawner)
 	world.name = "World"
 	add_child(world)
 	interactions.name = "Interactions"
@@ -69,7 +82,10 @@ func bind_level(root: Node, start: Transform3D, key: String) -> void:
 	_start = start
 	set_process(not multiplayer.is_server())
 	_owns_root = CogitoLevel.mark_network_root(root)
+	root.set_meta(&"cogito_net_players", self)
+	spawner.bind(root)
 	world.bind(root, key)
+	spawner.track_authored()
 	root.tree_exiting.connect(_level_exiting, CONNECT_ONE_SHOT)
 	if multiplayer.is_server():
 		for record in _session.records():
@@ -92,6 +108,7 @@ func _level_exiting() -> void:
 	if _owns_root:
 		CogitoLevel.unmark_network_root(_level)
 		_owns_root = false
+	_level.remove_meta(&"cogito_net_players")
 	_level = null
 	_ready_levels.clear()
 
@@ -191,6 +208,7 @@ func _create(id: String, life: int, start: Transform3D, initial_pose: Dictionary
 		_prefab = load(AVATAR.PREFAB)
 	avatar.spawn(_prefab, _level, id, start, local, multiplayer.is_server())
 	avatar.actor.player_interaction_component.network_interactions = interactions
+	inventory.attach(avatar.actor, id, _peer_by_id[id], life)
 	if not initial_pose.is_empty():
 		avatar.receive(initial_pose)
 	if local:
@@ -229,6 +247,10 @@ func _remove(id: String) -> void:
 	var local := avatar.actor == local_actor
 	if local:
 		interactions.close_view(avatar.actor.player_interaction_component)
+		if avatar.actor.player_hud.is_inventory_visible():
+			avatar.actor.player_hud.set_inventory_visibility(false)
+	containers.forget(peer)
+	inventory.detach(peer, avatar.actor)
 	avatar.despawn()
 	if local:
 		local_actor = null

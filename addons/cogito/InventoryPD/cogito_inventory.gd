@@ -131,6 +131,11 @@ func grab_single_slot_data(index: int) -> InventorySlotPD:
 
 
 func use_slot_data(index: int):
+	if is_instance_valid(owner) and owner is CogitoPlayer and owner.network_movement_only:
+		if owner.has_meta(&"inventory_endpoint") and index >= 0 and index < inventory_slots.size():
+			var endpoint: Node = owner.get_meta(&"inventory_endpoint")
+			endpoint.submit("use", [index, endpoint.local.id_of(inventory_slots[index])])
+		return
 	if index == -1: # No item assigned to hotbar
 		return
 	

@@ -50,12 +50,14 @@ const DESPAWNINGLOGICTYPES: Array = [DespawningLogic.NONE, DespawningLogic.ONLY_
 
 func _ready() -> void:
 	
-	if debug_prints:
+	if debug_prints and multiplayer.is_server():
 		despawning_logic = DESPAWNINGLOGICTYPES[randi() % DESPAWNINGLOGICTYPES.size()]
 		CogitoGlobals.debug_log(debug_prints, "Loot Component/Loot Drop Container", "Debug prints bool is true. Randomizing container despawn types. Despawning Logic is set to: " + str(despawning_logic))
 	
-	call_deferred("_set_up_references")
-	call_deferred("_handle_despawning")
+	if multiplayer.is_server():
+		if multiplayer.multiplayer_peer is OfflineMultiplayerPeer:
+			call_deferred("_set_up_references")
+		call_deferred("_handle_despawning")
 	
 	add_to_group("external_inventory")
 	add_to_group("loot_bag")
@@ -65,7 +67,8 @@ func _ready() -> void:
 	interaction_nodes = find_children("","InteractionComponent",true)
 	interaction_text = text_when_closed
 	object_state_updated.emit(interaction_text)
-	inventory_data.apply_initial_inventory()
+	if multiplayer.multiplayer_peer is OfflineMultiplayerPeer:
+		inventory_data.apply_initial_inventory()
 
 
 ## Set up references to player and container in a deferred manner to avoid nulling
@@ -247,6 +250,14 @@ func _on_inventory_updated(inventory_data : CogitoInventory):
 
 ## Removal of the container
 func _remove_container():
+	if has_meta(&"cogito_net_world"):
+		var world: Node = get_meta(&"cogito_net_world")
+		var id: String = world.entities.id_for(self)
+		if multiplayer.is_server() and not id.is_empty():
+			if not id.begins_with("runtime:"):
+				world.publish(id, {"removed": true})
+			queue_free()
+		return
 	if _player_hud and self.toggle_inventory.is_connected(_player_hud.toggle_inventory_interface):
 		self.toggle_inventory.disconnect(_player_hud.toggle_inventory_interface)
 				

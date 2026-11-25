@@ -45,6 +45,8 @@ var _ammo_quickslot_inventory : CogitoInventory
 
 func use(target) -> bool:
 	# Target should always be player? Null check to override using the CogitoSceneManager, which stores a reference to current player node
+	if CogitoNet.is_online() or (target is CogitoPlayer and target.network_movement_only):
+		return false
 	if target == null:
 		CogitoGlobals.debug_log(true,"WieldableItemPD.gd", "Bad target pass. Setting target to " + CogitoSceneManager.get_player().name )
 		target = CogitoSceneManager.get_player()
@@ -199,6 +201,11 @@ func switch_to_ammo_type(index: int) -> bool:
 ## The set is built once per item and its counts follow the inventory of passed_player_interaction_component
 ## (stored as player_interaction_component, like use() does).
 func get_quickslot_set(passed_player_interaction_component: PlayerInteractionComponent = null) -> CogitoQuickslotSet:
+	if (
+		passed_player_interaction_component
+		and passed_player_interaction_component.network_interactions
+	):
+		return null
 	if passed_player_interaction_component:
 		player_interaction_component = passed_player_interaction_component
 	if !ammo_quickslot_set or ammo_types.size() <= 1:

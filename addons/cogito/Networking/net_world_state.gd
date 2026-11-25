@@ -50,6 +50,11 @@ func bind(root: Node, key: String) -> void:
 					node.net_bind_replica()
 
 
+## Tombstone kept for late joiners and contested pickup replies.
+func is_removed(id: String) -> bool:
+	return _states.get(id, {}).get("removed", false)
+
+
 ## Client load nonce echoed by the baseline, including when reloading the same key.
 func binding() -> int:
 	return _client_binding
@@ -159,6 +164,7 @@ func _ack(key: String, epoch: int, nonce: int) -> void:
 	for change: Array in _pending[peer]:
 		_send_change(peer, change)
 	_pending.erase(peer)
+	get_parent().inventory.baseline(peer)
 
 
 func _changed(event: StringName, id: String) -> void:
@@ -166,9 +172,24 @@ func _changed(event: StringName, id: String) -> void:
 	if not node:
 		return
 	var state: Dictionary = node.net_state()
-	revisions[id] += 1
+	publish(id, state, event)
+
+
+## Publish server-owned lifecycle records using the same baseline and acknowledgement as devices.
+func publish(id: String, state: Dictionary, event: StringName = &"") -> void:
+	revisions[id] = revisions.get(id, 0) + 1
 	_states[id] = state
-	var change := [id, revisions[id], state, event]
+	_broadcast([id, revisions[id], state, event])
+
+
+## Track physics independently of inventory eligibility. A falling pickup keeps its revision.
+func publish_pose(id: String, pose: Transform3D) -> void:
+	if _states.has(id) and not is_removed(id):
+		_states[id].pose = pose
+		_broadcast([id, revisions[id], pose])
+
+
+func _broadcast(change: Array) -> void:
 	for peer: int in _subscribers:
 		if not get_parent().peer_in_level(peer):
 			continue
@@ -184,7 +205,16 @@ func _send_change(peer: int, change: Array) -> void:
 
 @rpc("authority", "call_remote", "reliable", 2)
 func _delta(key: String, epoch: int, change: Array) -> void:
-	if not entities.matches(key, epoch) or change[1] <= revisions.get(change[0], -1):
+	if not entities.matches(key, epoch):
+		return
+	var observed: int = revisions.get(change[0], -1)
+	if change[2] is Transform3D:
+		var body := entities.live_object(change[0]) as Node3D
+		if body and observed == change[1]:
+			body.global_transform = change[2]
+			_states[change[0]].pose = change[2]
+		return
+	if change[1] <= observed:
 		return
 	if _apply(change[0], change[1], change[2], false):
 		var node := entities.objects[String(change[0])]
@@ -194,6 +224,12 @@ func _delta(key: String, epoch: int, change: Array) -> void:
 
 
 func _apply(id: String, revision: int, state: Dictionary, silent: bool) -> bool:
+	var tombstone: bool = state.size() == 1 and state.get("removed", false)
+	if state.has("quantity") or tombstone or id.begins_with("runtime:"):
+		if get_parent().spawner.apply(id, state):
+			revisions[id] = revision
+			_states[id] = state
+		return false
 	var node := entities.live_object(id)
 	if not node:
 		return false

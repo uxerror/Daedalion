@@ -91,6 +91,8 @@ func setup_player(new_player : Node):
 
 
 func _setup_player():
+	if player is CogitoPlayer and player.network_movement_only and not is_inside_tree():
+		return
 	hold_ui.player_interaction_component = player.player_interaction_component
 	#prevent stuck prompts when changing players
 	delete_interaction_prompts()
@@ -165,6 +167,8 @@ func instantiate_player_currency_ui():
 
 
 func connect_to_external_inventories(): # Grabbing external inventories in scene.
+	if player is CogitoPlayer and player.network_movement_only:
+		return
 	for node in CogitoLevel.nodes_in_group(player, &"external_inventory"):
 		CogitoGlobals.debug_log(true, "player_hud_manager", node.name + " is in external_inventory group.")
 		if !node.is_connected("toggle_inventory",toggle_inventory_interface):

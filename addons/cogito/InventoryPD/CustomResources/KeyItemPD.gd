@@ -8,6 +8,8 @@ class_name KeyItemPD
 
 func use(target) -> bool:
 	# Target should always be player? Null check to override using the CogitoSceneManager, which stores a reference to current player node
+	if CogitoNet.is_online() and (not target is CogitoPlayer or not target.multiplayer.is_server()):
+		return false
 	if target == null or target.is_in_group("external_inventory"):
 		CogitoGlobals.debug_log(true, "KeyItemPD", "Bad target pass. Setting target to" + str(CogitoSceneManager.get_player()) )
 		target = CogitoSceneManager.get_player()

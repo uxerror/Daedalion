@@ -62,6 +62,11 @@ func perform_hold_action(_player_interaction_component: PlayerInteractionCompone
 func get_actions(_player_interaction_component: PlayerInteractionComponent) -> Array[CogitoInteractionAction]:
 	if !pickup:
 		return []
+	if _player_interaction_component.network_interactions:
+		return [
+			CogitoInteractionAction.new(pickup.interaction_text, self, perform_quick_action, true, &"press"),
+			CogitoInteractionAction.new(hold_interaction_text, self, perform_hold_action, true, &"hold"),
+		]
 	var can_use := !_is_use_blocked(_player_interaction_component.player)
 	var can_pick_up : bool = _player_interaction_component.get_inventory().can_pick_up_slot_data(pickup.slot_data)
 	return [

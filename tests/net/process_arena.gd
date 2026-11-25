@@ -1,6 +1,7 @@
 extends Node3D
 ## The process harness observes actual Advanced bodies. Each drive file requests another lap.
 
+const GRID := preload("res://addons/cogito/Networking/net_grid.gd")
 const CHANNEL := preload("res://addons/cogito/Networking/net_command_channel.gd")
 const DRIVE_TICKS := 140
 
@@ -13,6 +14,7 @@ var _order := 0
 var _presentations := 0
 var _cutscene_starts := 0
 var _wheel_start := {}
+var _pickup_request := {}
 
 
 class LossChannel:
@@ -127,7 +129,97 @@ func _physics_process(_delta: float) -> void:
 		"cutscene": $Cutscene.player_reference != null,
 		"cut_used": $Cutscene.has_been_triggered,
 	}
+	data.merge(_inventory_sample())
 	print("NET POS ", JSON.stringify(data))
+
+
+func _contents(inv: CogitoInventory) -> Dictionary:
+	var totals := {}
+	for i in inv.inventory_slots.size():
+		var slot := inv.inventory_slots[i]
+		if slot and slot.origin_index == i:
+			var key := slot.inventory_item.name
+			totals[key] = totals.get(key, 0) + slot.quantity
+	return totals
+
+
+func _inventory_sample() -> Dictionary:
+	var players := CogitoNet.player_world
+	var owners := {}
+	for record in CogitoNet.players():
+		var avatar := players.avatar_for(record.player_id)
+		if avatar and (CogitoNet.is_server() or avatar.actor == CogitoNet.local_player()):
+			owners[record.display_name] = {
+				"items": _contents(avatar.actor.inventory_data),
+				"wallet": avatar.actor.player_currencies.credits.value_current,
+			}
+	var box: Variant = null
+	if CogitoNet.is_server():
+		box = _contents($SharedBox.inventory_data)
+	elif players.containers.local:
+		box = _contents(players.containers.local.data)
+	var dropped := players.world.entities.live_object("runtime:1") as RigidBody3D
+	return {
+		"settled": dropped != null and dropped.sleeping,
+		"inventories": owners,
+		"box": box,
+		"stock": $Vendor.amount_remaining,
+		"loose": players.world.entities.live_object("level:loose") != null,
+		"drop": players.world.entities.live_object("runtime:1") != null,
+		"inventory_ready": players.inventory.local != null and players.inventory.local.revision > 0,
+	}
+
+
+func _inventory_stage(order: Dictionary) -> void:
+	var players := CogitoNet.player_world
+	for record in CogitoNet.players():
+		var actor := players.avatar_for(record.player_id).actor
+		var first: bool = record.display_name == order.first
+		var point := Vector3(30.3 if first else 31.7, 0.1, 0.7)
+		match order.place:
+			"start":
+				actor.inventory_data.inventory_slots.fill(null)
+				if first:
+					for resource in ["Battery", "Key"]:
+						var stack := InventorySlotPD.new()
+						stack.inventory_item = load(
+							"res://addons/cogito/InventoryPD/Items/Cogito_%s.tres" % resource
+						)
+						GRID.insert(actor.inventory_data, stack, 1, false)
+				actor.player_currencies.credits.value_current = 20
+				actor.inventory_data.inventory_updated.emit(actor.inventory_data)
+			"box":
+				point.z = -0.5
+			"vendor":
+				point = Vector3(35.4 if first else 32.2, 0.1, 1.5)
+			"drop":
+				var object := players.world.entities.live_object("runtime:1") as Node3D
+				point = Vector3(24, 0.1, 3) if first else object.position + Vector3(0.5, 0, 0.8)
+				point.y = 0.1
+		actor.position = point
+		actor.velocity = Vector3.ZERO
+		players.mark_teleport(record.player_id)
+
+
+func _inventory_order(order: Dictionary) -> void:
+	var players := CogitoNet.player_world
+	var api := players.inventory
+	var box := players.containers
+	var model := box.local if order.action == "take" else api.local
+	var slots := model.data.find_slots(order.item)
+	if slots.is_empty():
+		push_error("Missing fixture stack %s" % order.item)
+		return
+	var slot := slots[0]
+	var args := [slot.origin_index, model.id_of(slot)]
+	if order.action == "drop":
+		args.append(1)
+	else:
+		var target := box.local if order.action == "put" else api.local
+		args.append_array(
+			[target.data.inventory_slots.find(null), 1, 0, box.token, box.local.revision]
+		)
+	api.submit(order.action, args)
 
 
 func _result(result: Dictionary) -> void:
@@ -140,6 +232,22 @@ func _presented(_id: String, _revision: int, _event: StringName) -> void:
 
 func _execute(order: Dictionary) -> void:
 	match order.op:
+		"inventory_stage":
+			_inventory_stage(order)
+		"inventory":
+			_inventory_order(order)
+		"close_box":
+			CogitoNet.local_player().player_hud.set_inventory_visibility(false)
+		"prepare_pickup":
+			var api := CogitoNet.player_world.interactions
+			_pickup_request = api.make_request($LooseItem/PickupComponent, &"interact")
+		"race":
+			CogitoNet.player_world.interactions.dispatch(_pickup_request)
+		"collect_drop":
+			var object := CogitoNet.player_world.world.entities.live_object("runtime:1")
+			CogitoNet.player_world.interactions.submit(
+				object.get_node("PickupComponent"), &"interact"
+			)
 		"stage":
 			for record in CogitoNet.players():
 				var actor := CogitoNet.player_world.avatar_for(record.player_id).actor

@@ -11,6 +11,7 @@ var pose_packets := {}
 ## Opt-in capture of actual serialized outbound RPC packets for privacy assertions.
 var capture := false
 var sent: Array[PackedByteArray] = []
+var destinations: Array[int] = []
 var _command_count := 0
 var _target: int
 var _channel: int
@@ -48,6 +49,7 @@ func _set_target_peer(peer_id: int) -> void:
 func _put_packet_script(buffer: PackedByteArray) -> Error:
 	if capture:
 		sent.append(buffer.duplicate())
+		destinations.append(_target)
 	if drop_every_tenth_command and _channel == 1 and _transfer == TRANSFER_MODE_UNRELIABLE_ORDERED:
 		_command_count += 1
 		if _command_count % 10 == 0:

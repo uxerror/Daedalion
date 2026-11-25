@@ -9,7 +9,7 @@ const WORLD := preload("net_world_state.gd")
 const AVATAR := preload("net_avatar.gd")
 const SESSION := preload("net_session.gd")
 const DEVICES := preload("net_devices.gd")
-const UNSUPPORTED := "Unavailable online (MP3 inventory and pickups, MP4 carry and seats)"
+const UNSUPPORTED := "Unavailable online (MP3b weapons, MP4 carry and seats)"
 ## Retries older than this many requests per peer get "Old request" instead of a cached reply.
 const RESULT_CACHE := 64
 const DOUBLE_PRESS_MSEC := 300
@@ -72,7 +72,7 @@ func prompt(pic: PlayerInteractionComponent, component: InteractionComponent) ->
 	var choices := component.get_actions(pic)
 	if choices.is_empty():
 		return ""
-	if component is DualInteraction:
+	if component is DualInteraction or component is ExtendedPickupInteraction:
 		return component.interaction_text
 	return choices[0].text
 
@@ -91,7 +91,7 @@ func press(pic: PlayerInteractionComponent, input: String) -> void:
 		var choices := component.get_actions(pic)
 		if not choices.is_empty():
 			var action := choices[0]
-			if component is DualInteraction:
+			if component is DualInteraction or component is ExtendedPickupInteraction:
 				_begin_hold(action)
 			else:
 				perform(action)
@@ -310,6 +310,8 @@ func _end_wheel(
 ## Address, opt-in and payload checks that need no actor.
 func _request_error(component: InteractionComponent, request: Dictionary) -> String:
 	if not component:
+		if world.is_removed(request.entity_id):
+			return "Item already taken"
 		return "Unknown entity or component"
 	if not ACTIONS.supported(world.entities.objects[String(request.entity_id)], component):
 		return UNSUPPORTED
@@ -352,7 +354,8 @@ func _hold_phase(peer: int, component: InteractionComponent, request: Dictionary
 		if phase == "act":
 			return {"action_id": key}
 		return {"ok": false, "reason": "Invalid phase"}
-	if phase == "start" or (phase == "act" and component is DualInteraction and key == &"press"):
+	var dual := component is DualInteraction or component is ExtendedPickupInteraction
+	if phase == "start" or (phase == "act" and dual and key == &"press"):
 		return {"action_id": key}
 	var held: Dictionary = _holds.get(peer, {})
 	_holds.erase(peer)
@@ -370,7 +373,7 @@ func _release_key(
 	if phase != "release":
 		return {"ok": false, "reason": "Hold required"}
 	var complete := Time.get_ticks_msec() - start >= component.hold_time * 1000
-	if component is DualInteraction and key == &"press":
+	if (component is DualInteraction or component is ExtendedPickupInteraction) and key == &"press":
 		return {"action_id": &"hold" if complete else &"press"}
 	if not complete:
 		return {"ok": false, "reason": "Hold too short"}
@@ -410,6 +413,7 @@ func _act(
 	_hint_actor = pic
 	_captured_hints = []
 	var result := ACTIONS.commit(node, action, pic, request.get("payload"))
+	get_parent().inventory.flush_actor(pic.player)
 	if result.get("view") in ["keypad", "read"]:
 		_views[peer] = component
 	elif result.get("view") == "code_ok":
@@ -479,6 +483,8 @@ func _result(result: Dictionary) -> void:
 				_local_hold.clear()
 		var node := component.get_parent()
 		match result.get("view", ""):
+			"container":
+				pic.get_hud().set_inventory_visibility(true, node)
 			"read":
 				_local_view = component
 				component.open_net_interface(pic)

@@ -2,7 +2,7 @@ extends Node
 class_name CurrencyCheck
 
 
-signal transaction_success()
+signal transaction_success(purchaser: Node)
 signal transaction_failed()
 
 
@@ -42,7 +42,7 @@ func check_for_currency(player: Node) -> bool:
 	if found_currency and found_currency.value_current >= currency_cost:
 		if apply_transaction:
 			found_currency.value_current -= currency_cost
-		transaction_success.emit()
+		transaction_success.emit(player)
 		return true
 	else:
 		transaction_failed.emit()

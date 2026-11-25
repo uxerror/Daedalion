@@ -257,7 +257,7 @@ func _ready():
 	
 	initial_collision_mask = collision_mask
 	if inventory_data:
-		if not is_local_presentation:
+		if not is_local_presentation or network_movement_only:
 			inventory_data = inventory_data.duplicate_deep(Resource.DEEP_DUPLICATE_ALL)
 		inventory_data.owner = self
 	
@@ -272,7 +272,8 @@ func _ready():
 	player_interaction_component.exclude_player(get_rid())
 	
 	
-	randomize() 
+	if not network_movement_only:
+		randomize()
 	
 	radius = _calculate_player_radius()
 	
@@ -439,8 +440,6 @@ func report_mouse_movement(movement: Vector2) -> void:
 
 ## Passes a local presentation event to the configured quickslot views.
 func handle_quickslot_input(event: InputEvent) -> void:
-	if network_movement_only:
-		return
 	var fp_hud : CogitoPlayerHudManager = player_hud as CogitoPlayerHudManager
 	if fp_hud and fp_hud.inventory_interface and fp_hud.inventory_interface.quick_slots and can_act():
 		fp_hud.inventory_interface.quick_slots.on_input(event)
@@ -725,6 +724,12 @@ func _handle_command_edge(edge: int, index: int) -> void:
 			intent.action = CogitoPlayerCommand.ACTIONS[action]
 			intent.pressed = pressed
 			player_interaction_component.on_action_input(intent)
+		if is_local_presentation and pressed and action == ACTION.INVENTORY and not is_dead:
+			player_hud.set_inventory_visibility(true)
+		elif is_local_presentation and input_source is CogitoLocalInputSource:
+			var local_event := (input_source as CogitoLocalInputSource).view_event(index)
+			if local_event:
+				handle_quickslot_input(local_event)
 		if action == ACTION.JUMP and pressed:
 			current_command.held |= 1 << ACTION.JUMP
 		return

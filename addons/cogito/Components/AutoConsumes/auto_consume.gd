@@ -31,6 +31,8 @@ var _watched_inventory: CogitoInventory
 
 # Must be called from _ready in subclass
 func initialize_auto_consume() -> void:
+	if not multiplayer.is_server():
+		return
 	if !consumables or consumables.size() == 0:
 		CogitoGlobals.debug_log(true, "AutoConsume", "No consumables added to the " + attribute_name + " attribute's auto-consume list.")
 		return
@@ -143,7 +145,13 @@ func _update_values() -> void:
 
 
 func _consume_item(slot_data: InventorySlotPD) -> void:
-	(get_parent() as CogitoPlayer).inventory_data.use_slot_data(slot_data.origin_index)
+	var actor := get_parent() as CogitoPlayer
+	if actor.network_movement_only:
+		var service: Node = actor.player_interaction_component.network_interactions
+		var endpoint: Node = service.get_parent().inventory
+		endpoint.auto_consume.call_deferred(actor, slot_data)
+	else:
+		actor.inventory_data.use_slot_data(slot_data.origin_index)
 	CogitoGlobals.debug_log(true, "AutoConsume", "Auto-consumed " + slot_data.inventory_item.name + " for " + attribute_name)
 	
 	if hint_text_on_use != "":
