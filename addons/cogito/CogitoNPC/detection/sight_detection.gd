@@ -78,7 +78,7 @@ static func _linear_curve() -> Curve:
 	return curve
 
 func _ready() -> void:
-	if show_detection_line:
+	if show_detection_line and not CogitoNet.is_online() and multiplayer.is_server():
 		debug_line = DebugLineScript.new()
 		add_child(debug_line)
 	connect_detection_signals()

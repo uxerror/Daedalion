@@ -24,6 +24,9 @@ func _ready() -> void:
 
 
 func damage(damage_amount: float, object: Node3D = null, _hit_direction:= Vector3.ZERO, _hit_position:= Vector3.ZERO):
+	var npc := parent as CogitoNPC
+	if npc and (not multiplayer.is_server() or (npc.network_state and npc.is_dead())):
+		return
 	if health_attribute:
 		var victim := health_attribute.get_parent() as CogitoPlayer
 		if victim and victim.network_movement_only:
@@ -44,10 +47,13 @@ func damage(damage_amount: float, object: Node3D = null, _hit_direction:= Vector
 		parent.add_child(spawned_object)
 		
 	if apply_force_on_hit:
-		##TODO Handle CharacterBody3D for NPC knockback
 		if parent is RigidBody3D:
 			parent.apply_impulse(_hit_direction * damage_amount * applied_force_multipler, _hit_position)
 		if parent is CharacterBody3D:
 			parent.apply_knockback(_hit_direction * damage_amount * applied_force_multipler)
 			
+	if npc and npc.perception and not npc.is_dead():
+		if not apply_force_on_hit and not _hit_direction.is_zero_approx():
+			npc.apply_knockback(_hit_direction)
+		npc.perception.players.combat.npc_event(npc, &"hit", _hit_position, _hit_direction)
 	got_hit.emit(object)

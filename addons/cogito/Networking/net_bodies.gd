@@ -6,6 +6,7 @@ const NEAR := 24.0
 const INTEREST := 96.0
 
 var _bodies: Dictionary[String, Node3D] = {}
+var _npc_poses := {}
 var _original := {}
 var _observers := {}
 var _timelines: Dictionary[String, TIMELINE] = {}
@@ -44,6 +45,7 @@ func _untrack(id: String) -> void:
 		_original.erase(id)
 	for seen: Dictionary in _observers.values():
 		seen.erase(id)
+	_npc_poses.erase(id)
 	_bodies.erase(id)
 	_timelines.erase(id)
 
@@ -83,6 +85,10 @@ func advance(delta: float, players: Dictionary, peers: Array[int]) -> void:
 				break
 		var linear := rigid.linear_velocity if rigid and not rest else Vector3.ZERO
 		var angular := rigid.angular_velocity if rigid and not rest else Vector3.ZERO
+		if body is CogitoNPC:
+			rest = body.global_transform.is_equal_approx(_npc_poses.get(id, body.global_transform))
+			linear = Vector3.ZERO if rest else body.get_real_velocity()
+			_npc_poses[id] = body.global_transform
 		if driven:
 			var vehicle: CogitoVehicle = body.get_meta(&"net_driver")
 			linear = vehicle.velocity
@@ -90,6 +96,8 @@ func advance(delta: float, players: Dictionary, peers: Array[int]) -> void:
 		samples[id] = [body.global_transform, linear, angular, rest, nearby or driven]
 	var entities: Variant = get_parent().world.entities
 	for peer in peers:
+		var session := get_parent().get_parent()
+		get_parent().npcs.publish(peer, players[peer], session.for_peer(peer).player_id)
 		var batch := batch_for(peer, players[peer], samples)
 		if batch.rows.is_empty():
 			continue
@@ -144,6 +152,8 @@ func _receive(key: String, epoch: int, tick: int, rows: Array) -> void:
 			continue
 		if not _timelines.has(id):
 			_timelines[id] = TIMELINE.new()
+		if _bodies[id] is CogitoNPC and tick > _timelines[id].tick:
+			_bodies[id].network_state.motion(row[2])
 		if _timelines[id].push(tick, row):
 			_bodies[id].global_transform = row[1]
 			_bodies[id].reset_physics_interpolation()

@@ -210,7 +210,7 @@ var ledge_climbing_shapecast_initial_position : Vector3
 @onready var jump_timer: Timer = $JumpCooldownTimer
 
 # Adding carryable position for item control.
-@onready var footstep_surface_detector : FootstepSurfaceDetector = $FootstepPlayer
+@onready var footstep_surface_detector: FootstepSurfaceDetector = get_node_or_null("FootstepPlayer")
 
 #Navigation agent for Player auto seat exit handling
 @onready var navigation_agent = $NavigationAgent3D
@@ -1131,7 +1131,9 @@ func _on_grounded_state_entered() -> void:
 		landing_volume = lerp(min_volume_db, max_volume_db, velocity_ratio)
 		landing_pitch = lerp(max_pitch, min_pitch, velocity_ratio)
 		# Play the landing sound
-		footstep_surface_detector._play_interaction("landing", current_lerp_speed)
+		_network_footstep(current_lerp_speed)
+		if footstep_surface_detector and (not network_movement_only or is_local_presentation):
+			footstep_surface_detector._play_interaction("landing", current_lerp_speed)
 	was_in_air = false  # Reset airborne state
 
 
@@ -1213,17 +1215,32 @@ func _on_grounded_state_physics_processing(delta: float) -> void:
 	is_sprinting_in_airborne = false
 
 
+## Submit a movement stimulus to the authoritative NPCs in this level.
+func _network_footstep(speed: float) -> void:
+	if network_movement_only and multiplayer.is_server():
+		var endpoint := player_interaction_component.network_interactions
+		if endpoint:
+			endpoint.get_parent().npcs.noise(self, speed * 0.5)
+
+
 func _footstep_sounds_system():
 	# FOOTSTEP SOUNDS SYSTEM = CHECK IF ON GROUND AND MOVING
 	if main_velocity.length() >= 0.2:
 		if current_moving_state == MovingState.Sliding:
-			if !slide_audio_player.playing:
+			if (
+				slide_audio_player and not slide_audio_player.playing
+				and (not network_movement_only or is_local_presentation)
+			):
 				slide_audio_player.play()
 		else:
 			if slide_audio_player:
 				slide_audio_player.stop()
 			
 			if can_play_footstep && wiggle_vector.y > 0.9:
+				_network_footstep(main_velocity.length())
+				can_play_footstep = false
+				if not footstep_surface_detector or (network_movement_only and not is_local_presentation):
+					return
 				#dynamic volume for footsteps
 				if current_moving_state == MovingState.Walking:
 					footstep_surface_detector.volume_db = walk_volume_db
@@ -1232,9 +1249,7 @@ func _footstep_sounds_system():
 				elif current_moving_state == MovingState.Sprinting:
 					footstep_surface_detector.volume_db = sprint_volume_db
 				footstep_surface_detector._play_interaction("footstep", main_velocity.length())
-					
-				can_play_footstep = false
-				
+
 			if !can_play_footstep && wiggle_vector.y < 0.9:
 				can_play_footstep = true
 #endregion

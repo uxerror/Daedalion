@@ -18,6 +18,9 @@ var noise_duration: float
 ## The type of noise (Footstep or Impact)
 var noise_type: NoiseType
 
+## Stable server identity of the player responsible for an impact, if known.
+var source_id := ""
+
 var collider: CollisionShape3D
 var debug_mesh: MeshInstance3D
 

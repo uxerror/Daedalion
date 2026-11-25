@@ -1,6 +1,7 @@
 extends Node
 ## Server-owned runtime pickups and loot bags. Lifecycle records share MP2's late-join barrier.
 
+const Corpse := preload("net_npc_corpse.gd")
 const STOCK := preload("net_stock.gd")
 const GRID := preload("net_grid.gd")
 
@@ -118,10 +119,25 @@ func spawn_bag(component: LootComponent, pos: Vector3) -> CogitoContainer:
 	return _spawn({"bag": key}, pos) as CogitoContainer
 
 
+## Resolve death drops from authored scenes. Only the server mints their runtime IDs.
+func spawn_npc_remains(npc: CogitoNPC) -> void:
+	var entity: String = get_parent().world.entities.id_for(npc)
+	for index in npc.health.spawn_on_death.size():
+		var scene := npc.health.spawn_on_death[index]
+		if not scene:
+			continue
+		var stack := STOCK.pickup_template(scene)
+		if stack:
+			spawn_item(stack, stack.quantity, npc.global_position + Vector3.UP * 0.4)
+		elif Corpse.is_ragdoll(scene):
+			var spec := {"corpse": entity, "index": index, "basis": npc.global_basis}
+			_spawn(spec, npc.global_position + Vector3.UP * 0.4)
+
+
 func _spawn(spec: Dictionary, pos: Vector3) -> Node3D:
 	_serial += 1
 	var id := "runtime:%d" % _serial
-	spec.pose = Transform3D(Basis.IDENTITY, pos)
+	spec.pose = Transform3D(spec.get("basis", Basis.IDENTITY), pos)
 	var node := _instantiate(id, spec)
 	if node:
 		get_parent().world.publish(id, spec)
@@ -132,7 +148,11 @@ func _spawn(spec: Dictionary, pos: Vector3) -> Node3D:
 func _instantiate(id: String, spec: Dictionary) -> Node3D:
 	var scene: PackedScene
 	var item: InventoryItemPD
-	if spec.has("bag"):
+	if spec.has("corpse"):
+		var npc := get_parent().world.entities.live_object(spec.corpse) as CogitoNPC
+		if npc and spec.index >= 0 and spec.index < npc.health.spawn_on_death.size():
+			scene = npc.health.spawn_on_death[spec.index]
+	elif spec.has("bag"):
 		scene = _bags.get(spec.bag)
 	else:
 		item = load(spec.item)
@@ -140,7 +160,7 @@ func _instantiate(id: String, spec: Dictionary) -> Node3D:
 			scene = load(item.drop_scene)
 	if not scene:
 		return null
-	var instance := scene.instantiate()
+	var instance := Corpse.create(scene) if spec.has("corpse") else scene.instantiate()
 	if not instance is Node3D:
 		instance.free()
 		return null

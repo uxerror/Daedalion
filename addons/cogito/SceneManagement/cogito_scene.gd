@@ -65,6 +65,8 @@ func move_player_to_connector(connector_name:String):
 
 func _enter_tree() -> void:
 	if CogitoNet.is_online():
+		if not CogitoNet.is_dedicated():
+			CogitoAudio.set_scene_music_state(music_state, combat_music_state)
 		bind_network_players()
 		return
 	if CogitoLevel.hosted_root(self):

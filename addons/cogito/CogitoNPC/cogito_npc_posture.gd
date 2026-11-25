@@ -5,10 +5,14 @@ extends StateProcessor
 var upper_body_state: AnimationNodeStateMachinePlayback
 
 func _on_walking_state_physics_processing(delta: float) -> void:
+	if npc.network_state:
+		npc.network_state.running = false
 	var relative_velocity = npc.global_basis.inverse() * ((npc.velocity * Vector3(0.5,0,0.5)) / npc.walk_speed)
 	set_animation_ready(relative_velocity)
 	
 func _on_running_state_physics_processing(delta: float) -> void:
+	if npc.network_state:
+		npc.network_state.running = true
 	var relative_velocity = npc.global_basis.inverse() * ((npc.velocity * Vector3(1,0,1)) / npc.sprint_speed)
 	set_animation_ready(relative_velocity)
 
@@ -39,6 +43,8 @@ func _on_raised_weapon_state_entered() -> void:
 
 
 func _on_attack_state_entered() -> void:
+	if npc.network_state:
+		npc.network_state.swing_tick = Engine.get_physics_frames()
 	animation_tree.set("parameters/UpperBodyState/RaisedFists/attack/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
 
 
@@ -49,6 +55,9 @@ func _on_attack_state_physics_processing(delta: float) -> void:
 
 
 func upper_body_travel(state: String):
+	if npc.network_state:
+		npc.network_state.upper = state
+		npc.network_state.swing_tick = -1
 	upper_body_state = animation_tree.get("parameters/UpperBodyState/playback")
 	if upper_body_state.get_current_node() != state:
 		upper_body_state.travel(state)

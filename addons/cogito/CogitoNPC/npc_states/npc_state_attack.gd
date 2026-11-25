@@ -36,6 +36,11 @@ func _on_attacking_state_exited() -> void:
 
 
 func _on_attacking_state_physics_processing(delta: float) -> void:
+	if npc.perception:
+		target = npc.perception.target()
+		if not target:
+			state_chart.send_event("chase")
+			return
 	# Lerping down the velocity
 	npc.velocity.x = move_toward(npc.velocity.x, 0, delta * npc.move_speed)
 	npc.velocity.z = move_toward(npc.velocity.z, 0, delta * npc.move_speed)
@@ -68,11 +73,16 @@ func attempt_attack():
 		# Never fire from a holstered weapon: draw it first, shoot on a later attack.
 		state_chart.send_event("ubody_raise_weapon")
 	else:
-		npc.sight_detection.check_if_player_in_los()
+		if not npc.perception:
+			npc.sight_detection.check_if_player_in_los()
 		npc.weapon.npc_do_attack(npc)
 
 
 func punch_attack(target: Node3D):
+	if npc.perception:
+		if target == npc.perception.target():
+			target.decrease_attribute("health", attack_impact_zone.get_damage(), npc)
+		return
 	var dir = npc.global_position.direction_to(target.global_position)
 	CogitoAudio.play_sound_3d_in(self, attack_sound, npc.global_position)
 	

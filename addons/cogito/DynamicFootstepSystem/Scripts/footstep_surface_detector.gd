@@ -178,7 +178,7 @@ func _get_surface_material(collider : Node3D) -> Material:
 
 
 func _spawn_footstep_noise(noise_size):
-	if is_npc: # Ignore if its an npc
+	if is_npc or CogitoNet.is_online(): # Online stimuli originate on the movement authority.
 		return
 	var noise: ObjectNoise = ObjectNoise.new(use_debug_shape_noise)
 	noise.set_parameters(ObjectNoise.NoiseType.Footstep, noise_size/sound_reduction_divisor, footstep_noise_duration, footstep_noise_layer)

@@ -69,7 +69,7 @@ func _ready():
 	firing_cooldown = 0
 	var player := CogitoLevel.local_player(self)
 	wielding_rid = player.get_rid() if player else RID()
-	if projectile_prefab:
+	if projectile_prefab and not CogitoNet.is_online() and multiplayer.is_server():
 		build_projectile_pool()
 
 
@@ -79,6 +79,14 @@ func _physics_process(_delta: float) -> void:
 
 
 func can_npc_attack(attacking_npc: CogitoNPC) -> bool:
+	if not multiplayer.is_server():
+		return false
+	if attacking_npc.perception:
+		var target := attacking_npc.perception.target()
+		if not target or attacking_npc.is_dead() or firing_cooldown > 0.0:
+			return false
+		var distance := attacking_npc.global_position.distance_to(target.global_position)
+		return npc_wieldable_range <= 0.0 or distance <= npc_wieldable_range
 	if npc_wieldable_range <= 0.0:
 		return true
 	# Check the weapon range is within player distance
@@ -99,6 +107,12 @@ func npc_do_attack(attacking_npc: CogitoNPC):
 	if wielding_rid != attacking_npc.get_rid():
 		wielding_rid = attacking_npc.get_rid()
 	
+	if attacking_npc.perception:
+		var memory := attacking_npc.perception
+		var point: Vector3 = memory.candidates[memory.target_id].point
+		if memory.players.combat.fire_npc(attacking_npc, point):
+			firing_cooldown = firing_delay
+		return
 	var player_sight_collision_point = attacking_npc.sight_detection.player_sight_collision_point
 	if player_sight_collision_point != Vector3.ZERO:
 		if attack_type == AttackType.Hitscan:

@@ -133,10 +133,21 @@ func subscribe(peer: int, nonce: int) -> void:
 		return
 	_subscribers[peer] = nonce
 	_pending[peer] = []
+	var players := get_parent()
+	var viewer: CogitoPlayer = (
+		players.avatar_for(players.get_parent().for_peer(peer).player_id).actor
+	)
 	var chunk := []
 	for id: String in _states:
 		var node := entities.live_object(id)
 		var state: Dictionary = _states[id]
+		if node is CogitoNPC:
+			if (
+				not node.network_state.dead
+				and not node.network_state.in_interest(viewer.global_position)
+			):
+				continue
+			state = node.network_state.at_send_time(node.net_state())
 		if not node and not state.get("removed", false):
 			continue
 		if node is Node3D and state.has("pose"):
@@ -159,7 +170,7 @@ func _baseline(key: String, epoch: int, nonce: int, rows: Array, last: bool) -> 
 	if entities.epoch != 0 and entities.epoch != epoch:
 		return
 	for row: Array in rows:
-		_apply(row[0], row[1], row[2], true)
+		apply_state(row[0], row[1], row[2], true)
 		if row.size() > 3:
 			holders[row[0]] = row[3]
 	if last:
@@ -194,7 +205,12 @@ func _changed(event: StringName, id: String) -> void:
 	if not node:
 		return
 	var state: Dictionary = node.net_state()
-	publish(id, state, event)
+	if node is CogitoNPC:
+		# Active observers receive NPC state on the interest stream after baseline acknowledgement.
+		revisions[id] = revisions.get(id, 0) + 1
+		_states[id] = state
+	else:
+		publish(id, state, event)
 
 
 ## Publish server-owned lifecycle records using the same baseline and acknowledgement as devices.
@@ -248,14 +264,15 @@ func _delta(key: String, epoch: int, change: Array) -> void:
 		_set_holder(change[0], change[2])
 		revisions[change[0]] = change[1]
 		return
-	if _apply(change[0], change[1], change[2], false):
+	if apply_state(change[0], change[1], change[2], false):
 		var node := entities.objects[String(change[0])]
 		if node.has_method("present_net_event"):
 			node.present_net_event(change[3])
 		presented.emit(change[0], change[1], change[3])
 
 
-func _apply(id: String, revision: int, state: Dictionary, silent: bool) -> bool:
+## Install authoritative fields. Return true for devices that accept a live presentation event.
+func apply_state(id: String, revision: int, state: Dictionary, silent: bool) -> bool:
 	if state.is_empty():
 		revisions[id] = revision
 		return false
@@ -273,6 +290,8 @@ func _apply(id: String, revision: int, state: Dictionary, silent: bool) -> bool:
 	node.apply_net_state(state, silent)
 	revisions[id] = revision
 	_states[id] = state
+	if node is CogitoNPC:
+		return false
 	var actor: CogitoPlayer = get_parent().local_actor
 	if actor:
 		var targeting := actor.player_interaction_component.targeting

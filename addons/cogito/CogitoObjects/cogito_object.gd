@@ -245,6 +245,7 @@ func _on_body_entered(body: Node) -> void:
 	if was_thrown and rigid_body and noise_magnitude_when_impacting > 0:
 		was_thrown = false
 		var noise = ObjectNoise.new(show_noise_as_debug_mesh)
+		noise.source_id = get_meta(&"net_damage_owner", "")
 		noise.set_parameters(ObjectNoise.NoiseType.Impact, noise_magnitude_when_impacting * physics_frame_velocity_scalar, 0.5, noise_collision_layer)
 		CogitoLevel.spawn_parent(self).add_child(noise)
 		noise.global_position = global_position

@@ -51,8 +51,10 @@ func pick_target() -> void:
 	var use_navigation := _has_navigation()
 	var candidate := origin
 	for i in TARGET_TRIES:
-		var angle := randf() * TAU
-		var distance := randf_range(panic_radius * 0.4, panic_radius)
+		var rng: RandomNumberGenerator = npc.perception.players.spawner.rng if npc.perception else null
+		var angle := (rng.randf() if rng else randf()) * TAU
+		var distance := (rng.randf_range(0.4, 1.0) * panic_radius if rng
+			else randf_range(panic_radius * 0.4, panic_radius))
 		candidate = origin + Vector3(cos(angle), 0.0, sin(angle)) * distance
 		if use_navigation:
 			candidate = NavigationServer3D.map_get_closest_point(map, candidate)

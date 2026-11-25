@@ -67,7 +67,11 @@ func _on_patrolling_state_exited() -> void:
 func _on_patrolling_state_physics_processing(delta: float) -> void:
 	for i in npc.get_slide_collision_count():
 		var collision = npc.get_slide_collision(i)
-		if collision.get_collider() is CogitoPlayer and npc.response_to_player == "Hostile":
+		if (
+			not npc.perception
+			and collision.get_collider() is CogitoPlayer
+			and npc.response_to_player == "Hostile"
+		):
 			npc.attention_target = collision.get_collider()
 			state_chart.send_event("ubody_raise_weapon")
 			state_chart.send_event("chase")

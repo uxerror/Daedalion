@@ -38,6 +38,8 @@ var spawn_policy: Callable:
 			player_world.spawn_policy = value
 ## Set before opening a session. Defaults to the level-scoped CogitoRespawnPolicy.
 var respawn_policy: CogitoRespawnPolicy
+## Default target selection resource for server NPCs without a per-NPC override.
+var npc_target_policy: CogitoNpcTargetPolicy
 ## Optional owner-only Control implementing open_online(actor, seconds, request) and close_online().
 var death_screen_scene: PackedScene
 ## Optional server damage filter (attacker_id, victim_id, source) -> bool.
@@ -182,6 +184,8 @@ func _attach(
 	player_world.name = "Players"
 	player_world.spawn_policy = spawn_policy
 	player_world.snapshot_hz = snapshot_hz
+	if npc_target_policy:
+		player_world.npc_target_policy = npc_target_policy
 	if respawn_policy:
 		player_world.death.policy = respawn_policy
 	player_world.death.screen_scene = death_screen_scene

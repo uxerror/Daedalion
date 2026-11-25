@@ -25,6 +25,32 @@ func launch(
 	var scene := profile.projectiles[index]
 	if not scene:
 		return false
+	var row := {
+		"shooter": shooter,
+		"life": life,
+		"item": STOCK.definition(item).resource_path,
+		"index": index,
+		"pos": aim.origin,
+		"velocity": -aim.basis.z.normalized() * profile.speed,
+	}
+	var recoverable := stack if profile.kind == &"throw" else STOCK.pickup_template(scene)
+	return _launch(row, scene, item.wieldable_damage, recoverable)
+
+
+## Use the configured NPC weapon and its registered owner as the projectile archetype.
+func launch_npc(npc: CogitoNPC, start: Vector3, direction: Vector3) -> bool:
+	if not multiplayer.is_server() or not npc.weapon or not npc.weapon.projectile_prefab:
+		return false
+	var scene := npc.weapon.projectile_prefab
+	var row := {
+		"npc": get_parent().world.entities.id_for(npc),
+		"pos": start,
+		"velocity": direction * npc.weapon.projectile_velocity,
+	}
+	return _launch(row, scene, npc.weapon.npc_wieldable_damage, STOCK.pickup_template(scene))
+
+
+func _launch(row: Dictionary, scene: PackedScene, damage: float, pickup: InventorySlotPD) -> bool:
 	var instance := scene.instantiate()
 	var template := instance as CogitoProjectile
 	if not template:
@@ -33,20 +59,11 @@ func launch(
 	var lifespan := template.get_node_or_null("Lifespan") as Timer
 	var gravity: Vector3 = ProjectSettings.get_setting("physics/3d/default_gravity_vector")
 	gravity *= float(ProjectSettings.get_setting("physics/3d/default_gravity"))
-	gravity *= template.gravity_scale
+	row.gravity = gravity * template.gravity_scale
 	_serial += 1
-	var row := {
-		"id": _serial,
-		"shooter": shooter,
-		"life": life,
-		"item": STOCK.definition(item).resource_path,
-		"index": index,
-		"pos": aim.origin,
-		"velocity": -aim.basis.z.normalized() * profile.speed,
-		"gravity": gravity,
-	}
+	row.id = _serial
 	var flight := _create(row, template)
-	flight.damage = item.wieldable_damage
+	flight.damage = damage
 	flight.remaining = lifespan.wait_time if lifespan and lifespan.autostart else 30.0
 	flight.element = template.impact_element
 	flight.buildup = template.impact_element_amount
@@ -57,11 +74,8 @@ func launch(
 	flight.burning = props != null and props.ignite_on_ready
 	var wet_flag := CogitoProperties.ElementalProperties.WET
 	flight.wet = props != null and (props.elemental_properties & wet_flag) != 0
-	var pickup := STOCK.pickup_template(scene)
-	if not template.destroy_on_impact:
-		var recoverable := stack if profile.kind == &"throw" else pickup
-		if recoverable:
-			flight.pickup = STOCK.copy_stack(recoverable, 1)
+	if not template.destroy_on_impact and pickup:
+		flight.pickup = STOCK.copy_stack(pickup, 1)
 	template.free()
 	for peer: int in get_parent().observers():
 		_spawn.rpc_id(peer, get_parent().world.entities.epoch, row)
@@ -116,8 +130,16 @@ func baseline(peer: int) -> void:
 func _spawn(epoch: int, row: Dictionary) -> void:
 	if get_parent().world.entities.epoch != epoch or _flights.has(row.id):
 		return
-	var profile: PROFILE = get_parent().wield_profile(row.item)
-	var template := profile.projectiles[row.index].instantiate() as Node3D
+	var scene: PackedScene
+	if row.has("npc"):
+		var npc := get_parent().world.entities.live_object(row.npc) as CogitoNPC
+		if not npc or not npc.weapon:
+			return
+		scene = npc.weapon.projectile_prefab
+	else:
+		var profile: PROFILE = get_parent().wield_profile(row.item)
+		scene = profile.projectiles[row.index]
+	var template := scene.instantiate() as Node3D
 	_create(row, template)
 	template.free()
 
@@ -137,17 +159,22 @@ func _physics_process(delta: float) -> void:
 
 func _step(id: int, flight: Dictionary, start: Vector3, delta: float) -> void:
 	var row: Dictionary = flight.row
-	var avatar: Variant = get_parent().avatar_for(row.shooter)
-	if not avatar or avatar.lifetime != row.life:
+	var actor: CollisionObject3D
+	if row.has("npc"):
+		actor = get_parent().world.entities.live_object(row.npc) as CogitoNPC
+	else:
+		var avatar: Variant = get_parent().avatar_for(row.shooter)
+		if avatar and avatar.lifetime == row.life:
+			actor = avatar.actor
+	if not actor:
 		_finish(id, false)
 		return
-	var hit := COMBAT.trace(avatar.actor, start, row.pos)
+	var hit := COMBAT.trace(actor, start, row.pos)
 	flight.remaining -= delta
 	if hit.is_empty():
 		if flight.remaining <= 0:
 			_finish(id, false)
 		return
-	var actor := avatar.actor as CogitoPlayerAdvanced
 	var point: Vector3 = hit.position
 	var dir: Vector3 = row.velocity.normalized()
 	_finish(id, true)
@@ -158,7 +185,7 @@ func _step(id: int, flight: Dictionary, start: Vector3, delta: float) -> void:
 	var allowed := true
 	if hit.collider is CogitoPlayer:
 		allowed = get_parent().death.allows_damage(hit.collider, actor)
-	if allowed and (flight.material < 0 or soft_contact):
+	if allowed and (row.has("npc") or flight.material < 0 or soft_contact):
 		combat.hit(hit.collider, flight.damage, actor, dir, point)
 	# These are the contact reactions from the shipped burning and wet dart scenes.
 	if allowed and props:
@@ -172,7 +199,8 @@ func _step(id: int, flight: Dictionary, start: Vector3, delta: float) -> void:
 		CogitoProperties.deal_elemental_damage(
 			hit.collider, flight.element_damage, flight.element, actor, dir, point
 		)
-	combat.broadcast(row.shooter, row.life, row.item, &"impact", point, hit.normal)
+	if not row.has("npc"):
+		combat.broadcast(row.shooter, row.life, row.item, &"impact", point, hit.normal)
 	if flight.has("pickup"):
 		get_parent().spawner.spawn_item(flight.pickup, 1, point - dir * 0.12)
 

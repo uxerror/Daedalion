@@ -48,7 +48,10 @@ func _running(delta: float):
 		elif distance_to_target <= target_melee_distance:
 			current_chase_status = ChaseStatus.CAUGHT
 		
-	if not npc.nav_agent.is_target_reachable():
+	if (
+		(not npc.perception or current_chase_status != ChaseStatus.CAUGHT)
+		and not npc.nav_agent.is_target_reachable()
+	):
 		start_waiting()
 		
 	npc.move_npc_to_next_position(delta)
@@ -124,15 +127,24 @@ func _on_chasing_state_entered() -> void:
 
 func _on_chasing_state_exited() -> void:
 	super.exit_state()
+	if npc.perception:
+		los_broken_timer.stop()
+		chase_wait_timer.stop()
 	chase_target = null
 
 
 func _on_chasing_state_physics_processing(delta: float) -> void:
+	if npc.perception:
+		chase_target = npc.perception.target()
+		if not chase_target:
+			state_chart.send_event("search")
+			return
+		npc.head_turner.target_node = chase_target.get_path()
 	## When loading a game during a chase, the attention target needs to be reacquired
 	if not chase_target and npc.attention_target:
 		chase_target = npc.attention_target
 	
-	can_see_player = check_los_to_player()
+	can_see_player = true if npc.perception else check_los_to_player()
 	if can_see_player:
 		npc.head_turner.active = true
 		los_broken_timer.stop()

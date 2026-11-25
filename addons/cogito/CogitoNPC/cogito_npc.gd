@@ -4,6 +4,11 @@ class_name CogitoNPC
 ## Emitted when received damage. Used with the HitboxComponent
 signal damage_received(damage_value:float)
 signal object_exits_tree()
+## Durable online behaviour or health changed.
+signal net_changed(event: StringName)
+
+const Perception := preload("../Networking/net_perception.gd")
+const NetworkState := preload("../Networking/net_npc_state.gd")
 
 #region Cogito Interaction variables needed
 @export var cogito_name : String = self.name
@@ -19,8 +24,12 @@ enum PromptPositionMode{
 @export var prompt_pos_mode : PromptPositionMode = PromptPositionMode.ORIGIN
 @export var prompt_marker : Marker3D
 
+## Overrides the session target selection policy for this NPC.
+@export var target_policy: CogitoNpcTargetPolicy
 @export var head: Node3D
 var interaction_nodes : Array[Node]
+var perception: Perception
+var network_state: NetworkState
 var cogito_properties : CogitoProperties = null
 ## Element effects on movement and actions (chilled, frozen, stunned), or null. Found among the children.
 var actor_elements : CogitoActorElements = null
@@ -132,6 +141,8 @@ func in_state(states: Array) -> bool:
 ## Requests combat music while the NPC is in a combat behaviour and releases it otherwise.
 ## Called by StateProcessor.enter_state().
 func update_combat_music() -> void:
+	if network_state or not multiplayer.is_server():
+		return
 	if is_inside_tree() and CogitoLevel.hosted_root(self):
 		return
 	var state: CogitoMusicState = combat_music_state if combat_music_state else CogitoAudio.get_scene_combat_music_state()
@@ -164,6 +175,48 @@ func _ready():
 	find_actor_elements()
 	connect_weapon_to_hand()
 	find_health_attribute()
+
+
+## Capture the public state for late joins and live changes.
+func net_state() -> Dictionary:
+	return network_state.capture() if network_state else {}
+
+
+## Restore public presentation without running gameplay signals.
+func apply_net_state(fields: Dictionary, _silent: bool) -> void:
+	network_state.apply(fields)
+
+
+## Start the online authority when the level registry binds.
+func net_bind_authority() -> void:
+	_bind_network_state()
+	perception = Perception.new(self, network_state.players)
+	process_physics_priority = -10
+	network_state.published = net_state()
+	net_changed.emit(&"")
+
+
+## Stop every gameplay subtree, leaving the animation mixer available to presentation.
+func net_bind_replica() -> void:
+	_bind_network_state()
+	network_state.disable_simulation()
+	hide()
+
+
+func _bind_network_state() -> void:
+	network_state = NetworkState.new(self, get_meta(&"cogito_net_world").get_parent())
+	if sight_detection:
+		sight_detection.set_physics_process(false)
+	if hearing_detection:
+		hearing_detection.set_process(false)
+	network_state.present_listener(Vector3i.ZERO)
+
+
+## Return a surviving scene to its authored role on session shutdown.
+func net_unbind() -> void:
+	network_state.restore()
+	perception = null
+	network_state = null
 
 
 func find_interaction_nodes():
@@ -243,6 +296,16 @@ func is_dead():
 
 
 func _physics_process(delta: float) -> void:
+	if perception:
+		perception.advance(delta)
+		network_state.target_id = perception.target_id
+		if network_state.players.local_actor:
+			var id: String = network_state.players.local_actor.get_meta(&"net_player_id")
+			network_state.present_listener(network_state.listener(id))
+		var fields := net_state()
+		if fields != network_state.published:
+			network_state.published = fields
+			net_changed.emit(&"")
 	if knockback_timer > 0:
 		knockback_timer -= delta
 		velocity = knockback_force
@@ -253,7 +316,7 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 	
-	if footsteps_enabled:
+	if footsteps_enabled and (not network_state or network_state.players.local_actor):
 		npc_footsteps(delta)
 	
 	#move_and_slide()
@@ -357,6 +420,8 @@ func save():
 		patrol_path_id = CogitoPersistentId.of(patrol_path)
 	attention_target_uid = attention_target.uid if attention_target and "uid" in attention_target else 0
 	attention_target_id = CogitoPersistentId.of(attention_target) if attention_target else ""
+	if perception and attention_target is CogitoPlayer:
+		attention_target_id = "player:" + str(attention_target.get_meta(&"net_player_id", ""))
 	
 	var node_data = {
 		"filename" : get_scene_file_path(),
@@ -413,7 +478,10 @@ func _restore_current_behaviour() -> void:
 
 
 func load_attention_target():
-	if !attention_target_id.is_empty():
+	if perception and attention_target_id.begins_with("player:"):
+		var id := attention_target_id.trim_prefix("player:")
+		attention_target = perception.eligible_actor(id)
+	elif !attention_target_id.is_empty():
 		attention_target = CogitoPersistentId.find_in_level(self, attention_target_id)
 	elif attention_target_uid:
 		# Do a fast check for uid matching player before scanning the tree
@@ -427,6 +495,8 @@ func load_attention_target():
 
 
 func _on_hitbox_component_got_hit(object) -> void:
+	if network_state and (not multiplayer.is_server() or network_state.dead):
+		return
 	if object == null or object == self or object is CogitoElementArea:
 		return # Damage ticks of its own element states (burning, poison) or element areas give nothing to look at.
 	var attacker := attacker_of(object)
@@ -434,8 +504,14 @@ func _on_hitbox_component_got_hit(object) -> void:
 		return
 	if attacker is CogitoPlayer and response_to_player == "Hostile":
 		# Shot by the player it is hostile to: fight back right away, in every behaviour.
-		attention_target = attacker
-		if not in_state([BehaviourState.Chasing, BehaviourState.Attacking, BehaviourState.Panicking]):
+		if perception:
+			perception.threatened(attacker)
+		else:
+			attention_target = attacker
+		if (
+			not perception
+			and not in_state([BehaviourState.Chasing, BehaviourState.Attacking, BehaviourState.Panicking])
+		):
 			state_chart.send_event("chase")
 	else:
 		var source: Variant = _hit_source_position(object, attacker)
@@ -447,7 +523,8 @@ func _on_hitbox_component_got_hit(object) -> void:
 		else:
 			sight_detection.generate_attention_target(source)
 		state_chart.send_event("alerted")
-	animation_tree.set("parameters/Transition/transition_request","hit")
+	if not network_state:
+		animation_tree.set("parameters/Transition/transition_request","hit")
 
 
 ## Who caused a hit: the shooter of a projectile or thrown object, the wielder of a weapon,

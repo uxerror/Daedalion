@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://b7goxs6fdbtex" path="res://addons/cogito/CogitoNPC/cogito_npc.gd" id="1_ix4lt"]
 [ext_resource type="AnimationNodeBlendTree" uid="uid://dnrojkastjfi6" path="res://addons/cogito/CogitoNPC/cogito_npc_animation_blend_tree.tres" id="2_s7kaf"]
-[ext_resource type="Script" uid="uid://couw105c3bde4" path="res://addons/godot_state_charts/state_chart.gd" id="2_vw50h"]
+[ext_resource type="Script" path="res://addons/cogito/CogitoNPC/npc_authority_chart.gd" id="2_vw50h"]
 [ext_resource type="Script" uid="uid://c1vp0ojjvaby1" path="res://addons/godot_state_charts/parallel_state.gd" id="3_w6rik"]
 [ext_resource type="Script" uid="uid://dk6krlxe7iue4" path="res://addons/cogito/CogitoNPC/npc_states/npc_state_idle.gd" id="4_84j4a"]
 [ext_resource type="Script" uid="uid://jk2jm1g6q853" path="res://addons/godot_state_charts/compound_state.gd" id="4_fx0vh"]

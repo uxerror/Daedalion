@@ -21,6 +21,8 @@ const SNAPSHOT := preload("net_snapshot.gd")
 
 ## Optional game spawn transform selector, supplied by the facade.
 var spawn_policy: Callable
+## Shared default for NPCs without an authored policy.
+var npc_target_policy := CogitoNpcTargetPolicy.new()
 ## Number of snapshot broadcasts per second.
 var snapshot_hz := 25
 ## Sender-side packet policy. A custom channel can drop or delay packets for transport tests.
@@ -37,6 +39,8 @@ var containers := CONTAINERS.new()
 var spawner := SPAWNER.new()
 ## Motion stream shared by authored and runtime bodies.
 var bodies := preload("net_bodies.gd").new()
+## Listener-specific NPC perception and presentation.
+var npcs := preload("net_npc_listeners.gd").new()
 ## Owner-scoped carry input and release.
 var carry := preload("net_carry.gd").new()
 ## Authoritative seat and driver claims.
@@ -50,6 +54,7 @@ var _bindings := {}
 var _session: SESSION
 var _prefab: PackedScene
 var _level: Node
+var _has_light_zones := false
 var _owns_root := false
 var _level_key: String
 var _start: Transform3D
@@ -62,6 +67,8 @@ var _elapsed := 0.0
 
 
 func _ready() -> void:
+	npcs.name = "Npcs"
+	add_child(npcs)
 	death.name = "Death"
 	add_child(death)
 	combat.name = "Combat"
@@ -108,11 +115,22 @@ func bind_level(root: Node, start: Transform3D, key: String) -> void:
 	set_process(not multiplayer.is_server())
 	_owns_root = CogitoLevel.mark_network_root(root)
 	root.set_meta(&"cogito_net_players", self)
+	_has_light_zones = false
+	for area in root.find_children("*", "Area3D", true, false):
+		if area.get_script() == preload("../Components/LightzoneComponent.gd"):
+			_has_light_zones = true
+			break
 	spawner.bind(root)
 	world.bind(root, key)
 	for id in world.entities.objects:
 		var node := world.entities.objects[id]
-		if node is RigidBody3D:
+		if node is CogitoNPC:
+			npcs.track(node)
+			bodies.track(id, node)
+		if (
+			node is RigidBody3D
+			and not (node.get_parent() is BoneAttachment3D and node.owner is CogitoNPC)
+		):
 			bodies.track(id, node)
 		if node is CogitoVehicle:
 			var target: Node3D = node.vehicle_node if node.vehicle_node else node
@@ -139,6 +157,7 @@ func _level_exiting() -> void:
 	projectiles.clear()
 	clear()
 	interactions.clear()
+	npcs.clear()
 	bodies.clear()
 	world.clear()
 	_bindings.clear()
@@ -175,6 +194,7 @@ func _release_subscription(peer: int) -> void:
 	interactions.forget(peer)
 	containers.forget(peer)
 	world.forget(peer)
+	npcs.forget(peer)
 	bodies.forget(peer)
 
 
@@ -271,6 +291,8 @@ func _create(id: String, life: int, start: Transform3D, initial_pose: Dictionary
 	if not _prefab:
 		_prefab = load(AVATAR.PREFAB)
 	avatar.spawn(_prefab, _level, id, start, local, multiplayer.is_server())
+	if not _has_light_zones and avatar.actor.has_meta(&"net_fallback_visibility"):
+		avatar.actor.set_meta(&"net_unzoned_visibility", true)
 	avatar.actor.player_interaction_component.network_interactions = interactions
 	avatar.wield.actor = avatar.actor
 	avatar.wield.players = self
@@ -325,6 +347,7 @@ func _remove(id: String) -> void:
 	carry.release(peer, false)
 	if multiplayer.is_server() and _avatars.has(id):
 		seats.release(_avatars[id].actor)
+	npcs.forget(peer)
 	bodies.forget(peer)
 	world.forget(peer)
 	interactions.forget(peer)

@@ -9,7 +9,7 @@ const WORLD := preload("net_world_state.gd")
 const AVATAR := preload("net_avatar.gd")
 const SESSION := preload("net_session.gd")
 const DEVICES := preload("net_devices.gd")
-const UNSUPPORTED := "Unavailable online (MP6 NPCs, MP7 elements)"
+const UNSUPPORTED := ACTIONS.UNSUPPORTED
 ## Retries older than this many requests per peer get "Old request" instead of a cached reply.
 const RESULT_CACHE := 64
 const DOUBLE_PRESS_MSEC := 300

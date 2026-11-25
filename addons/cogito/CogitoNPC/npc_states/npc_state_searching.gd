@@ -69,6 +69,10 @@ func _ready() -> void:
 func _on_searching_state_entered() -> void:
 	super.enter_state()
 	
+	if npc.perception:
+		broken_los_point = npc.perception.last_known
+		last_known_player_point = broken_los_point
+		player = null
 	npc.nav_agent.target_position = broken_los_point
 	if not npc.nav_agent.target_reached.is_connected(reached_target):
 		npc.nav_agent.target_reached.connect(reached_target)
@@ -103,8 +107,11 @@ func _on_searching_state_physics_processing(delta: float) -> void:
 		search_point_two_label.visible = true
 		search_point_two_label.global_position = last_known_player_point
 	
-	sight_detection_check()
+	if not npc.perception:
+		sight_detection_check()
 	if npc.nav_agent.is_target_reached():
+		if npc.perception and not los_point_reached:
+			reached_target()
 		npc.velocity.x = move_toward(npc.velocity.x, 0, delta * npc.move_speed)
 		npc.velocity.z = move_toward(npc.velocity.z, 0, delta * npc.move_speed)
 	else:
@@ -137,6 +144,8 @@ func start_chasing():
 
 
 func reached_target():
+	if npc.perception and npc.current_behaviour != behaviours.Searching:
+		return
 	if not los_point_reached:
 		los_point_reached = true
 		first_wait_timer.start()
@@ -146,12 +155,20 @@ func reached_target():
 
 
 func search_next_point():
+	if npc.perception and npc.current_behaviour != behaviours.Searching:
+		return
 	npc.nav_agent.target_position = last_known_player_point
+	if npc.perception and broken_los_point.is_equal_approx(last_known_player_point):
+		reached_target()
 
 
 func end_search():
+	if npc.perception and npc.current_behaviour != behaviours.Searching:
+		return
 	bark(end_search_bark)
-	if reset_suspicion_when_search_ends:
+	if npc.perception:
+		npc.perception.end_search(reset_suspicion_when_search_ends)
+	elif reset_suspicion_when_search_ends:
 		if npc.hearing_detection:
 			npc.hearing_detection.reset()
 		if npc.sight_detection:

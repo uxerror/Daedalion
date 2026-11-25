@@ -65,11 +65,14 @@ func spawn(
 			)
 			actor.add_child(visibility)
 			visibility.owner = actor
+			actor.set_meta(&"net_fallback_visibility", true)
 	if not server:
 		for attr: CogitoAttribute in actor.find_children("*", "CogitoAttribute", false, false):
 			attr.network_frozen = true
 			attr.set_block_signals(true)
 			attr.process_mode = Node.PROCESS_MODE_DISABLED
+	if not local:
+		actor.get_node("FootstepPlayer").free()
 	if server and not local:
 		source = INPUT.new()
 		actor.input_source = source

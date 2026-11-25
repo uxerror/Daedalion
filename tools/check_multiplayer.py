@@ -584,6 +584,68 @@ class Scenario:
                 raise CheckFailed("late joiner missed the respawn")
         print("PASS survival", "listen" if listen else "dedicated")
 
+    def npc_dedicated(self):
+        self.npc(listen=False)
+
+    def npc_listen(self):
+        self.npc(listen=True)
+
+    @staticmethod
+    def npc_bandwidth(role, start, end):
+        if "rx" in start and "rx" in end:
+            rate = (end["rx"] - start["rx"]) * 60 / (end["tick"] - start["tick"])
+            print(f"NPC {role.directory.name} received {rate:.0f} B/s (all game traffic)")
+
+    def npc(self, listen):
+        self.start(dedicated=not listen, friendly_fire=False)
+        first = "Host" if listen else "Ada"
+        a = self.server if listen else self.fixture(first, "client")
+        self.state(a, [first])
+        b = self.fixture("Ben", "client")
+        self.state(b, [first, "Ben"])
+        viewers = [b] if listen else [a, b]
+        starts = [(v, self.pose(v, [first, "Ben"])) for v in viewers]
+
+        self.order(self.server, op="npc_stage", place="split", first=first)
+        self.sample(b, lambda s: s["npc_target"] == "Ben" and s["indicator"])
+        self.sample(a, lambda s: s["npc_target"] == "Ben" and not s["indicator"])
+        self.sample(self.server, lambda s: s["vitals"]["Ben"]["dead"])
+        for v in viewers:
+            self.sample(v, lambda s: s["npc_shots"] == 2)
+        self.sample(self.server, lambda s: not s["npc_target"] and s["npc_behaviour"] == 7)
+        self.order(self.server, op="npc_stage", place="reveal", first=first)
+        self.sample(a, lambda s: s["npc_target"] == first and s["npc_shots"] >= 3)
+        self.order(self.server, op="npc_stage", place="aim", first=first)
+        self.sample(a, lambda s: s["wield"][first][0] == "Cogito_LaserRifle.tres")
+        self.order(a, op="fire", ticks=30)
+        settled = self.sample(self.server, lambda s: s["npc_dead"] and s["corpse_rest"])
+        for v, start in starts:
+            end = self.sample(v, lambda s: s["npc_deaths"] == 1 and s["npc_loot"] == 1
+                              and s["corpse"] and math.dist(s["corpse"], settled["corpse"]) < 0.04)
+            self.npc_bandwidth(v, start, end)
+        expected = 102 - settled["vitals"][first]["health"]
+        for v in viewers:
+            if v.samples[-1]["npc_shots"] != expected:
+                raise CheckFailed(f"shots {v.samples[-1]['npc_shots']} vs MP5 damage {expected}")
+        if settled["npc_deaths"] != 1 or settled["npc_loot"] != 1:
+            raise CheckFailed("duplicate or missing authoritative death/drop")
+        if not listen:
+            late = self.fixture("Cy", "client")
+            self.state(late, [first, "Ben", "Cy"])
+            baseline = self.sample(late, lambda s: s["npc_dead"] and s["npc_loot"] == 1
+                                   and s["corpse"] and math.dist(s["corpse"], settled["corpse"]) < 0.04)
+            if baseline["npc_deaths"] or baseline["npc_shots"] or baseline["indicator"]:
+                raise CheckFailed("NPC baseline replayed live effects")
+        self.order(self.server, op="npc_stage", place="drag", first=first)
+        self.order(a, op="drag_corpse")
+        self.sample(a, lambda s: s["carrying"])
+        self.sample(b, lambda s: math.dist(s["corpse"], settled["corpse"]) > 0.25)
+        if not listen:
+            dragged = self.sample(late, lambda s: s["tick"] > baseline["tick"]
+                                  and math.dist(s["corpse"], settled["corpse"]) > 0.25)
+            self.npc_bandwidth(late, baseline, dragged)
+        print("PASS authoritative NPC", "listen" if listen else "dedicated")
+
     def friendly_fire_off(self):
         self.start(dedicated=True, friendly_fire=False)
         a = self.fixture("Ada", "client")
@@ -698,11 +760,13 @@ class Scenario:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scenario", choices=("dedicated", "listen", "friendly_fire_off"))
+    scenarios = ("dedicated", "listen", "friendly_fire_off", "npc_dedicated", "npc_listen")
+    parser.add_argument("--scenario", choices=scenarios)
     parser.add_argument("--file-transport", action="store_true", help="use a socket-free packet bus")
     parser.add_argument("--survival-only", action="store_true", help="run only MP5 scenarios")
     args = parser.parse_args()
-    for name in ([args.scenario] if args.scenario else ("dedicated", "listen", "friendly_fire_off")):
+    for name in ([args.scenario] if args.scenario else scenarios[:3] if args.survival_only else scenarios):
+        started = time.monotonic()
         with tempfile.TemporaryDirectory(prefix=f"cogito-{name}-") as directory:
             scenario = Scenario(Path(directory), args.file_transport)
             try:
@@ -716,6 +780,7 @@ def main():
                     print(f"[{role.directory.name}]", *role.tail, sep="\n", file=sys.stderr)
                 return 1
             finally:
+                print(f"{name}: {time.monotonic() - started:.2f} s", flush=True)
                 for role in reversed(scenario.roles):
                     role.kill()
     return 0

@@ -107,10 +107,17 @@ func _process(delta: float) -> void:
 		npc.try_end_investigation()
 
 func _on_hearing_radius_area_entered(area: Area3D) -> void:
-	if area is not ObjectNoise:
+	if not multiplayer.is_server() or area is not ObjectNoise:
 		return
 	var noise: ObjectNoise = area as ObjectNoise
 	# First off if the noise is an impact like a thrown object, transition to Alerted
+	if npc.perception:
+		if not noise.source_id.is_empty():
+			npc.perception.hear(noise.source_id, noise.global_position, noise.magnitude)
+		if noise.noise_type == ObjectNoise.NoiseType.Impact and not npc.perception.target():
+			npc.perception.attention_point(noise.global_position)
+			npc.state_chart.send_event("alerted")
+		return
 	if noise.noise_type == ObjectNoise.NoiseType.Impact:
 		generate_attention_target(noise.global_position)
 		npc.state_chart.send_event("alerted")

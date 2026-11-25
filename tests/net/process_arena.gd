@@ -3,6 +3,7 @@ extends Node3D
 
 const GRID := preload("res://addons/cogito/Networking/net_grid.gd")
 const CHANNEL := preload("res://addons/cogito/Networking/net_command_channel.gd")
+const RIFLE := preload("res://addons/cogito/InventoryPD/Items/Cogito_LaserRifle.tres")
 const DRIVE_TICKS := 140
 
 var _driver := Driver.new()
@@ -19,6 +20,8 @@ var _fires := 0
 var _launches := 0
 var _impacts := 0
 var _respawn_error := ""
+var _npc_shots := 0
+var _npc_deaths := 0
 
 
 class LossChannel:
@@ -87,6 +90,14 @@ func _ready() -> void:
 		return
 	$Cutscene/AnimationPlayer.animation_started.connect(
 		func(_clip: StringName): _cutscene_starts += 1
+	)
+	if CogitoNet.is_server():
+		$Guard.health.death.connect(func(): _npc_deaths += 1)
+	CogitoNet.player_world.combat.npc_presented.connect(
+		func(_npc: CogitoNPC, event: StringName, _point: Vector3):
+			_npc_shots += int(event == &"fire")
+			if not CogitoNet.is_server():
+				_npc_deaths += int(event == &"death")
 	)
 	_control = OS.get_environment("COGITO_TEST_CONTROL")
 	CogitoNet.player_world.bind_level(self, Transform3D(Basis.IDENTITY, Vector3.UP), "arena")
@@ -165,6 +176,7 @@ func _physics_process(_delta: float) -> void:
 		data.rx = multiplayer.multiplayer_peer.received_bytes
 	data.merge(_inventory_sample())
 	data.merge(_combat_sample())
+	data.merge(_npc_sample())
 	data.merge(_survival_sample())
 	var box: RigidBody3D = $CarryBox
 	var crate_pos := box.global_position
@@ -218,9 +230,7 @@ func _survival_stage(order: Dictionary) -> void:
 				var guns := actor.inventory_data.find_slots("Laser Rifle")
 				if guns.is_empty():
 					var stack := InventorySlotPD.new()
-					stack.inventory_item = preload(
-						"res://addons/cogito/InventoryPD/Items/Cogito_LaserRifle.tres"
-					)
+					stack.inventory_item = RIFLE
 					GRID.insert(actor.inventory_data, stack, 1, false)
 					guns = actor.inventory_data.find_slots("Laser Rifle")
 				guns[0].inventory_item.charge_current = 100
@@ -370,6 +380,82 @@ func _combat_stage(first: String) -> void:
 		players.inventory.flush_actor(actor)
 
 
+func _npc_sample() -> Dictionary:
+	var guard := $Guard as CogitoNPC
+	var world := CogitoNet.player_world.world
+	var target: String = guard.network_state.target_id
+	var corpse: Array = []
+	var loot := 0
+	var rest := false
+	for id: String in world.entities.objects:
+		if not id.begins_with("runtime:"):
+			continue
+		var body := world.entities.live_object(id) as RigidBody3D
+		if (
+			body
+			and body.get_script() == preload("res://addons/cogito/CogitoNPC/cogito_body_drag.gd")
+		):
+			var p := body.global_position
+			corpse = [p.x, p.y, p.z]
+			rest = body.sleeping
+		elif body and body.scene_file_path.ends_with("/pickup_coins.tscn"):
+			loot += 1
+	return {
+		"npc_target": CogitoNet.player_for_id(target).get("display_name", ""),
+		"npc_behaviour": guard.current_behaviour,
+		"npc_dead": guard.network_state.dead,
+		"npc_shots": _npc_shots,
+		"npc_deaths": _npc_deaths,
+		"corpse": corpse,
+		"corpse_rest": rest,
+		"npc_loot": loot,
+		"indicator": guard.sight_detection.sight_suspicion_indicator.visible,
+	}
+
+
+func _stage_npc(order: Dictionary) -> void:
+	var players := CogitoNet.player_world
+	var guard := $Guard as CogitoNPC
+	if order.place == "split":
+		guard.rotation.y = 0
+		guard.sight_detection.buildup_to_investigation_rate = 30
+		guard.sight_detection.buildup_to_aggro_rate = 30
+	for record in CogitoNet.players():
+		var avatar := players.avatar_for(record.player_id)
+		var actor := avatar.actor
+		var first: bool = order.first == record.display_name
+		match order.place:
+			"split":
+				actor.position = Vector3(25 if first else 31, 0.91, 21)
+				actor.player_attributes.health.value_current = 100 if first else 2
+				if first:
+					var stack := InventorySlotPD.new()
+					stack.inventory_item = RIFLE
+					GRID.insert(actor.inventory_data, stack, 1, false)
+					var rifle: InventorySlotPD = actor.inventory_data.find_slots("Laser Rifle")[0]
+					rifle.inventory_item.charge_current = 50
+					avatar.wield.equip(rifle)
+					players.inventory.flush_actor(actor)
+			"reveal":
+				if not first:
+					continue
+				actor.position = guard.position - guard.global_basis.z * 4
+				actor.position.y = 0.91
+			"aim":
+				if not first:
+					continue
+				guard.health.value_current = 1
+				actor.position = guard.position + Vector3(0, 0.91, 3)
+			"drag":
+				if not first:
+					continue
+				var corpse := players.world.entities.live_object("runtime:1") as RigidBody3D
+				actor.position = corpse.global_position + Vector3(0, 0, 0.9)
+				actor.position.y = 0.91
+		actor.velocity = Vector3.ZERO
+		players.mark_teleport(record.player_id)
+
+
 func _result(result: Dictionary) -> void:
 	print("NET RESULT ", JSON.stringify(result))
 
@@ -380,6 +466,13 @@ func _presented(_id: String, _revision: int, _event: StringName) -> void:
 
 func _execute(order: Dictionary) -> void:
 	match order.op:
+		"npc_stage":
+			_stage_npc(order)
+		"drag_corpse":
+			var players := CogitoNet.player_world
+			var corpse := players.world.entities.live_object("runtime:1")
+			var grip: CogitoCarryableComponent = corpse.interaction_nodes[0]
+			players.interactions.submit(grip, &"interact2")
 		"survival":
 			_survival_stage(order)
 		"respawn":

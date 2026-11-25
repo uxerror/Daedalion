@@ -47,6 +47,18 @@
 [ext_resource type="Script" path="res://addons/cogito/Scripts/hazard_zone.gd" id="hazard"]
 [ext_resource type="Script" path="res://addons/cogito/Scripts/cogito_attribute_zone.gd" id="attribute_zone"]
 
+[ext_resource type="PackedScene" path="res://addons/cogito/CogitoNPC/cogito_npc.tscn" id="npc"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Wieldables/NPC_blaster.tscn" id="blaster"]
+[ext_resource type="Script" path="res://addons/cogito/CogitoNPC/cogito_patrol_path.gd" id="patrol"]
+[ext_resource type="Script" path="res://addons/cogito/CogitoNPC/cogito_patrol_point.gd" id="point"]
+
+[sub_resource type="NavigationMesh" id="patrol_mesh"]
+vertices = PackedVector3Array(18, 0, 17, 38, 0, 17, 38, 0, 38, 18, 0, 38)
+polygons = [PackedInt32Array(0, 1, 2, 3)]
+
+[sub_resource type="BoxShape3D" id="npc_wall"]
+size = Vector3(1.8, 3, 0.5)
+
 [sub_resource type="BoxShape3D" id="hazard_shape"]
 size = Vector3(4, 3, 4)
 
@@ -77,6 +89,37 @@ size = Vector3(0.2, 0.3, 0.1)
 
 [node name="Arena" instance=ExtResource("1")]
 script = ExtResource("2")
+
+[node name="PatrolRegion" type="NavigationRegion3D" parent="."]
+navigation_mesh = SubResource("patrol_mesh")
+
+[node name="Patrol" type="Node3D" parent="." node_paths=PackedStringArray("starting_patrol_point")]
+script = ExtResource("patrol")
+starting_patrol_point = NodePath("Start")
+
+[node name="Start" type="Marker3D" parent="Patrol" node_paths=PackedStringArray("next_patrol_points")]
+position = Vector3(28, 0, 27)
+script = ExtResource("point")
+next_patrol_points = [NodePath("../End")]
+
+[node name="End" type="Marker3D" parent="Patrol" node_paths=PackedStringArray("next_patrol_points")]
+position = Vector3(28, 0, 27.2)
+script = ExtResource("point")
+next_patrol_points = [NodePath("../Start")]
+
+[node name="Guard" parent="." node_paths=PackedStringArray("patrol_path", "weapon") instance=ExtResource("npc")]
+position = Vector3(28, 0.02, 27)
+response_to_player = "Hostile"
+patrol_path = NodePath("../Patrol")
+weapon = NodePath("Blaster")
+
+[node name="Blaster" parent="Guard" instance=ExtResource("blaster")]
+
+[node name="ScreenWall" type="StaticBody3D" parent="."]
+position = Vector3(26.5, 1.5, 24)
+
+[node name="Shape" type="CollisionShape3D" parent="ScreenWall"]
+shape = SubResource("npc_wall")
 
 [node name="Hazard" type="Area3D" parent="."]
 position = Vector3(-12, 1, 12)

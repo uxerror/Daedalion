@@ -8,6 +8,7 @@ const DUAL := preload("../Components/Interactions/DualInteraction.gd")
 const HazardZone := preload("../Scripts/hazard_zone.gd")
 const AttributeZone := preload("../Scripts/cogito_attribute_zone.gd")
 const REACH_MARGIN := 0.25
+const UNSUPPORTED := "Unavailable online (MP7 elements)"
 
 
 ## Protocol diagnostics stay in results. Expected races and short taps need no HUD message.
@@ -41,6 +42,7 @@ static func supported(node: Node, component: InteractionComponent) -> bool:
 		)
 		or (
 			component is CogitoCarryableComponent
+			# Includes the rigid CogitoBodyDrag pelvis created for a network corpse.
 			and node is RigidBody3D
 			and component.get_parent() == node
 		)

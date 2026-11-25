@@ -49,7 +49,18 @@ func bind_to_signal(sig: Signal, callable: Callable):
 
 
 ## Plays a bark. Passes in a sound that could be null if not configured, so checks a barker exists and sound exists before attempting to play it
-func bark(nullable_sound):
-	if barker and nullable_sound:
+func bark(nullable_sound: AudioStream):
+	if not barker or not nullable_sound:
+		return
+	if npc.perception:
+		# Send a reference to an authored property within the shared NPC scene.
+		for property: Dictionary in get_property_list():
+			if property.hint_string == "AudioStream" and get(property.name) == nullable_sound:
+				var path := NodePath("%s:%s" % [npc.get_path_to(self), property.name])
+				npc.perception.players.combat.npc_event(
+					npc, &"bark", npc.global_position, Vector3.ZERO, path
+				)
+				break
+	elif not npc.network_state:
 		barker.stream = nullable_sound
 		barker.play()

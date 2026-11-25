@@ -14,7 +14,7 @@ const SILENT_DB := -80.0
 ## Plays a non-positional sound (UI, 2D or player-centric sounds).
 ## These keep playing across scene changes and while the game is paused.
 func play_sound(stream: AudioStream, volume_db := 0.0, pitch_scale := 1.0, bus: String = OptionsConstants.sfx_bus_name) -> AudioStreamPlayer:
-	if not stream:
+	if not stream or CogitoNet.is_dedicated():
 		return null
 	var player := AudioStreamPlayer.new()
 	player.stream = stream
@@ -37,7 +37,7 @@ func play_sound_3d_in(
 	context: Node, stream: AudioStream, position: Vector3, volume_db := 0.0,
 	pitch_scale := 1.0, bus: String = OptionsConstants.sfx_bus_name
 ) -> AudioStreamPlayer3D:
-	if not stream:
+	if not stream or CogitoNet.is_dedicated():
 		return null
 	var scene := CogitoLevel.spawn_parent(context)
 	if not scene:
@@ -53,7 +53,7 @@ func play_sound_3d_in(
 ## Plays a sound attached to a node, so it follows the node while playing.
 ## The sound stops if the node is freed.
 func play_sound_3d_attached(stream: AudioStream, node: Node3D, volume_db := 0.0, pitch_scale := 1.0, bus: String = OptionsConstants.sfx_bus_name) -> AudioStreamPlayer3D:
-	if not stream or not is_instance_valid(node):
+	if not stream or CogitoNet.is_dedicated() or not is_instance_valid(node):
 		return null
 	var player := _create_player_3d(stream, volume_db, pitch_scale, bus)
 	node.add_child(player)
@@ -157,6 +157,8 @@ func _queue_music_resolve() -> void:
 
 func _resolve_music_state() -> void:
 	_resolve_queued = false
+	if CogitoNet.is_dedicated():
+		return
 	_music_requests = _music_requests.filter(func(request): return is_instance_valid(request.source))
 
 	var target_state: CogitoMusicState = null
