@@ -80,7 +80,10 @@ func _ready() -> void:
 	temp_screenshot = CogitoSceneManager.grab_screenshot(CogitoGlobals.screenshot_scale)
 	options_tab_menu.hide()
 	update_load_related_gui()
-	nodes_to_focus[0].grab_focus.call_deferred()
+	if _pauses_world:
+		nodes_to_focus[0].grab_focus.call_deferred()
+	else:
+		resume_game_button.grab_focus.call_deferred()
 	
 	InputRouter.push(on_input)
 	if InputHelper.device_index == -1:
@@ -143,6 +146,16 @@ func update_load_related_gui():
 		%Label_SaveTime.visible = false
 		load_button.disabled = true
 		label_active_slot.visible = false
+	if not _pauses_world:
+		_hide_save_slots()
+
+
+# Saves are local single-player slots; network saves are a later stage (MP9).
+func _hide_save_slots() -> void:
+	save_button.hide()
+	load_button.hide()
+	%QuickLoadButton.get_parent().get_parent().hide()
+	label_active_slot.hide()
 
 
 func load_slot_data():
@@ -201,6 +214,7 @@ func _on_resume_game_button_pressed():
 
 
 func _on_quit_button_pressed():
+	CogitoNet.disconnect_session()
 	CogitoSceneManager.delete_temp_saves()
 	get_tree().quit()
 
@@ -253,6 +267,14 @@ func start_new_game() -> void:
 func _on_back_to_main_menu_pressed() -> void:
 	var menu := CogitoGlobals.cogito_settings.main_menu_scene
 	if not menu:
+		return
+	if not _pauses_world:
+		# Leaving frees this avatar (and this menu) at once; the autoload finishes the load.
+		InputRouter.remove(on_input)
+		CogitoNet.disconnect_session()
+		CogitoSceneManager.load_next_scene(
+			menu.resource_path, "", "temp", CogitoSceneManager.CogitoSceneLoadMode.RESET
+		)
 		return
 	var error := await CogitoSceneManager.load_next_scene(
 		menu.resource_path, "", "temp", CogitoSceneManager.CogitoSceneLoadMode.RESET

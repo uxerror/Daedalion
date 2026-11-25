@@ -726,6 +726,8 @@ func _handle_command_edge(edge: int, index: int) -> void:
 			player_interaction_component.on_action_input(intent)
 		if is_local_presentation and pressed and action == ACTION.INVENTORY and not is_dead:
 			player_hud.set_inventory_visibility(true)
+		elif is_local_presentation and pressed and action == ACTION.MENU:
+			_handle_menu()
 		elif is_local_presentation and input_source is CogitoLocalInputSource:
 			var local_event := (input_source as CogitoLocalInputSource).view_event(index)
 			if local_event:

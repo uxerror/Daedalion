@@ -3,14 +3,19 @@ extends Control
 
 const NET_CONFIG := preload("../Networking/net_config.gd")
 
+## The command-line session starts once; returning to the menu shows the normal menu.
+static var _network_started := false
+
 
 func _enter_tree() -> void:
 	var args := OS.get_cmdline_user_args()
-	if CogitoNet.dedicated_boot or "--host" in args or "--join" in args:
+	var wants_network := ("--host" in args or "--join" in args) and not _network_started
+	if CogitoNet.dedicated_boot or wants_network:
 		var menu := get_node("MainMenu")
 		remove_child(menu)
 		menu.free()
 		if not CogitoNet.dedicated_boot:
+			_network_started = true
 			_start_network_demo.call_deferred(args)
 
 

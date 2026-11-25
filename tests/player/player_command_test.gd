@@ -354,3 +354,27 @@ func test_online_pause_menu_keeps_physics_running() -> void:
 	assert_bool(actor.current_command.has_control).is_false()
 	menu.close_pause_menu()
 	assert_bool(InputRouter.is_input_active(actor)).is_true()
+
+
+# A networked avatar (client or listen host) takes the network_movement_only
+# path; Esc must still open the pause menu and free the mouse.
+func test_networked_avatar_menu_opens_pause_menu() -> void:
+	var actor := _spawn(Vector3.UP, null, true)
+	actor.network_movement_only = true
+	await _ticks(12)
+	CogitoNet._mode = CogitoNet.Mode.CLIENT
+	var down := InputEventAction.new()
+	down.action = &"menu"
+	down.pressed = true
+	InputRouter.on_input.emit(down)
+	await _ticks(3)
+	var menus := actor.find_children("*", "CogitoPauseMenu", false, false)
+	assert_int(menus.size()).is_equal(1)
+	if menus.is_empty():
+		return
+	var menu := menus[0] as CogitoPauseMenu
+	assert_bool(get_tree().paused).is_false()
+	assert_bool(menu.save_button.visible).is_false()
+	assert_bool(menu.load_button.visible).is_false()
+	menu.close_pause_menu()
+	assert_bool(InputRouter.is_input_active(actor)).is_true()
