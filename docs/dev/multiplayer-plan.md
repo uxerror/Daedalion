@@ -9,6 +9,8 @@
 | Movement | Server-authoritative movement, immediate local look, interpolated remote players. The API keeps an input-sequence/ack hook so client prediction can be added later. |
 | Identity | Server-issued player ID; the client stores a key and proves possession on reconnect. A hook lets a game plug in its own account system. |
 | Death | Individual respawn at a checkpoint with inventory kept. Games can override the policy. Offline keeps reload-after-death. |
+| Death and respawn (2026-11-25) | A dead player sees a private death screen; its Respawn button unlocks after a server-configured delay (default 10 s). The player respawns at separately authored, level-scoped respawn points; a replaceable selection policy decides which one (the default picks among the enabled points of the player's current level, falling back to the level's player spawn). Games may replace the policy or the death screen freely. |
+| Player damage (2026-11-25) | Player-versus-player damage is on by default and switchable in the server configuration (`friendly_fire`). |
 | Quests | Shared world progression by default; personal scope opt-in per quest. |
 | Levels | **Players travel independently.** The server keeps several levels live at the same time (one live instance per level, shared by every player in it). This replaces "one active level, party travels together" below. |
 | Transport | ENet (UDP) only, direct address / LAN. NAT traversal, relay, browser transports and matchmaking are out of scope for 1.4. |
