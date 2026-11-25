@@ -298,6 +298,34 @@ class Scenario:
         for role in (self.server, second):
             self.sample(role, lambda s: not s["locked"] and not s["keydoor_locked"] and s["keydoor_open"])
 
+    def devices(self, first, second, first_name, walker):
+        self.order(self.server, op="devices", first=first_name)
+        self.order(first, op="wheel", phase="start")
+        self.wait_line(first, lambda line: line.startswith("NET RESULT ") and json.loads(
+            line.removeprefix("NET RESULT "))["ok"])
+        start = self.server.samples[-1]["tick"]
+        self.sample(self.server, lambda s: s["tick"] >= start + 24)
+        self.order(first, op="wheel", phase="release")
+        self.wait_line(first, lambda line: line.startswith("NET RESULT ") and json.loads(
+            line.removeprefix("NET RESULT "))["ok"])
+        for role in (first, second, self.server):
+            self.sample(role, lambda s: s["wheel_open"] and s["turned"])
+
+        self.use(first, "PickDoor/Pick")
+        self.sample(first, lambda s: s["picking"])
+        self.order(self.server, op="fix_lock")
+        self.order(first, op="tension")
+        for role in (first, second, self.server):
+            self.sample(role, lambda s: s["picked"] and not s["picking"])
+
+        self.order(self.server, op="enter_zone", first=first_name)
+        self.sample(first, lambda s: s["cutscene"] and s["cutscene_starts"] == 1)
+        before = self.sample(second, lambda s: s["cut_used"])
+        self.order(second, op="walk")
+        self.sample(self.server, lambda s: s["actors"][walker][2] < before["actors"][walker][2] - 0.6)
+        if second.samples[-1]["cutscene_starts"] or not first.samples[-1]["cutscene"]:
+            raise CheckFailed("cutscene was not private while the observer moved")
+
     def dedicated(self):
         self.start(dedicated=True)
         first = self.fixture("Ada", "client")
@@ -314,13 +342,15 @@ class Scenario:
         self.drive(first, "Ada", roster, [self.server, second])
         self.drive(second, "Ben", roster, [self.server, first])
         self.panels(first, second, "Ada", "Ben")
+        self.devices(first, second, "Ada", "Ben")
         late = self.fixture("Cy", "client")
         self.state(late, ["Ada", "Ben", "Cy"])
         self.state(first, ["Ada", "Ben", "Cy"])
         self.state(second, ["Ada", "Ben", "Cy"])
         baseline = self.sample(late, lambda s: s["epoch"] > 0)
         if (not baseline["open"] or not baseline["keydoor_open"] or baseline["locked"]
-                or baseline["keydoor_locked"] or baseline["events"]):
+                or baseline["keydoor_locked"] or baseline["events"] or not baseline["wheel_open"]
+                or not baseline["picked"] or not baseline["cut_used"] or baseline["cutscene_starts"]):
             raise CheckFailed(f"incorrect late-join world baseline: {baseline}")
         self.stop(late)
         self.state(first, roster)
@@ -345,7 +375,7 @@ class Scenario:
         if self.state(restored, ["Ada"]) != (ada, {"Ada": ada}):
             raise CheckFailed("server restart changed identity")
         self.stop(restored)
-        print("PASS dedicated + 2 clients: movement, collision, interaction retry, keypad, silent late join, identity, restart")
+        print("PASS dedicated + 2 clients: movement, collision, interaction retry, keypad, turnwheel, lockpick, private cutscene, silent late join, identity, restart")
 
     def listen(self):
         self.start(dedicated=False)
@@ -358,11 +388,12 @@ class Scenario:
         self.drive(self.server, "Host", roster, [self.server, client])
         self.drive(client, "Ada", roster, [self.server, client])
         self.panels(self.server, client, "Host")
+        self.devices(self.server, client, "Host", "Ada")
         self.stop(client)
         self.state(self.server, ["Host"])
         self.pose(self.server, ["Host"])
         self.stop(self.server)
-        print("PASS listen host + 1 client: movement, interactions in both directions, host identity, departure")
+        print("PASS listen host + 1 client: movement, interactions in both directions, turnwheel, lockpick, private cutscene, host identity, departure")
 
 
 def main():

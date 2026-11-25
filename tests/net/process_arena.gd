@@ -11,6 +11,8 @@ var _generation := 0
 var _clock := 0
 var _order := 0
 var _presentations := 0
+var _cutscene_starts := 0
+var _wheel_start := {}
 
 
 class LossChannel:
@@ -60,6 +62,9 @@ func _ready() -> void:
 		# The memory-peer suites bind their own branch facade.
 		set_physics_process(false)
 		return
+	$Cutscene/AnimationPlayer.animation_started.connect(
+		func(_clip: StringName): _cutscene_starts += 1
+	)
 	_control = OS.get_environment("COGITO_TEST_CONTROL")
 	CogitoNet.player_world.bind_level(self, Transform3D(Basis.IDENTITY, Vector3.UP), "arena")
 	CogitoNet.player_world.interactions.result_received.connect(_result)
@@ -114,6 +119,13 @@ func _physics_process(_delta: float) -> void:
 		"keydoor_locked": $KeyDoor.is_locked,
 		"keydoor_open": $KeyDoor.is_open,
 		"events": _presentations,
+		"wheel_open": $WheelDoor.is_open,
+		"turned": $Wheel.has_been_turned,
+		"picked": not $PickDoor.is_locked,
+		"picking": $PickDoor/Pick.lockpick_ui.visible,
+		"cutscene_starts": _cutscene_starts,
+		"cutscene": $Cutscene.player_reference != null,
+		"cut_used": $Cutscene.has_been_triggered,
 	}
 	print("NET POS ", JSON.stringify(data))
 
@@ -135,6 +147,42 @@ func _execute(order: Dictionary) -> void:
 				actor.position = Vector3(5.3 if first else 6.8, 0.1, -12.6)
 				actor.velocity = Vector3.ZERO
 				CogitoNet.player_world.mark_teleport(record.player_id)
+		"devices":
+			for record in CogitoNet.players():
+				var actor := CogitoNet.player_world.avatar_for(record.player_id).actor
+				var first: bool = record.display_name == order.first
+				actor.position = Vector3(19.9 if first else 23.0, 0.1, -10.8)
+				actor.velocity = Vector3.ZERO
+				if first:
+					var stack := InventorySlotPD.new()
+					stack.inventory_item = $PickDoor/Pick.required_lockpick_item
+					stack.quantity = 2
+					stack.origin_index = 0
+					actor.inventory_data.inventory_slots[0] = stack
+				CogitoNet.player_world.mark_teleport(record.player_id)
+		"wheel":
+			var api := CogitoNet.player_world.interactions
+			var request := api.make_request($Wheel/Hold, &"interact", order.phase)
+			if order.phase == "start":
+				_wheel_start = request
+			else:
+				request.expected_revision = _wheel_start.expected_revision
+			api.dispatch(request)
+		"fix_lock":
+			# The fixture sets a reproducible server challenge after exclusive acquisition.
+			var devices := CogitoNet.player_world.interactions.devices
+			for session: Dictionary in devices._sessions.values():
+				if session.has("lock"):
+					session.lock.spot = 7.3
+		"tension":
+			CogitoNet.player_world.interactions.devices.tension(true, 414)
+		"enter_zone":
+			for record in CogitoNet.players():
+				if record.display_name == order.first:
+					var actor := CogitoNet.player_world.avatar_for(record.player_id).actor
+					actor.position = $Cutscene.position
+					actor.velocity = Vector3.ZERO
+					CogitoNet.player_world.mark_teleport(record.player_id)
 		"walk":
 			if _loss:
 				_loss.muted = false

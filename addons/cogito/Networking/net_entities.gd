@@ -23,7 +23,7 @@ func bind(level: Node, key: String, generation: int) -> void:
 	for node in root.find_children("*", "Node3D", true, false):
 		if CogitoLevel.root_of(node) != root:
 			continue
-		if node is ReadableComponent:
+		if _needs_parent_address(node):
 			candidates[node.get_parent()] = true
 		if (
 			node.has_method("net_state")
@@ -42,7 +42,7 @@ func bind(level: Node, key: String, generation: int) -> void:
 			objects[id] = node
 	for id in objects.keys():
 		var node := objects[id]
-		if not node.has_method("net_state") and not _has_readable(node):
+		if not node.has_method("net_state") and not _has_addressable_child(node):
 			objects.erase(id)
 			continue
 		if node.has_method("net_state"):
@@ -58,14 +58,24 @@ func bind(level: Node, key: String, generation: int) -> void:
 			while parent != node and not candidates.has(parent):
 				parent = parent.get_parent()
 			if parent == node:
+				# A stateful component also has its own baseline row. Reject an ambiguous id.
+				if (
+					child.has_method("net_state")
+					and objects.get(CogitoPersistentId.of(child)) != child
+				):
+					continue
 				components[str(node.get_path_to(child))] = child
 				_owners[child as InteractionComponent] = node
 		_components[id] = components
 
 
-func _has_readable(node: Node) -> bool:
+func _needs_parent_address(node: Node) -> bool:
+	return node is ReadableComponent or node is SpinnerInteraction or node is LockpickInteraction
+
+
+func _has_addressable_child(node: Node) -> bool:
 	for child in node.get_children():
-		if child is ReadableComponent:
+		if _needs_parent_address(child):
 			return true
 	return false
 

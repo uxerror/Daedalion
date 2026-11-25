@@ -1,5 +1,7 @@
 extends GdUnitTestSuite
 
+const ACTIONS := preload("res://addons/cogito/Networking/net_actions.gd")
+const PLAYER := preload("res://addons/cogito/PackedScenes/cogito_player_advanced.tscn")
 const ANIMATION := preload("res://addons/cogito/Networking/net_animation.gd")
 const ENTITIES := preload("res://addons/cogito/Networking/net_entities.gd")
 const BASIC := preload("res://addons/cogito/Components/Interactions/BasicInteraction.gd")
@@ -74,3 +76,57 @@ func test_replica_animation_keeps_pose_tracks_and_restores_authored_library() ->
 	assert_object(player.get_animation(&"open")).is_same(clip)
 	assert_int(clip.get_track_count()).is_equal(3)
 	assert_bool(player.is_blocking_signals()).is_false()
+
+
+func test_hud_protocol_diagnostics() -> void:
+	for reason in ["Stale revision", "Old request", "No matching hold", "Hold too short"]:
+		assert_str(ACTIONS.hud_reason(reason)).is_empty()
+	for reason in ["Wrong level epoch", "Invalid payload", "Unknown entity or component"]:
+		assert_str(ACTIONS.hud_reason(reason)).is_equal("Unavailable")
+	assert_str(ACTIONS.hud_reason("In use")).is_equal("In use")
+
+
+func test_offline_authored_devices_keep_local_input_links_and_save_fields() -> void:
+	var previous := CogitoSceneManager.get_player()
+	var mouse_mode := Input.mouse_mode
+	var level: Node3D = preload("process_arena.tscn").instantiate()
+	add_child(level)
+	var actor: CogitoPlayerAdvanced = PLAYER.instantiate()
+	level.add_child(actor)
+	var pic := actor.player_interaction_component
+	assert_object(pic.network_interactions).is_null()
+	assert_int(CogitoNet.get_child_count()).is_zero()
+	var spinner: SpinnerInteraction = level.get_node("Spinner/SpinnerInteraction")
+	spinner.interact(pic)
+	spinner.spin_accumulator = spinner.rotation_speed * 2.0
+	spinner.apply_spin()
+	assert_float(spinner.spinner_value).is_equal(2.0)
+	spinner.force_exit()
+	assert_bool(InputRouter.is_input_active(actor)).is_true()
+	var wheel: CogitoTurnwheel = level.get_node("Wheel")
+	var hold: HoldInteraction = wheel.get_node("Hold")
+	hold.is_being_held.emit(0.1, 0.1)
+	hold.perform_hold_action(pic)
+	assert_bool(wheel.save().has_been_turned).is_true()
+	assert_bool(level.get_node("WheelDoor").is_open).is_true()
+	var pick: LockpickInteraction = level.get_node("PickDoor/Pick")
+	var item := InventorySlotPD.new()
+	item.inventory_item = pick.required_lockpick_item
+	item.quantity = 1
+	actor.inventory_data.inventory_slots[0] = item
+	pick.interact(pic)
+	assert_bool(pick.lockpick_ui.visible).is_true()
+	pick.spawned_lockpick_game.unlock_animation = ""
+	pick.spawned_lockpick_game.unlock_lock()
+	assert_bool(level.get_node("PickDoor").is_locked).is_false()
+	assert_bool(pick.lockpick_ui.visible).is_false()
+	var trigger: CogitoCutsceneTrigger = level.get_node("Cutscene")
+	trigger._on_body_entered(actor)
+	assert_bool(trigger.cutscene_animation_player.is_playing()).is_true()
+	assert_bool(trigger.save().has_been_triggered).is_false()
+	trigger.finish_cutscene()
+	assert_bool(trigger.save().has_been_triggered).is_true()
+	assert_bool(InputRouter.is_input_active(actor)).is_true()
+	level.free()
+	CogitoSceneManager.register_player(previous)
+	Input.mouse_mode = mouse_mode

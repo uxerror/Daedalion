@@ -35,6 +35,8 @@ signal lockpick_broke # Emitted when a lockpick breaks.
 @export var jiggle_sound : AudioStream
 @export var lockpick_break_sound : AudioStream
 
+## Set only on the local player's online presentation instance.
+var net_devices: Node
 var lockpick_health : float:
 	set(value):
 		lockpick_health = maxf(value,0)
@@ -72,7 +74,8 @@ func _ready() -> void:
 	animation_player.play(start_animation)
 	await animation_player.animation_finished
 	
-	place_sweetspot(max_range)
+	if not net_devices:
+		place_sweetspot(max_range)
 
 func on_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
@@ -91,16 +94,66 @@ func on_input(event: InputEvent) -> void:
 	
 	if event.is_action_pressed("menu"):
 		get_viewport().set_input_as_handled()
-		cancelled.emit()
-		InputRouter.pop()
+		if net_devices:
+			net_devices.dismiss()
+		else:
+			cancelled.emit()
+			InputRouter.pop()
 
 
 func _physics_process(delta: float) -> void:
+	if net_devices:
+		if not is_changing_lockpicks and not is_unlocked:
+			_sample_net_input(delta)
+		return
 	# we remap the lockpick spot from -90 and 90 to a value that goes from MIN_RANGE to max_range, then we snap it for easier controls
 	lockpick_spot = snappedf(remap(rad_to_deg(lockpick_pivot.rotation.z), -90, 90, MIN_RANGE, max_range), 0.1)
 	
 	if not is_unlocked:
 		_handle_keyhole(delta)
+
+
+func _sample_net_input(delta: float) -> void:
+	if joystick_h_event and not is_turning_keyhole:
+		lockpick_pivot.rotation.z = clampf(
+			lockpick_pivot.rotation.z + joystick_h_event.axis_value * delta, -PI / 2, PI / 2
+		)
+	var pressing := Input.is_action_pressed("right") and InputRouter.is_input_active(self)
+	if pressing != is_turning_keyhole:
+		is_turning_keyhole = pressing
+		net_devices.tension(pressing, roundi(lockpick_pivot.rotation_degrees.z * 10.0))
+
+
+## Render only the authority's keyhole travel and mechanical feedback.
+func net_feedback(event: StringName, data: Dictionary) -> void:
+	if event == &"progress":
+		keyhole_pivot.rotation_degrees.z = -float(data.turn)
+		if data.jam and not animation_player.is_playing():
+			animation_player.play(jiggle_animation)
+			CogitoAudio.play_sound(jiggle_sound)
+	elif event == &"break":
+		is_changing_lockpicks = true
+		CogitoAudio.play_sound(lockpick_break_sound)
+		animation_player.play(lockpick_break_animation)
+		await animation_player.animation_finished
+		if not is_unlocked:
+			await grab_new_lockpick()
+
+
+## Give input back immediately, then finish the private terminal animation.
+func net_finish(event: StringName) -> void:
+	is_unlocked = true
+	InputRouter.remove(on_input)
+	set_physics_process(false)
+	if event == &"success":
+		CogitoAudio.play_sound(unlock_sound)
+		animation_player.play(unlock_animation)
+		await animation_player.animation_finished
+	elif event == &"broken":
+		CogitoAudio.play_sound(lockpick_break_sound)
+		animation_player.play(lockpick_break_animation)
+		await animation_player.animation_finished
+	queue_free()
 
 
 # generating a random number via godot's RandomNumberGenerator class, call this function when you want to reinitialise the sweet spot

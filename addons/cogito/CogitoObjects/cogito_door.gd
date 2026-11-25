@@ -480,6 +480,8 @@ func apply_net_state(state: Dictionary, silent: bool) -> void:
 			component.interaction_text = (
 				tr(interaction_text) + tr(component.interaction_text_joiner) + tr(lock_interaction_text)
 			)
+		elif component is LockpickInteraction:
+			continue
 		elif component.has_method("can_start_hold"):
 			component.interaction_text = lock_interaction_text
 		else:

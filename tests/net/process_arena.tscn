@@ -14,6 +14,24 @@
 [ext_resource type="AudioStream" path="res://addons/cogito/Assets/Audio/Kenney/doorOpen_1.ogg" id="sound"]
 [ext_resource type="PackedScene" path="res://addons/cogito/PackedScenes/cogito_pressure_plate.tscn" id="plate"]
 
+[ext_resource type="Script" path="res://addons/cogito/CogitoObjects/cogito_turnwheel.gd" id="wheel"]
+[ext_resource type="PackedScene" path="res://addons/cogito/Components/Interactions/LockpickInteraction.tscn" id="pick"]
+[ext_resource type="PackedScene" path="res://addons/cogito/DemoScenes/DemoPrefabs/SpinnerKnob.tscn" id="spinner"]
+[ext_resource type="Script" path="res://addons/cogito/Scripts/cogito_cutscene_trigger.gd" id="cut"]
+
+[sub_resource type="BoxShape3D" id="zone"]
+size = Vector3(2, 3, 2)
+
+[sub_resource type="Animation" id="clip"]
+resource_name = "camera"
+length = 2.5
+tracks/0/type = "value"
+tracks/0/path = NodePath("Camera:current")
+tracks/0/keys = {"times": PackedFloat32Array(0), "values": [true], "transitions": PackedFloat32Array(1), "update": 1}
+
+[sub_resource type="AnimationLibrary" id="library"]
+_data = {&"camera": SubResource("clip")}
+
 [sub_resource type="BoxShape3D" id="slab"]
 size = Vector3(3.6, 3, 0.2)
 
@@ -109,3 +127,58 @@ metadata/cogito_persistent_id = "level:page"
 [node name="Plate" parent="." instance=ExtResource("plate")]
 position = Vector3(-6, 0, -12)
 metadata/cogito_persistent_id = "level:plate"
+
+[node name="Wheel" type="AnimatableBody3D" parent="." node_paths=PackedStringArray("nodes_to_trigger")]
+position = Vector3(20, 1.45, -12)
+collision_layer = 3
+script = ExtResource("wheel")
+nodes_to_trigger = [NodePath("../WheelDoor")]
+hold_audio_stream = ExtResource("sound")
+
+[node name="Hold" type="Node3D" parent="Wheel"]
+script = ExtResource("hold")
+input_map_action = "interact"
+hold_time = 0.3
+
+[node name="Shape" type="CollisionShape3D" parent="Wheel"]
+shape = SubResource("panel")
+
+[node name="Audio" type="AudioStreamPlayer3D" parent="Wheel"]
+
+[node name="WheelDoor" type="AnimatableBody3D" parent="."]
+position = Vector3(24, 1.5, -16)
+script = ExtResource("door")
+door_type = 1
+closed_position = Vector3(24, 1.5, -16)
+open_position = Vector3(28, 1.5, -16)
+
+[node name="PickDoor" type="AnimatableBody3D" parent="."]
+position = Vector3(21, 1.45, -12)
+script = ExtResource("door")
+is_locked = true
+
+[node name="Shape" type="CollisionShape3D" parent="PickDoor"]
+shape = SubResource("panel")
+
+[node name="Pick" parent="PickDoor" node_paths=PackedStringArray("doors_to_unlock") instance=ExtResource("pick")]
+doors_to_unlock = [NodePath("..")]
+
+[node name="Spinner" parent="." instance=ExtResource("spinner")]
+position = Vector3(19.4, 1.45, -12)
+
+[node name="Cutscene" type="Area3D" parent="." node_paths=PackedStringArray("cutscene_animation_player")]
+position = Vector3(25, 1, -10)
+collision_layer = 0
+collision_mask = 16
+script = ExtResource("cut")
+cutscene_animation_player = NodePath("AnimationPlayer")
+cutscene_animation_name = "camera"
+allow_cancel = true
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="Cutscene"]
+libraries = {&"": SubResource("library")}
+
+[node name="Camera" type="Camera3D" parent="Cutscene"]
+
+[node name="Shape" type="CollisionShape3D" parent="Cutscene"]
+shape = SubResource("zone")

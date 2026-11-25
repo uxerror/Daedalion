@@ -60,6 +60,8 @@ signal mouse_movement(relative_mouse_movement:Vector2)
 ## Lowest pitch for hardest landing sound
 @export var min_pitch = 0.7
 #Setup Dynamic Pitch & Volume for Landing Audio, used to store velocity based results
+## An actor-addressed takeover consumes sequences with neutral movement and look.
+var network_input_blocked := false
 var landing_pitch: float = 1.0
 var landing_volume: float = 0.8
 
@@ -690,6 +692,9 @@ func _physics_process(delta):
 		command.has_control = false
 	else:
 		command = input_source.sample(self, next_sequence)
+	if network_input_blocked and command:
+		command = neutral_command(command.sequence)
+		command.has_control = false
 	if not command and network_movement_only:
 		current_command = neutral_command(last_consumed_sequence)
 		current_command.has_control = false

@@ -8,12 +8,34 @@ const DUAL := preload("../Components/Interactions/DualInteraction.gd")
 const REACH_MARGIN := 0.25
 
 
+## Protocol diagnostics stay in results. Expected races and short taps need no HUD message.
+static func hud_reason(reason: String) -> String:
+	match reason:
+		"Stale revision", "Old request", "Hold too short", "No matching hold", "Already active":
+			return ""
+		"Wrong level epoch", "Unknown entity or component", "Invalid payload", "Invalid phase":
+			return "Unavailable"
+		"No avatar in level", "Disabled action", "Ambiguous action", "Hold required":
+			return "Unavailable"
+	if reason.begins_with("Unavailable online") or reason == "Currency transactions require MP3":
+		return "Unavailable online"
+	if reason == "Posture blocks interaction":
+		return "Can't interact in this position"
+	return reason
+
+
 ## Explicit opt in keeps all other solo component entry points inert online.
 static func supported(node: Node, component: InteractionComponent) -> bool:
-	if component is ReadableComponent:
+	if (
+		component is ReadableComponent
+		or component is SpinnerInteraction
+		or component is LockpickInteraction
+	):
 		return true
 	if not node.has_method("net_state") or not node.has_method("apply_net_state"):
 		return false
+	if node is CogitoTurnwheel:
+		return component.get_parent() == node and component.get_script() == HOLD
 	if component.has_method("net_commit"):
 		return true
 	return (
@@ -95,6 +117,20 @@ static func _lock_action(component: InteractionComponent, action: StringName) ->
 static func unavailable(
 	node: Node, component: InteractionComponent, action: StringName, pic: PlayerInteractionComponent
 ) -> String:
+	if component is LockpickInteraction:
+		if not _has_item(pic, component.required_lockpick_item):
+			return (
+				component.lockpick_item_hint
+				if component.lockpick_item_hint
+				else "Lockpick required"
+			)
+		return "" if component.net_has_locked_target() else "Already unlocked"
+	return _world_guard(node, component, action, pic)
+
+
+static func _world_guard(
+	node: Node, component: InteractionComponent, action: StringName, pic: PlayerInteractionComponent
+) -> String:
 	if node is CogitoDoor:
 		var lock_action := _lock_action(component, action)
 		if node.ignore_interaction_raycast:
@@ -144,7 +180,11 @@ static func commit(
 	var basic_call: bool = component.get_script() == BASIC and not node is CogitoKeypad
 	if component.attribute_check and not basic_call:
 		component.check_attribute(pic)
-	if component.has_method("net_commit"):
+	if component is SpinnerInteraction or component is LockpickInteraction:
+		return pic.network_interactions.devices.open_device(component, pic)
+	if node is CogitoTurnwheel:
+		node.net_complete(pic)
+	elif component.has_method("net_commit"):
 		component.net_commit(action.action_id, pic, payload)
 	elif component is ReadableComponent:
 		reply.view = "read"

@@ -1,4 +1,8 @@
+class_name SpinnerInteraction
 extends InteractionComponent
+
+## Publishes authoritative motion and goal cues.
+signal net_changed(event: StringName)
 
 #region inspector settings
 @export_group("Spinner Settings")
@@ -75,6 +79,9 @@ signal spin_counterclockwise
 signal spinner_goal_met
 #endregion
 
+var _net_motion: Tween
+var _net_removed := false
+
 
 func _ready() -> void:
 	is_being_controlled = false
@@ -124,8 +131,13 @@ func enter(_pic: PlayerInteractionComponent) -> void:
 func exit(_player: PlayerInteractionComponent) -> void:
 	if interacting_gizmo: interacting_gizmo.set_visible(false)
 	_hide_input_indicator()
-	_player.close_interface()
-	InputRouter.pop()
+	if _player.network_interactions:
+		is_being_controlled = false
+		InputRouter.remove(on_input)
+		_player.close_interface()
+	else:
+		_player.close_interface()
+		InputRouter.pop()
 	CogitoSceneManager.restore_gameplay_mouse_mode()
 	is_being_controlled = false
 
@@ -230,6 +242,12 @@ func get_stick_angle() -> float:
 func apply_spin() -> void:
 	if rotation_speed <= 0:
 		return
+	if player_interaction_component and player_interaction_component.network_interactions:
+		var steps := clampi(int(spin_accumulator / rotation_speed), -4, 4)
+		if steps:
+			spin_accumulator -= steps * rotation_speed
+			player_interaction_component.network_interactions.devices.spin(steps)
+		return
 	while spin_accumulator >= rotation_speed and is_being_controlled:
 		spin_accumulator -= rotation_speed
 		spin_step(1)
@@ -256,9 +274,52 @@ func spin_step(direction: int) -> void:
 		spinner_goal_met.emit()
 		if sound_on_goal_met :
 			CogitoAudio.play_sound_3d_in(self, sound_on_goal_met, global_position)
+		if has_meta(&"cogito_net_world"):
+			_net_removed = destroy_on_goal_met
+			net_changed.emit(&"goal")
 		if destroy_on_goal_met:
 			force_exit()
 			get_parent().queue_free()
+
+
+## The pose also captures overrotation and authored vertical travel.
+func net_state() -> Dictionary:
+	return {
+		"value": spinner_value,
+		"pose": rotating_object.transform if rotating_object else Transform3D.IDENTITY,
+		"removed": _net_removed,
+	}
+
+
+## Install the current pose without activating any linked gameplay.
+func apply_net_state(state: Dictionary, silent: bool) -> void:
+	if state.removed:
+		force_exit()
+		get_parent().queue_free()
+	if _net_motion:
+		_net_motion.kill()
+	if silent:
+		spinner_value = state.value
+		if rotating_object:
+			rotating_object.transform = state.pose
+	else:
+		_net_motion = create_tween().set_parallel()
+		_net_motion.tween_property(self, ^"spinner_value", state.value, 0.06)
+		if rotating_object:
+			_net_motion.tween_property(rotating_object, ^"transform", state.pose, 0.06)
+
+
+## Drop interpolation before returning the level to solo play.
+func net_unbind() -> void:
+	if _net_motion:
+		_net_motion.kill()
+		_net_motion = null
+
+
+## Play the goal cue once on each live observer.
+func present_net_event(event: StringName) -> void:
+	if event == &"goal" and sound_on_goal_met:
+		CogitoAudio.play_sound_3d_in(self, sound_on_goal_met, global_position)
 
 
 func is_goal_met() -> bool:

@@ -114,6 +114,8 @@ func _level_ready(key: String, nonce: int) -> void:
 		return
 	_peer_by_id[_session.for_peer(peer).player_id] = peer
 	world.forget(peer)
+	if _bindings.has(peer):
+		interactions.forget(peer)
 	_bindings[peer] = nonce
 	_ready_levels[peer] = key
 	for id in _avatars:
@@ -195,6 +197,7 @@ func _create(id: String, life: int, start: Transform3D, initial_pose: Dictionary
 		command_channel.clear()
 		local_actor = avatar.actor
 		local_changed.emit(local_actor)
+		world.acknowledge_local_avatar()
 
 
 func _send_spawn(peer: int, id: String) -> void:
@@ -241,6 +244,14 @@ func clear() -> void:
 ## Look up one live incarnation, including a replica's latest acknowledged input sequence.
 func avatar_for(id: String) -> AVATAR:
 	return _avatars.get(id)
+
+
+## Resolve a live server-side body to its admitted connection.
+func peer_for_actor(actor: CogitoPlayer) -> int:
+	for id in _avatars:
+		if _avatars[id].actor == actor:
+			return _peer_by_id[id]
+	return 0
 
 
 ## Increment after a server-forced look, seat change, teleport or respawn in place.

@@ -8,12 +8,16 @@ const ACTIONS := preload("net_actions.gd")
 const WORLD := preload("net_world_state.gd")
 const AVATAR := preload("net_avatar.gd")
 const SESSION := preload("net_session.gd")
-const UNSUPPORTED := "Unavailable online (MP2b devices, MP3 inventory, MP4 carry and seats)"
+const DEVICES := preload("net_devices.gd")
+const UNSUPPORTED := "Unavailable online (MP3 inventory and pickups, MP4 carry and seats)"
 ## Retries older than this many requests per peer get "Old request" instead of a cached reply.
 const RESULT_CACHE := 64
+const DOUBLE_PRESS_MSEC := 300
 
 ## Shared registry and authoritative revisions of this session branch.
 var world: WORLD
+## Actor-addressed device input and private presentation.
+var devices := DEVICES.new()
 var _session: SESSION
 var _next_id := 0
 var _results := {}
@@ -27,14 +31,18 @@ var _local_hold := {}
 var _last_displayed := 0
 var _captured_hints: Array
 var _hint_actor: PlayerInteractionComponent
+var _last_success := {}
 
 
 func _ready() -> void:
 	_session = get_parent().get_parent()
+	devices.name = "Devices"
+	add_child(devices)
 
 
 ## Clear per-level requests and holds when the registry is released.
 func clear() -> void:
+	_last_success.clear()
 	_results.clear()
 	_last_id.clear()
 	_holds.clear()
@@ -44,6 +52,7 @@ func clear() -> void:
 
 ## A new connection gets its own sequence space.
 func forget(peer: int) -> void:
+	devices.forget(peer)
 	_results.erase(peer)
 	_last_id.erase(peer)
 	_holds.erase(peer)
@@ -77,7 +86,7 @@ func press(pic: PlayerInteractionComponent, input: String) -> void:
 		if component.input_map_action != input or component.is_disabled:
 			continue
 		if not ACTIONS.supported(target, component):
-			pic.hint_prompt.emit(null, UNSUPPORTED)
+			pic.hint_prompt.emit(null, ACTIONS.hud_reason(UNSUPPORTED))
 			return
 		var choices := component.get_actions(pic)
 		if not choices.is_empty():
@@ -155,7 +164,9 @@ func make_request(
 	if address.is_empty() or not world.entities.epoch:
 		var local: CogitoPlayer = get_parent().local_actor
 		if local:
-			local.player_interaction_component.hint_prompt.emit(null, UNSUPPORTED)
+			local.player_interaction_component.hint_prompt.emit(
+				null, ACTIONS.hud_reason(UNSUPPORTED)
+			)
 		return {}
 	_next_id += 1
 	(
@@ -247,15 +258,53 @@ func _evaluate(peer: int, pic: PlayerInteractionComponent, request: Dictionary) 
 	if request.phase == "dismiss" and _views.get(peer) == component:
 		_views.erase(peer)
 		return {"ok": true}
+	return _evaluate_action(peer, pic, component, node, request)
+
+
+func _evaluate_action(
+	peer: int,
+	pic: PlayerInteractionComponent,
+	component: InteractionComponent,
+	node: Node,
+	request: Dictionary
+) -> Dictionary:
+	if devices.is_wheel(peer, component) and request.phase in ["release", "cancel"]:
+		return _end_wheel(peer, pic, component, request)
+	if node is CogitoTurnwheel and request.phase != "start":
+		return {"ok": false, "reason": "No matching hold"}
+	var busy := devices.unavailable(peer, component)
+	if not busy.is_empty():
+		return {"ok": false, "reason": busy}
 	var phase := _hold_phase(peer, component, request)
 	if phase.has("ok"):
 		return phase
-	why = _actor_guard(peer, pic, component, request)
+	var why := _actor_guard(peer, pic, component, request)
 	if why.is_empty():
 		why = ACTIONS.geometry(pic.player, node, component)
 	if not why.is_empty():
 		return {"ok": false, "reason": why}
 	return _act(peer, pic, component, node, phase.action_id, request)
+
+
+func _end_wheel(
+	peer: int, pic: PlayerInteractionComponent, component: InteractionComponent, request: Dictionary
+) -> Dictionary:
+	var phase := _hold_phase(peer, component, request)
+	if phase.has("ok"):
+		devices.finish_wheel(peer, false)
+		return phase
+	# Only the matched start envelope can finish a hold across its own pose revisions.
+	var current := request.duplicate()
+	current.expected_revision = world.revisions[request.entity_id]
+	var why := _actor_guard(peer, pic, component, current)
+	var wheel := component.get_parent() as CogitoTurnwheel
+	if why.is_empty():
+		why = ACTIONS.geometry(pic.player, wheel, component)
+	var result := {"ok": false, "reason": why}
+	if why.is_empty():
+		result = _act(peer, pic, component, wheel, phase.action_id, current)
+	devices.finish_wheel(peer, result.ok)
+	return result
 
 
 ## Address, opt-in and payload checks that need no actor.
@@ -277,7 +326,12 @@ func _actor_guard(
 		return "Stale revision"
 	if not pic.player.can_act() or pic.player.is_dead or pic._is_interaction_blocked(component):
 		return "Posture blocks interaction"
-	var private_view := component is ReadableComponent or component.get_parent() is CogitoKeypad
+	var private_view := (
+		component is ReadableComponent
+		or component is SpinnerInteraction
+		or component is LockpickInteraction
+		or component.get_parent() is CogitoKeypad
+	)
 	if _views.has(peer) and private_view:
 		if _views[peer] != component:
 			return "Another interface is open"
@@ -347,6 +401,8 @@ func _act(
 	if request.phase == "start":
 		_holds[peer] = request.duplicate()
 		_holds[peer].time = Time.get_ticks_msec()
+		if node is CogitoTurnwheel:
+			devices.start_wheel(peer, component, pic)
 		return {"ok": true}
 	var why := ACTIONS.unavailable(node, component, key, pic)
 	if not why.is_empty():
@@ -388,6 +444,7 @@ func _hint(key: String, epoch: int, hint: Array) -> void:
 
 func _response(request: Dictionary, result: Dictionary) -> Dictionary:
 	var response := result.duplicate()
+	response.action_id = request.action_id
 	for field: String in ["level_key", "epoch", "request_id", "entity_id", "component_key"]:
 		response[field] = request[field]
 	return response
@@ -412,10 +469,7 @@ func _result(result: Dictionary) -> void:
 	if not actor:
 		return
 	var pic := actor.player_interaction_component
-	for hint: Array in result.get("hints", []):
-		_hint(result.level_key, result.epoch, hint)
-	if not result.ok and not result.get("hints"):
-		pic.hint_prompt.emit(null, result.reason)
+	_present_hints(pic, result)
 	var component := world.entities.resolve(result.entity_id, result.component_key)
 	if component:
 		if _local_hold.get("request_id") == result.request_id:
@@ -441,8 +495,30 @@ func _result(result: Dictionary) -> void:
 	pic.targeting.rebuild_interaction_prompts()
 
 
+func _present_hints(pic: PlayerInteractionComponent, result: Dictionary) -> void:
+	var now := Time.get_ticks_msec()
+	var action := [result.entity_id, result.component_key, result.action_id]
+	if result.ok:
+		_last_success = {"action": action, "time": now}
+	elif _last_success.get("action") == action and now - _last_success.time <= DOUBLE_PRESS_MSEC:
+		return
+	for hint: Array in result.get("hints", []):
+		_hint(result.level_key, result.epoch, hint)
+	if not result.ok and not result.get("hints"):
+		var message := ACTIONS.hud_reason(result.reason)
+		if not message.is_empty():
+			pic.hint_prompt.emit(null, message)
+
+
+## An authority-triggered camera takes over from the actor's previous interaction.
+func interrupt_actor(peer: int) -> void:
+	_holds.erase(peer)
+	_views.erase(peer)
+
+
 ## Tell the authority when the owner dismisses a private reader or keypad.
 func dismiss_view() -> void:
+	devices.dismiss()
 	if is_instance_valid(_local_view):
 		var request := make_request(_local_view, &"dismiss", "dismiss")
 		_local_view = null
@@ -452,6 +528,7 @@ func dismiss_view() -> void:
 
 ## Return the input router to gameplay before destroying a local session avatar.
 func close_view(pic: PlayerInteractionComponent) -> void:
+	devices.close_local()
 	var component := _local_view
 	_local_view = null
 	if is_instance_valid(component):

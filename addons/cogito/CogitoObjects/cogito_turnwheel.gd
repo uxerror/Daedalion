@@ -1,5 +1,9 @@
 @icon("res://addons/cogito/Assets/Graphics/Editor/Icon_CogitoObject.svg")
+class_name CogitoTurnwheel
 extends AnimatableBody3D
+
+## Publishes wheel pose and hold audio edges.
+signal net_changed(event: StringName)
 
 signal object_state_updated(interaction_text : String)
 
@@ -29,6 +33,9 @@ enum PromptPositionMode{
 var has_been_turned: bool = false
 var interaction_nodes : Array[Node]
 var cogito_properties : CogitoProperties = null
+var _net_motion: Tween
+var _net_rotation := Quaternion.IDENTITY
+var _has_net_rotation := false
 
 func _ready():
 	self.add_to_group("save_object_state")
@@ -64,6 +71,72 @@ func interact(_player_interaction_component):
 	CogitoGlobals.debug_log(true,"cogito_turnwheel.gd", "Turnwheel has been turned: " + str(has_been_turned) )
 	for node in nodes_to_trigger:
 		node.interact(null)
+
+
+## Commit a completed server hold with the instigator for authored links.
+func net_complete(actor: PlayerInteractionComponent) -> void:
+	has_been_turned = not has_been_turned
+	var world: Node = get_meta(&"cogito_net_world")
+	for target in nodes_to_trigger:
+		world.activate_link(target, actor)
+
+
+## Keep the commanded pose available while AnimatableBody3D synchronizes with physics.
+func net_rotate(pose: Quaternion) -> void:
+	_has_net_rotation = true
+	_net_rotation = pose
+	quaternion = pose
+
+
+## Publish authority motion and present the same audio edge on a listen host.
+func net_publish(event: StringName) -> void:
+	present_net_event(event)
+	net_changed.emit(event)
+
+
+## Replicate the physical wheel pose independently of its links.
+func net_state() -> Dictionary:
+	return {"turned": has_been_turned, "rotation": _net_rotation if _has_net_rotation else quaternion}
+
+
+## Snap a baseline or interpolate a live rotation.
+func apply_net_state(state: Dictionary, silent: bool) -> void:
+	has_been_turned = state.turned
+	if _net_motion:
+		_net_motion.kill()
+	if silent:
+		var sync := sync_to_physics
+		sync_to_physics = false
+		quaternion = state.rotation
+		force_update_transform()
+		reset_physics_interpolation()
+		sync_to_physics = sync
+	else:
+		_net_motion = create_tween().set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
+		_net_motion.tween_property(self, ^"quaternion", state.rotation, 0.06)
+
+
+## A departing observer can leave while another player is still holding the wheel.
+func net_unbind() -> void:
+	_has_net_rotation = false
+	if _net_motion:
+		_net_motion.kill()
+		_net_motion = null
+	present_net_event(&"stop")
+
+
+## Loop the authored sound between the start and stop events.
+func present_net_event(event: StringName) -> void:
+	if not audio_stream_player_3d or not hold_audio_stream:
+		return
+	if event == &"start":
+		if not audio_stream_player_3d.finished.is_connected(audio_stream_player_3d.play):
+			audio_stream_player_3d.finished.connect(audio_stream_player_3d.play)
+		audio_stream_player_3d.play()
+	elif event == &"stop":
+		if audio_stream_player_3d.finished.is_connected(audio_stream_player_3d.play):
+			audio_stream_player_3d.finished.disconnect(audio_stream_player_3d.play)
+		audio_stream_player_3d.stop()
 
 
 func set_state():

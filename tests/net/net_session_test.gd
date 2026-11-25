@@ -650,3 +650,272 @@ func test_prompt_is_pure_and_only_authority_runs_auto_close() -> void:
 	await _ticks(17)
 	assert_bool(copy.is_open).is_false()
 	assert_int(client.player_world.world.revisions["level:door"]).is_equal(2)
+
+
+func _stage_devices(server: Facade) -> void:
+	var index := 0
+	for record in server.players():
+		var actor := server.player_world.avatar_for(record.player_id).actor
+		actor.position = Vector3(19.9 + 1.3 * index, 0.1, -10.8)
+		actor.velocity = Vector3.ZERO
+		server.player_world.mark_teleport(record.player_id)
+		index += 1
+	await _ticks(8)
+
+
+func _wire_input(branch: Facade, token: int, action: StringName, value: Variant) -> void:
+	var api := branch.player_world.interactions
+	var entities := api.world.entities
+	api.devices._input_device.rpc_id(1, entities.level_key, entities.epoch, token, action, value)
+	_pump()
+
+
+func test_spinner_exclusive_bounded_goal_and_disconnect() -> void:
+	var server := _branch(1)
+	server.start_server({"save_dir": "user://net/spinner"})
+	var level := _arena(server)
+	var first := _observer(2)
+	var second := _observer(3)
+	var spinner: SpinnerInteraction = level.get_node("Spinner/SpinnerInteraction")
+	var path := "Spinner/SpinnerInteraction"
+	var goals: Array[bool] = []
+	var cues: Array[StringName] = []
+	var replies: Array[Dictionary] = []
+	second.player_world.interactions.result_received.connect(func(r: Dictionary): replies.append(r))
+	second.player_world.world.presented.connect(
+		func(_id: String, _rev: int, event: StringName): cues.append(event)
+	)
+	spinner.spinner_goal_met.connect(func(): goals.append(true))
+	spinner.spinner_goal_value = 4
+	spinner.overrotate = false
+	await _stage_devices(server)
+	_use(first, path)
+	var device := first.player_world.interactions.devices
+	assert_int(device._local_token).is_greater(0)
+	assert_bool(first.player_world.active_level().get_node(path).is_being_controlled).is_true()
+	assert_object(second.player_world.active_level().get_node(path).input_indicator).is_null()
+	_use(second, path)
+	assert_str(replies.back().reason).is_equal("In use")
+	_wire_input(second, device._local_token, &"spin", 4)
+	_wire_input(first, device._local_token, &"spin", -5)
+	assert_float(spinner.spinner_value).is_zero()
+	_wire_input(first, device._local_token, &"spin", 2)
+	_wire_input(first, device._local_token, &"spin", 2)
+	assert_float(spinner.spinner_value).is_equal(2.0)
+	await _ticks(2)
+	_wire_input(first, device._local_token, &"spin", 4)
+	assert_float(spinner.spinner_value).is_equal(4.0)
+	assert_array(goals).contains_exactly([true])
+	assert_int(cues.count(&"goal")).is_equal(1)
+	await _ticks(7)
+	assert_float(second.player_world.active_level().get_node(path).spinner_value).is_equal(4.0)
+	first.disconnect_session()
+	_pump()
+	_use(second, path)
+	assert_bool(replies.back().ok).is_true()
+	server.player_world.avatar_for(second.local_player_id()).actor.position += Vector3.RIGHT * 10
+	await _ticks(3)
+	assert_int(second.player_world.interactions.devices._local_token).is_zero()
+	await _stage_devices(server)
+	spinner.spinner_goal_value = 5.0
+	spinner.destroy_on_goal_met = true
+	_use(second, "Spinner/SpinnerInteraction")
+	var devices := second.player_world.interactions.devices
+	_wire_input(second, devices._local_token, &"spin", 1)
+	await _ticks(3)
+	assert_object(level.get_node_or_null("Spinner")).is_null()
+	assert_int(devices._local_token).is_zero()
+	var late := _observer(4)
+	await _ticks(3)
+	assert_object(late.player_world.active_level().get_node_or_null("Spinner")).is_null()
+	assert_bool(InputRouter.is_input_active(late.local_player())).is_true()
+
+
+func test_wheel_server_hold_rollback_and_single_link() -> void:
+	var server := _branch(1)
+	server.start_server({"save_dir": "user://net/wheel"})
+	var level := _arena(server)
+	var first := _observer(2)
+	var second := _observer(3)
+	await _stage_devices(server)
+	var api := first.player_world.interactions
+	var hold: HoldInteraction = first.player_world.active_level().get_node("Wheel/Hold")
+	var wheel: CogitoTurnwheel = level.get_node("Wheel")
+	var observer: CogitoTurnwheel = second.player_world.active_level().get_node("Wheel")
+	var original := wheel.quaternion
+	var start := api.make_request(hold, &"interact", "start")
+	api.dispatch(start)
+	_pump()
+	await _ticks(6)
+	assert_bool(observer.audio_stream_player_3d.playing).is_true()
+	assert_bool(wheel.quaternion.is_equal_approx(original)).is_false()
+	var end := api.make_request(hold, &"interact", "cancel")
+	end.expected_revision = start.expected_revision
+	api.dispatch(end)
+	_pump()
+	await _ticks(3)
+	assert_bool(wheel.quaternion.is_equal_approx(original)).is_true()
+	assert_bool(observer.audio_stream_player_3d.playing).is_false()
+	await _ticks(5)
+	assert_bool(observer.quaternion.is_equal_approx(original)).is_true()
+	assert_bool(level.get_node("WheelDoor").is_open).is_false()
+	start = api.make_request(hold, &"interact", "start")
+	api.dispatch(start)
+	_pump()
+	await get_tree().create_timer(0.4).timeout
+	end = api.make_request(hold, &"interact", "release")
+	end.expected_revision = start.expected_revision
+	api.dispatch(end)
+	api.dispatch(end)
+	_pump()
+	assert_bool(observer.has_been_turned).is_true()
+	await _ticks(7)
+	assert_bool(observer.quaternion.is_equal_approx(wheel.quaternion)).is_true()
+	assert_bool(second.player_world.active_level().get_node("WheelDoor").is_open).is_true()
+	assert_int(server.player_world.world.revisions.WheelDoor).is_equal(1)
+
+
+func test_lockpick_private_wire_break_and_success(_timeout := 15000) -> void:
+	var server := _branch(1)
+	server.start_server({"save_dir": "user://net/lockpick"})
+	var level := _arena(server)
+	var first := _observer(2)
+	var second := _observer(3)
+	await _stage_devices(server)
+	var path := "PickDoor/Pick"
+	var pick: LockpickInteraction = level.get_node(path)
+	var responses: Array[Dictionary] = []
+	first.player_world.interactions.result_received.connect(
+		func(result: Dictionary): responses.append(result)
+	)
+	var actor := server.player_world.avatar_for(first.local_player_id()).actor
+	actor.inventory_data.inventory_slots.fill(null)
+	_use(first, path)
+	assert_str(responses.back().reason).is_equal(pick.lockpick_item_hint)
+	var items := InventorySlotPD.new()
+	items.inventory_item = pick.required_lockpick_item
+	items.quantity = 2
+	items.origin_index = 0
+	actor.inventory_data.inventory_slots[0] = items
+	pick.spawned_lockpick_game.lockpick_health_max = 0.01
+	var transport: MemoryPeer = _network[1]
+	transport.capture = true
+	_use(first, path)
+	var devices := first.player_world.interactions.devices
+	var abandoned := devices._local_token
+	devices.dismiss()
+	_pump()
+	assert_int(devices._local_token).is_zero()
+	_use(first, path)
+	_wire_input(first, abandoned, &"press", -900)
+	var token := first.player_world.interactions.devices._local_token
+	assert_int(token).is_greater(0)
+	var lock: RefCounted = server.player_world.interactions.devices._sessions[2].lock
+	lock.spot = 7.3
+	var contender: Array[Dictionary] = []
+	second.player_world.interactions.result_received.connect(
+		func(result: Dictionary): contender.append(result)
+	)
+	_use(second, path)
+	assert_str(contender.back().reason).is_equal("In use")
+	assert_bool(second.player_world.active_level().get_node(path).lockpick_ui.visible).is_false()
+	assert_bool(first.player_world.active_level().get_node(path).lockpick_ui.visible).is_true()
+	_wire_input(first, token, &"success", 0)
+	_wire_input(first, token, &"press", 901)
+	_wire_input(first, token, &"press", {"success": true})
+	_wire_input(second, token, &"press", 414)
+	assert_bool(lock.tension).is_false()
+	assert_int(items.quantity).is_equal(2)
+	assert_bool(level.get_node("PickDoor").is_locked).is_true()
+	_wire_input(first, token, &"press", -900)
+	await _ticks(32)
+	assert_int(items.quantity).is_equal(1)
+	assert_bool(lock.tension).is_false()
+	_wire_input(first, token, &"press", 414)
+	await _ticks(36)
+	assert_bool(level.get_node("PickDoor").is_locked).is_false()
+	assert_bool(second.player_world.active_level().get_node("PickDoor").is_locked).is_false()
+	assert_int(server.player_world.world.revisions.PickDoor).is_equal(1)
+	_wire_input(first, token, &"press", 414)
+	assert_int(server.player_world.world.revisions.PickDoor).is_equal(1)
+	assert_bool(first.player_world.active_level().get_node(path).lockpick_ui.visible).is_false()
+	var private_float := PackedByteArray()
+	private_float.resize(8)
+	private_float.encode_double(0, lock.spot)
+	var private_single := PackedByteArray()
+	private_single.resize(4)
+	private_single.encode_float(0, lock.spot)
+	var leaked := false
+	for packet in transport.sent:
+		var hex := packet.hex_encode()
+		for forbidden in ["sweet_spot", "difficulty", "max_health", "spot"]:
+			leaked = leaked or hex.contains(forbidden.to_ascii_buffer().hex_encode())
+		leaked = leaked or hex.contains(private_float.hex_encode())
+		leaked = leaked or hex.contains(private_single.hex_encode())
+	assert_bool(leaked).is_false()
+
+
+func test_cutscene_actor_only_neutral_commands_and_silent_join() -> void:
+	var server := _branch(1)
+	server.start_server({"save_dir": "user://net/cutscene"})
+	var level := _arena(server)
+	var first := _observer(2)
+	var second := _observer(3)
+	var actor := server.player_world.avatar_for(first.local_player_id()).actor
+	var other := server.player_world.avatar_for(second.local_player_id()).actor
+	actor.input_source = Walker.new()
+	other.input_source = Walker.new()
+	actor.position = level.get_node("Cutscene").position
+	await _ticks(8)
+	var trigger: CogitoCutsceneTrigger = first.player_world.active_level().get_node("Cutscene")
+	assert_bool(actor.network_input_blocked).is_true()
+	assert_bool(actor.current_command.has_control).is_false()
+	assert_vector(actor.current_command.move).is_equal(Vector2.ZERO)
+	assert_bool(other.network_input_blocked).is_false()
+	assert_vector(other.current_command.move).is_equal(Vector2.UP)
+	assert_object(trigger.player_reference).is_same(first.local_player())
+	(
+		assert_object(second.player_world.active_level().get_node("Cutscene").player_reference)
+		. is_null()
+	)
+	var late := _observer(4)
+	var baseline: CogitoCutsceneTrigger = late.player_world.active_level().get_node("Cutscene")
+	assert_bool(baseline.has_been_triggered).is_true()
+	assert_object(baseline.player_reference).is_null()
+	var event := InputEventAction.new()
+	event.action = &"ui_cancel"
+	event.pressed = true
+	trigger.on_input(event)
+	_pump()
+	assert_bool(actor.network_input_blocked).is_false()
+	assert_object(trigger.player_reference).is_null()
+	other.position = level.get_node("Cutscene").position
+	await _ticks(3)
+	assert_bool(other.network_input_blocked).is_false()
+
+
+func test_double_press_keeps_stale_reason_out_of_hud() -> void:
+	var server := _branch(1)
+	server.start_server({"save_dir": "user://net/double"})
+	_arena(server)
+	var first := _observer(2)
+	await _ticks(12)
+	var api := first.player_world.interactions
+	var hints: Array[String] = []
+	var replies: Array[Dictionary] = []
+	first.local_player().player_interaction_component.hint_prompt.connect(
+		func(_icon: Texture2D, message: String): hints.append(message)
+	)
+	api.result_received.connect(func(r: Dictionary): replies.append(r))
+	var use := first.player_world.active_level().get_node("Door/Use") as InteractionComponent
+	api.submit(use, &"interact")
+	api.submit(use, &"interact")
+	_pump()
+	assert_str(replies.back().reason).is_equal("Stale revision")
+	assert_array(hints).is_empty()
+	assert_str(api.ACTIONS.hud_reason("Old request")).is_empty()
+	_use(first, "Button/Use")
+	hints.clear()
+	_use(first, "Button/Use")
+	assert_bool(replies.back().ok).is_false()
+	assert_array(hints).is_empty()

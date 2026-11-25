@@ -1,6 +1,6 @@
 # Multiplayer sessions
 
-Daedalion 1.4 MP2a spawns a server-owned Advanced player for each admitted identity and synchronizes interactions with authored world objects. The offline demo still starts from the main menu.
+Daedalion 1.4 MP2 spawns a server-owned Advanced player for each admitted identity and synchronizes interactions with authored world objects. The offline demo still starts from the main menu.
 
 ## Try the Laboratory
 
@@ -145,8 +145,8 @@ Use `CogitoNet.player_world.avatar_for(player_id)` to look up a live binding. It
 ## World interactions
 
 Listen hosts and dedicated servers validate interactions with doors, including keyed locks,
-buttons, switches and keypads. A pressure plate on the server counts bodies above the plate.
-Readable and keypad interfaces belong to one viewer. Another player can continue moving or
+buttons, switches, keypads, spinners, turnwheels and lockpicks. Pressure plates and cutscene
+zones detect occupants on the server. Readable, keypad and device interfaces belong to one viewer. Another player can continue moving or
 interacting while a panel is open. Inventory changes, including consumption of a disposable
 key, take place in the acting avatar’s server inventory. A remote player’s inventory UI does
 not yet reflect those changes.
@@ -192,6 +192,56 @@ resulting world state are all determined on the server.
    Only the requester receives the result, HUD hint text and icon, or instruction to open a
    readable/keypad. Replayed replies do not repeat private presentation.
 
+The result retains the precise rejection reason for logs and tests. The HUD displays authored
+hint keys or short gameplay messages. Protocol errors map to `Unavailable`. Stale revisions,
+old requests, short holds and an immediate repeat of a just-accepted action are silent.
+
+### Continuous devices and private views
+
+Protocol version 4 adds `Session/Players/Interactions/Devices` on reliable channel 2.
+Enter through the object's usual MP2 request, with its authored component key, reach, LOS,
+posture, attribute and revision checks. The server grants one ongoing device per actor.
+A second user of the same spinner, wheel or lock receives `In use`. Each private input
+contains the level key and epoch, server-issued session token, operation and one integer. The
+receiver resolves ownership from the sender. Reopening a device invalidates its old token.
+Device requests keep their parent object's entity id and authored component path. The
+spinner and lockpick components each publish a separate state row under their own persistent
+id. This lets a lockpick share a door with its ordinary key interaction.
+
+Leaving the level, losing the avatar, death or moving out of interaction range releases
+the device. Dismissing a private view also releases input and restores its owner's HUD.
+
+- **Spinner.** The owner's mouse or stick drives the existing virtual ring. Whole steps
+  accumulate locally. The server accepts one signed batch of up to four steps per physics
+  tick and calls the authored `spin_step` for each. It alone evaluates limits, rise,
+  overrotation and directional/goal signals. A replica interpolates the clamped value and
+  resulting pose from `value` and `pose`. Each live goal crossing plays its sound once. Destruction at the goal
+  sets `removed` for silent late joins.
+- **Turnwheel.** Press starts an exclusive MP2a hold. The server rotates the wheel from its
+  starting pose at the authored speed, capped at `hold_time`. Release after the minimum
+  server-observed interval commits once and passes the instigator to each supported linked
+  object. A short release, cancellation or lost target restores the starting pose. Live
+  observers interpolate rotation and loop the hold sound between start and stop. Baselines
+  snap silently to `rotation` and `turned`, including for an observer arriving mid-turn.
+- **Lockpick.** The authority checks the acting inventory and initializes the sweet spot,
+  tolerance, pick health and skill adjustment from the authored minigame. The owner positions
+  the pick with the mouse or stick and applies tension with the usual right input. The two
+  input edges are `press` with an angle in tenths of a degree (−900 through 900), and
+  `relax` with zero. Physics time, angle error and the authored damage rates determine
+  keyhole travel, breakage and success. Only keyhole movement, jam/break feedback and the
+  remaining count reach the picker. A break removes one item from one server stack. A new
+  pick requires a fresh press. Success unlocks the registered `doors_to_unlock` and emits
+  `lockpick_success` on the server. The public lockpick state contains only `disabled`.
+  The inventory screen awaits MP3 replication.
+- **Cutscene.** An authoritative area entry consumes the once flag at start. The entering
+  avatar's peer plays the authored camera animation and owns the input context. The server
+  consumes that avatar's movement sequences as neutral for the clip duration. The owning
+  peer may cancel when `allow_cancel` is enabled. With `allow_repeat` another entry may
+  start a new viewing. A baseline contains only `triggered`. Author camera and local
+  visual tracks for cutscenes. A track that animates a shared object plays only in the
+  viewer's scene. Drive shared gameplay through an authoritative object adapter, especially
+  on a listen host where the viewer and server share a scene.
+
 ### State, baselines and author extensions
 
 The server assigns an epoch at level bind. Live state, events and private results carry the
@@ -232,8 +282,8 @@ object. Extending the wire schema requires a matching change to the server valid
 
 ## Current limitations
 
-- MP2a synchronizes players and the listed authored objects in one active level. Translation includes network latency. Client prediction, rollback, independent travel and reconnect state restoration are future stages.
-- Spinner/turnwheel, lockpick and cutscene adapters are planned for MP2b. Inventory and currency transactions, pickups, weapon use, vendors, carrying and seats await later stages. Unsupported interactions stay inert online. Direct server grants of authored items can be used to exercise keyed doors.
+- MP2 synchronizes players and the listed authored objects in one active level. Translation includes network latency. Client prediction, rollback, independent travel and reconnect state restoration are future stages.
+- Inventory and currency transactions, pickups, weapon use and vendors await MP3. Carrying and seats await MP4. Unsupported interactions stay inert online. Direct server grants of authored items can be used to exercise keyed doors.
 - NPCs, damage, death, movable props, quests, runtime spawns and network saves still need subsystem replication. A linked custom object needs its own state adapter to appear on observers. Use level-authored motion/visual tracks for replica animations. Method, nested-animation and audio tracks on door/switch replica players are removed at bind.
 - The sender repeats four frames. A burst that loses every copy of an edge can still lose the action. Artificial loss in the process test covers individual packet loss. LAN feel under jitter and mannequin animation need a visual playtest.
 
@@ -243,6 +293,6 @@ object. Extending the wire schema requires a matching change to the server valid
 GODOT_BIN=/usr/bin/godot NICE='nice -n 19' bash tools/check.sh multiplayer
 ```
 
-The loopback ENet harness runs a dedicated server with two clients, then a listen host with one client. Separate temporary user directories preserve the MP0 identity, rejection, disconnect and restart checks. In a small arena it also checks stationary avatars, forward and turning distances, observation by the opposite peer, the late-join pose and removal. Clients drop every tenth command datagram after encoding its redundant history. A jump tap lands on a dropped datagram and the server and observer must see the jump height. The interaction checks also exercise a closed and open collision doorway, duplicate requests, rejection at distance, a button-linked door, wrong/right keypad codes and a silent third-client baseline. In the listen topology the host opens the first door and the client opens the linked door. Each topology has a 45 s deadline.
+The loopback ENet harness runs a dedicated server with two clients, then a listen host with one client. Separate temporary user directories preserve the MP0 identity, rejection, disconnect and restart checks. In a small arena it also checks stationary avatars, forward and turning distances, observation by the opposite peer, the late-join pose and removal. Clients drop every tenth command datagram after encoding its redundant history. A jump tap lands on a dropped datagram and the server and observer must see the jump height. The interaction checks also exercise a closed and open collision doorway, duplicate requests, rejection at distance, a button-linked door, wrong/right keypad codes a turnwheel-linked door, a lockpick-locked door and movement by another player during an owner-only cutscene. A third client verifies a silent baseline. In the listen topology the host opens the first door and the client opens the linked door. Each topology has a 45 s deadline.
 
 The regular gdUnit run includes the socket-free codec, jitter, wrap, interpolation, level interest, role, actor-lifecycle, entity identity, validation, concurrent commits, private interfaces, plate and baseline tests in `tests/net/`.

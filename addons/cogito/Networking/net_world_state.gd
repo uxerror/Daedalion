@@ -18,6 +18,7 @@ var _subscribers := {}
 var _pending := {}
 var _generation := 0
 var _client_binding := 0
+var _awaiting_avatar := false
 
 
 ## Bind once per live instance. The client learns the authority epoch from its baseline.
@@ -68,6 +69,7 @@ func clear() -> void:
 		node.remove_meta(&"cogito_net_world")
 		if node.has_signal(&"net_changed") and node.is_connected(&"net_changed", _changed.bind(id)):
 			node.disconnect(&"net_changed", _changed.bind(id))
+	_awaiting_avatar = false
 	entities = ENTITIES.new()
 	revisions.clear()
 	_states.clear()
@@ -98,6 +100,11 @@ func activate_link(target: Node, actor: PlayerInteractionComponent) -> void:
 				target.press()
 
 
+## Private area events may start once this observer has installed its baseline.
+func ready_for_events(peer: int) -> bool:
+	return peer == 1 or (_subscribers.has(peer) and not _pending.has(peer))
+
+
 ## Remove a departed observer and any deltas waiting for its baseline acknowledgement.
 func forget(peer: int) -> void:
 	_subscribers.erase(peer)
@@ -112,7 +119,7 @@ func subscribe(peer: int, nonce: int) -> void:
 	_pending[peer] = []
 	var chunk := []
 	for id: String in _states:
-		if not entities.live_object(id):
+		if not entities.live_object(id) and not _states[id].get("removed", false):
 			continue
 		chunk.append([id, revisions[id], _states[id]])
 		if chunk.size() == CHUNK_SIZE:
@@ -131,7 +138,15 @@ func _baseline(key: String, epoch: int, nonce: int, rows: Array, last: bool) -> 
 		_apply(row[0], row[1], row[2], true)
 	if last:
 		entities.epoch = epoch
-		_ack.rpc_id(1, key, epoch, nonce)
+		_awaiting_avatar = true
+		acknowledge_local_avatar()
+
+
+## Spawn uses a different channel. Release private events only when the owner also exists.
+func acknowledge_local_avatar() -> void:
+	if _awaiting_avatar and get_parent().local_actor:
+		_awaiting_avatar = false
+		_ack.rpc_id(1, entities.level_key, entities.epoch, _client_binding)
 
 
 @rpc("any_peer", "call_remote", "reliable", 2)
@@ -188,6 +203,9 @@ func _apply(id: String, revision: int, state: Dictionary, silent: bool) -> bool:
 	var actor: CogitoPlayer = get_parent().local_actor
 	if actor:
 		var targeting := actor.player_interaction_component.targeting
-		if targeting.interactable == node:
+		var pick_prompt: bool = (
+			node is LockpickInteraction and targeting.interactable == node.get_parent()
+		)
+		if targeting.interactable == node or pick_prompt:
 			targeting.rebuild_interaction_prompts()
 	return true
