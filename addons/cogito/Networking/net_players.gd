@@ -9,6 +9,7 @@ const Attributes := preload("net_attributes.gd")
 const COMBAT := preload("net_combat_events.gd")
 const PROJECTILES := preload("net_projectiles.gd")
 const PROFILE := preload("net_wield_profile.gd")
+const STOCK := preload("net_stock.gd")
 const INVENTORY := preload("net_inventory.gd")
 const CONTAINERS := preload("net_containers.gd")
 const SPAWNER := preload("net_spawner.gd")
@@ -405,7 +406,7 @@ func mark_teleport(id: String) -> void:
 func wield_profile(path: String) -> PROFILE:
 	if not _profiles.has(path):
 		var profile := PROFILE.new()
-		profile.configure(load(path) as WieldableItemPD)
+		profile.configure(STOCK.load_definition(path) as WieldableItemPD)
 		_profiles[path] = profile
 	return _profiles[path]
 

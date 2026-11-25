@@ -95,7 +95,7 @@ func apply_public(path: String, on: bool, ads: bool) -> void:
 		profile = players.wield_profile(path) if path else null
 		var has_view := actor.is_local_presentation or not players.multiplayer.is_server()
 		if profile and (has_view or players.local_actor):
-			_view.equip(actor, load(path), profile)
+			_view.equip(actor, STOCK.load_definition(path), profile)
 	light_on = on
 	aiming = ads
 	_view.state(on, ads, profile)

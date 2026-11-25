@@ -20,6 +20,18 @@ static func definition(item: InventoryItemPD) -> InventoryItemPD:
 	return item
 
 
+## Load a definition by the path a server sent. Definitions embedded in a pickup scene have a
+## `scene.tscn::id` path that `load()` cannot resolve; read those through the pickup template.
+static func load_definition(path: String) -> InventoryItemPD:
+	var split := path.find("::")
+	if split < 0:
+		return load(path) as InventoryItemPD if ResourceLoader.exists(path) else null
+	var template := pickup_template(load(path.left(split)) as PackedScene)
+	if template and template.inventory_item and template.inventory_item.resource_path == path:
+		return template.inventory_item
+	return null
+
+
 ## Read the authored pickup slot without instantiating gameplay or physics.
 static func pickup_template(scene: PackedScene) -> InventorySlotPD:
 	if not scene:
@@ -158,7 +170,10 @@ func apply(fields: Dictionary, version: int, full: bool) -> void:
 		if not stack:
 			if String(row[0]).is_empty():
 				continue
-			var original := load(row[0]) as InventoryItemPD
+			var original := load_definition(row[0])
+			if not original:
+				push_warning("Unknown inventory item %s" % row[0])
+				continue
 			stack = InventorySlotPD.new()
 			stack.inventory_item = original.duplicate()
 			stack.inventory_item.set_meta(&"cogito_item_definition", original)

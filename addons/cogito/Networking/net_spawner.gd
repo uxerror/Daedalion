@@ -155,7 +155,7 @@ func _instantiate(id: String, spec: Dictionary) -> Node3D:
 	elif spec.has("bag"):
 		scene = _bags.get(spec.bag)
 	else:
-		item = load(spec.item)
+		item = STOCK.load_definition(spec.item)
 		if item and item.drop_scene:
 			scene = load(item.drop_scene)
 	if not scene:
