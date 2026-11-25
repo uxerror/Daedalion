@@ -2,6 +2,13 @@ class_name OptionsTabMenu
 extends Control
 signal options_updated
 
+## Re-apply the saved window mode and resolution whenever options load. An in-game menu
+## turns this off: opening it must not move or resize the window; only reverting a display
+## change made in this menu re-applies the saved values.
+@export var apply_display_on_load := true
+
+var _window_on_open: Array
+
 # Grabbing TabContainer node for gamepad navigation
 @onready var tab_container: CogitoTabMenu = $VBoxContainer/TabContainer
 
@@ -53,6 +60,7 @@ const window_operations_delay = 0.25
 
 
 func _ready() -> void:
+	_window_on_open = [CogitoGameConfig.is_fullscreen(), CogitoGameConfig.get_window().size]
 	reset()
 	
 	CogitoGameConfig.options_saved.connect(_on_options_saved)
@@ -259,7 +267,7 @@ func _on_options_loaded(skip_applying:bool):
 	
 	# Only apply window mode + resolution + refresh when a config actually exists,
 	# and when we're not skipping applying.
-	if !skip_applying and CogitoGameConfig.have_cfg:
+	if !skip_applying and CogitoGameConfig.have_cfg and _should_apply_display():
 		anti_aliasing_2d_option_button.emit_signal("item_selected", CogitoGameConfig.msaa_2d)
 		anti_aliasing_3d_option_button.emit_signal("item_selected", CogitoGameConfig.msaa_3d)
 		windowed_resolution_option_button.select(CogitoGameConfig.current_resolution_index)
@@ -268,6 +276,12 @@ func _on_options_loaded(skip_applying:bool):
 		#CogitoGameConfig.refresh_render()
 
 	refresh_resolution_controls()
+
+
+func _should_apply_display() -> bool:
+	if apply_display_on_load:
+		return true
+	return _window_on_open != [CogitoGameConfig.is_fullscreen(), CogitoGameConfig.get_window().size]
 
 
 func refresh_resolution_controls():

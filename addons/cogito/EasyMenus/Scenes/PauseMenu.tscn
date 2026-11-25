@@ -209,6 +209,7 @@ script = ExtResource("6_a8sll")
 [node name="OptionsTabMenu" parent="Content" unique_id=1402386604 instance=ExtResource("6_xdpcn")]
 visible = false
 layout_mode = 2
+apply_display_on_load = false
 
 [node name="SaveLoadMenu" parent="Content" unique_id=142870542 instance=ExtResource("9_k8f0y")]
 visible = false
