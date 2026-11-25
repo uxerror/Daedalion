@@ -42,6 +42,10 @@ func disable_simulation() -> void:
 	)
 	if npc.weapon:
 		npc.weapon.animation_player.process_mode = npc.animation_tree.process_mode
+		# The fire clip restarts muzzle particles; inheriting the disabled NPC would freeze
+		# them mid-burst and leave every flash hanging at the muzzle.
+		for effect in _weapon_effects():
+			effect.process_mode = npc.animation_tree.process_mode
 	npc.collision_layer = 0
 	npc.collision_mask = 0
 	npc.nav_agent.avoidance_enabled = false
@@ -88,6 +92,8 @@ func restore() -> void:
 	npc.nav_agent.avoidance_enabled = _original.avoidance
 	if npc.weapon:
 		npc.weapon.animation_player.process_mode = Node.PROCESS_MODE_INHERIT
+		for effect in _weapon_effects():
+			effect.process_mode = Node.PROCESS_MODE_INHERIT
 	npc.visible = _original.visible
 	for area: Area3D in _areas:
 		area.set_deferred("monitoring", _areas[area][0])
@@ -95,6 +101,12 @@ func restore() -> void:
 	npc.state_chart.thaw()
 	if not npc.state_chart._state.active:
 		npc.state_chart._enter_initial_state.call_deferred()
+
+
+func _weapon_effects() -> Array[Node]:
+	var effects := npc.weapon.find_children("*", "GPUParticles3D", true, false)
+	effects.append_array(npc.weapon.find_children("*", "CPUParticles3D", true, false))
+	return effects
 
 
 ## Replicated durable fields. A subclass of CogitoNPC may extend its MP2 state dictionary.
