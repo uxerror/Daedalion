@@ -3,20 +3,29 @@ extends Node
 
 var tracked: Array[CogitoNPC] = []
 var _seen := {}
+var _untrack := {}
 
 
 ## Bind authored actors once. Runtime corpses use MP4's body registry directly.
 func track(npc: CogitoNPC) -> void:
 	tracked.append(npc)
-	npc.tree_exiting.connect(tracked.erase.bind(npc), CONNECT_ONE_SHOT)
+	_untrack[npc] = _forget_npc.bind(npc)
+	npc.tree_exiting.connect(_untrack[npc], CONNECT_ONE_SHOT)
 
 
 ## Forget bound actors and all per-observer samples on level exit.
 func clear() -> void:
-	for npc in tracked:
-		npc.tree_exiting.disconnect(tracked.erase.bind(npc))
+	for npc: CogitoNPC in _untrack:
+		if is_instance_valid(npc) and npc.tree_exiting.is_connected(_untrack[npc]):
+			npc.tree_exiting.disconnect(_untrack[npc])
+	_untrack.clear()
 	tracked.clear()
 	_seen.clear()
+
+
+func _forget_npc(npc: CogitoNPC) -> void:
+	tracked.erase(npc)
+	_untrack.erase(npc)
 
 
 ## Clear a departed observer's interest history.

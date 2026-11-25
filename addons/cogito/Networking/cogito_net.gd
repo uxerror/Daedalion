@@ -217,6 +217,13 @@ func _report(reason: String, err: Error) -> Error:
 	return err
 
 
+# Closing the window must tell the server at once; otherwise the identity stays
+# connected until the ENet timeout and an immediate rejoin is rejected.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		disconnect_session()
+
+
 ## Closes the session, drops all records and restores the branch's original offline peer.
 func disconnect_session() -> void:
 	if _session == null:

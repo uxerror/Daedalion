@@ -216,9 +216,11 @@ func _on_resume_game_button_pressed():
 
 
 func _on_quit_button_pressed():
+	# Leaving an online session frees this menu with the level, so keep the tree first.
+	var tree := get_tree()
 	CogitoNet.disconnect_session()
 	CogitoSceneManager.delete_temp_saves()
-	get_tree().quit()
+	tree.quit()
 
 
 func _on_save_button_pressed() -> void:
