@@ -66,7 +66,9 @@ func _strip_scripts(node: Node) -> void:
 ## Play the authored clip with its gameplay and nested playback tracks removed.
 func play(clip: StringName) -> void:
 	if animation and clip and animation.has_animation(clip):
-		animation.stop()
+		# stop() without keep_state rewinds the last clip visually: the equip clip starts
+		# with the mesh hidden, and a shoot clip without a visibility track kept it hidden.
+		animation.stop(true)
 		animation.play(clip)
 
 
@@ -74,7 +76,7 @@ func play(clip: StringName) -> void:
 func cancel() -> void:
 	if animation and animation.is_playing():
 		animation.seek(0, true)
-		animation.stop()
+		animation.stop(true)
 
 
 ## Apply visible authoritative state without invoking a wieldable action.

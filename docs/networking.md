@@ -522,7 +522,7 @@ These measurements exclude ENet, IP and link headers.
 
 ## Attributes, damage and respawn
 
-On dedicated and listen servers, the authoritative avatar advances all its attributes, including sprint and jump costs, regeneration, underwater oxygen, suffocation and sanity. Each hazard and attribute zone tracks its own occupants, delay and hint counters. Leaving a zone removes that player from that zone. Water checks the individual avatar’s head. Online, authored light zones supply visibility and the light meter on both server types, so the same level works headless. The offline light meter keeps its camera sampling.
+On dedicated and listen servers, the authoritative avatar advances all its attributes, including sprint and jump costs, regeneration, underwater oxygen, suffocation and sanity. Each hazard and attribute zone tracks its own occupants, delay and hint counters. Leaving a zone removes that player from that zone. Water checks the individual avatar’s head. Online, authored light zones drive the HUD light meter on both server types, so the same level works headless. They affect NPC sight only when the player prefab has its own visibility attribute, as offline. The offline light meter keeps its camera sampling.
 
 | Recipient | Reliable channel 0 payload |
 | --- | --- |
@@ -560,7 +560,7 @@ The level server runs each authored `CogitoNPC` even when nobody can see it. Its
 
 ### Perception and target policy
 
-Each physics tick the server evaluates the admitted, live avatars in the NPC’s level. Each player has an independent cone/LOS test, visibility, sight and hearing suspicion, decay timers, distance and last-known point. A wall in front of one player leaves every other player’s ray independent. Sight uses the authoritative visibility attribute and authored light zones. When replacing a rendered light meter in a level without any authored light zones, the server assumes full visibility. Footstep and landing stimuli come from the server movement clock. They work with the footstep audio node removed. Thrown-object impacts can carry the responsible player’s identity.
+Each physics tick the server evaluates the admitted, live avatars in the NPC’s level. Each player has an independent cone/LOS test, visibility, sight and hearing suspicion, decay timers, distance and last-known point. A wall in front of one player leaves every other player’s ray independent. Sight compares the player's visibility attribute with `minimum_visibility` on the same raw scale as offline `SightDetection`. A player prefab without a visibility attribute is always fully visible, as offline. The meter the server adds in place of a rendered light meter only drives the HUD light meter and does not hide players from NPCs. Footstep and landing stimuli come from the server movement clock. They work with the footstep audio node removed. Thrown-object impacts can carry the responsible player’s identity.
 
 The default `CogitoNpcTargetPolicy` considers visible candidates with positive suspicion. It adds normalized sight suspicion and one quarter of normalized hearing suspicion, then gives the current candidate a configurable `hysteresis` bonus (default 0.15). Equal scores favour the closer player, then the lexicographically smaller stable player ID. A lost target leaves its last-known point for the search. Death, departure, despawn and input-blocking cutscenes remove the candidate. A new avatar incarnation starts with fresh suspicion.
 

@@ -139,6 +139,19 @@ func test_hidden_first_visible_second_search_and_reacquire() -> void:
 	assert_str(memory.target_id).is_equal(a)
 
 
+# Laboratory has lamp light zones, so the server fallback meter of a player outside them
+# reads zero. Offline the prefab has no visibility attribute and the NPC sees the player.
+func test_fallback_meter_does_not_hide_a_player_outside_light_zones() -> void:
+	_stage()
+	var b := _b.local_player_id()
+	assert_bool(_ben.has_meta(&"net_fallback_visibility")).is_true()
+	_ben.visibility_attribute.value_current = 0
+	_level_root.add_child(preload("res://addons/cogito/Components/LightzoneComponent.gd").new())
+	await _ticks(30)
+	assert_bool(_guard.perception.candidates[b].visible).is_true()
+	assert_str(_guard.perception.target_id).is_equal(b)
+
+
 func test_one_authoritative_shot_one_mp5_hit_and_one_event_per_listener(
 	projectile: bool, _test_parameters := [[false], [true]]
 ) -> void:
@@ -221,8 +234,15 @@ func test_cutscene_visibility_zone_and_new_life_clear_attention() -> void:
 	_stage()
 	var id := _b.local_player_id()
 	var memory := _guard.perception
-	var meter := _ben.visibility_attribute as CogitoVisibilityAttribute
-	_ben.remove_meta(&"net_unzoned_visibility")
+	# Stealth needs a zone-driven visibility attribute on the prefab, as offline.
+	var meter := (
+		preload("res://addons/cogito/Components/Attributes/VisibilityAttribute.tscn").instantiate()
+		as CogitoVisibilityAttribute
+	)
+	_ben.add_child(meter)
+	_ben.visibility_attribute = meter
+	_ben.remove_meta(&"net_fallback_visibility")
+	_guard.sight_detection.minimum_visibility = 1
 	meter.value_start = 0
 	meter.value_current = 0
 	await _ticks(6)

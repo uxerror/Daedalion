@@ -56,12 +56,13 @@ func _sample(row: Dictionary, actor: CogitoPlayerAdvanced, delta: float) -> void
 	row.visible = false
 	row.visibility = 0.0
 	if sight and npc.response_to_player == "Hostile" and actor in sight.nodes_inside_cone:
+		# Same scale as offline SightDetection: the raw attribute value, or fully visible
+		# when the player prefab has no visibility attribute. The server's fallback meter
+		# only feeds the HUD light meter and must not add stealth the offline game lacks.
 		var meter := actor.visibility_attribute
-		row.visibility = (
-			100.0 if not meter else 100.0 * meter.value_current / maxf(1, meter.value_max)
-		)
-		if actor.has_meta(&"net_unzoned_visibility"):
-			row.visibility = 100.0
+		if actor.has_meta(&"net_fallback_visibility"):
+			meter = null
+		row.visibility = 100.0 if not meter else meter.value_current
 		if row.visibility >= sight.minimum_visibility:
 			var query := PhysicsRayQueryParameters3D.create(
 				npc.head.global_position, actor.head.global_position

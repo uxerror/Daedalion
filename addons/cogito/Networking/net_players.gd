@@ -55,7 +55,6 @@ var _bindings := {}
 var _session: SESSION
 var _prefab: PackedScene
 var _level: Node
-var _has_light_zones := false
 var _owns_root := false
 var _level_key: String
 var _start: Transform3D
@@ -116,11 +115,6 @@ func bind_level(root: Node, start: Transform3D, key: String) -> void:
 	set_process(not multiplayer.is_server())
 	_owns_root = CogitoLevel.mark_network_root(root)
 	root.set_meta(&"cogito_net_players", self)
-	_has_light_zones = false
-	for area in root.find_children("*", "Area3D", true, false):
-		if area.get_script() == preload("../Components/LightzoneComponent.gd"):
-			_has_light_zones = true
-			break
 	spawner.bind(root)
 	world.bind(root, key)
 	for id in world.entities.objects:
@@ -292,8 +286,6 @@ func _create(id: String, life: int, start: Transform3D, initial_pose: Dictionary
 	if not _prefab:
 		_prefab = load(AVATAR.PREFAB)
 	avatar.spawn(_prefab, _level, id, start, local, multiplayer.is_server())
-	if not _has_light_zones and avatar.actor.has_meta(&"net_fallback_visibility"):
-		avatar.actor.set_meta(&"net_unzoned_visibility", true)
 	avatar.actor.player_interaction_component.network_interactions = interactions
 	avatar.wield.actor = avatar.actor
 	avatar.wield.players = self

@@ -278,3 +278,23 @@ func test_poison_dart_applies_element_only_to_authoritative_target(_timeout := 1
 	assert_bool(target.cogito_properties.is_poisoned).is_true()
 	assert_bool(replica.cogito_properties.is_poisoned).is_false()
 	assert_float(replica.get_node("Health").value_current).is_equal(100.0)
+
+
+func test_owner_viewmodel_stays_visible_when_firing_after_equip(_timeout := 15000) -> void:
+	_open()
+	var slot := _grant("LaserRifle")
+	_equip(slot)
+	var view: Variant = _owner.player_world.avatar_for(_owner.local_player_id()).wield._view
+	var mesh: Node3D = view.model.get_node("LaserRifleMesh")
+	for frame in 120:
+		if not view.animation.is_playing():
+			break
+		await get_tree().process_frame
+	assert_bool(view.animation.is_playing()).is_false()
+	assert_bool(mesh.visible).is_true()
+	var profile: Variant = _owner.player_world.avatar_for(_owner.local_player_id()).wield.profile
+	view.play(profile.fire_clip)
+	await get_tree().process_frame
+	assert_bool(mesh.visible).is_true()
+	view.cancel()
+	assert_bool(mesh.visible).is_true()
