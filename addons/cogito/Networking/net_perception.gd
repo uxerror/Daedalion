@@ -2,6 +2,8 @@ extends RefCounted
 ## This memory belongs to one server NPC. Discard a player's row when its life changes.
 
 const BEHAVIOUR := CogitoNPC.BehaviourState
+## Set COGITO_NPC_DEBUG=1 on the server to print each candidate row once per second.
+const DEBUG_ENV := "COGITO_NPC_DEBUG"
 
 var candidates := {}
 var target_id := ""
@@ -11,6 +13,7 @@ var npc: CogitoNPC
 var players: Node
 var policy: CogitoNpcTargetPolicy
 var _point: CogitoPoint
+var _debug := OS.has_environment(DEBUG_ENV)
 
 
 func _init(owner_npc: CogitoNPC, world_players: Node) -> void:
@@ -74,10 +77,13 @@ func _sample(row: Dictionary, actor: CogitoPlayerAdvanced, delta: float) -> void
 			row.visible = hit.get("collider") == actor
 			if row.visible:
 				row.point = hit.position
+	if _debug and Engine.get_physics_frames() % 60 == 0:
+		_trace(row, actor)
 	if sight and row.visible:
-		var rate := sight.buildup_to_investigation_rate
-		if row.sight >= sight.investigation_threshold:
-			rate = sight.buildup_to_aggro_rate
+		# As offline: slow build-up only while idle or patrolling, fast once alerted.
+		var rate := sight.buildup_to_aggro_rate
+		if npc.in_state([BEHAVIOUR.Patrolling, BEHAVIOUR.Idle]):
+			rate = sight.buildup_to_investigation_rate
 		if sight.visibility_modifier_curve:
 			rate *= sight.visibility_modifier_curve.sample(row.visibility)
 		rate *= clampf(sight.get_distance_modifier_to(actor), 0.0, 1.0)
@@ -97,6 +103,30 @@ func _sample(row: Dictionary, actor: CogitoPlayerAdvanced, delta: float) -> void
 		row.score += (
 			0.25 * row.hearing / maxf(0.001, hearing.suspicion_threshold_before_investigating)
 		)
+
+
+func _trace(row: Dictionary, actor: CogitoPlayerAdvanced) -> void:
+	var sight := npc.sight_detection
+	print(
+		(
+			(
+				"NPC %s state=%d target=%s player=%s dist=%.1f cone=%s visible=%s"
+				+ " visibility=%.0f sight=%.2f hearing=%.2f"
+			)
+			% [
+				npc.name,
+				npc.current_behaviour,
+				target_id.left(8),
+				String(actor.get_meta(&"net_player_id", "")).left(8),
+				row.distance,
+				sight != null and actor in sight.nodes_inside_cone,
+				row.visible,
+				row.visibility,
+				row.sight,
+				row.hearing,
+			]
+		)
+	)
 
 
 func _select(selected: String) -> void:

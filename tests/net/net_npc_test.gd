@@ -175,6 +175,9 @@ func test_one_authoritative_shot_one_mp5_hit_and_one_event_per_listener(
 	assert_int(hits.size()).is_equal(1)
 	assert_float(health.value_current).is_equal(health_before - _guard.weapon.npc_wieldable_damage)
 	assert_int(events.count(&"fire")).is_equal(1)
+	var observed: CogitoNPC = _b.player_world.active_level().get_node("Guard")
+	await _ticks(20)
+	assert_array(observed.find_children("*", "OmniLight3D", true, false)).is_empty()
 	# Keep this chase at a fixed phase so a fresh live bark cannot mask a baseline replay.
 	_guard.state_chart.freeze()
 	var late := _branch(4)

@@ -158,6 +158,10 @@ func net_bind_authority() -> void:
 func _net_enter(body: Node3D) -> void:
 	if not is_usable or not body is PhysicsBody3D or is_ancestor_of(body):
 		return
+	# Offline only players (explicit force) and physics weights press the plate. A walking NPC
+	# and its bone hitboxes never do, so an investigating NPC must not hold a lamp on.
+	if (body is CharacterBody3D and not body is CogitoPlayer) or body.owner is CogitoNPC:
+		return
 	_occupants.append(body)
 	if not is_activated:
 		player_interaction_component = null

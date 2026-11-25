@@ -511,6 +511,25 @@ func test_plate_counts_authority_bodies_and_ignores_replica_bodies() -> void:
 	assert_int(server.player_world.world.revisions["level:keypad"]).is_equal(1)
 
 
+# Offline a walking NPC never weighs a plate down; online it must not either.
+func test_plate_ignores_npc_bodies() -> void:
+	var server := _branch(1)
+	assert_int(server.start_server({"save_dir": "user://net/plate_npc"})).is_equal(OK)
+	var level := _arena(server)
+	var plate: CogitoPressureplate = level.get_node("Plate")
+	var walker := CharacterBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(0.2, 0.2, 0.2)
+	shape.shape = box
+	walker.add_child(shape)
+	walker.position = plate.position + Vector3.UP * 0.25
+	level.add_child(walker)
+	await _ticks(4)
+	assert_bool(plate.is_activated).is_false()
+	walker.free()
+
+
 func test_prompt_is_pure_and_only_authority_runs_auto_close() -> void:
 	var server := _branch(1)
 	assert_int(server.start_server({"save_dir": "user://net/preview"})).is_equal(OK)

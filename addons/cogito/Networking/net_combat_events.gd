@@ -163,6 +163,9 @@ func present(
 
 func _flash(actor: Node3D, point: Vector3) -> void:
 	var flash := OmniLight3D.new()
+	# A replica NPC has processing disabled; an inherited mode would freeze the fade
+	# tween and leave the light on at full energy.
+	flash.process_mode = Node.PROCESS_MODE_ALWAYS
 	actor.add_child(flash)
 	flash.global_position = point
 	flash.omni_range = 2.0
