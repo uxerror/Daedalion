@@ -55,6 +55,21 @@
 [ext_resource type="PackedScene" path="res://addons/cogito/DemoScenes/DemoPrefabs/ElementStands/stand_fire.tscn" id="fire_stand"]
 [ext_resource type="PackedScene" path="res://addons/cogito/DemoScenes/DemoPrefabs/ElementStands/stand_cold.tscn" id="cold_stand"]
 
+[ext_resource type="Script" path="res://addons/cogito/QuestSystem/Components/cogito_quest_updater.gd" id="updater"]
+[ext_resource type="Script" path="res://addons/cogito/QuestSystem/Flags/world_flag.gd" id="flag"]
+[ext_resource type="Resource" path="res://addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_TargetPractice.tres" id="shared_quest"]
+[ext_resource type="Resource" path="res://addons/cogito/QuestSystem/Quests/DemoSceneQuests/Demo_AccessArchive.tres" id="personal_quest"]
+
+[sub_resource type="Resource" id="targets"]
+script = ExtResource("flag")
+flag_name = "TargetsShot"
+value = 5
+
+[sub_resource type="Resource" id="archive"]
+script = ExtResource("flag")
+flag_name = "ArchiveAccessed"
+value = true
+
 [sub_resource type="NavigationMesh" id="patrol_mesh"]
 vertices = PackedVector3Array(18, 0, 17, 38, 0, 17, 38, 0, 38, 18, 0, 38)
 polygons = [PackedInt32Array(0, 1, 2, 3)]
@@ -388,6 +403,20 @@ shape = SubResource("panel")
 
 [node name="CarryableComponent" parent="Draggable" instance=ExtResource("grab")]
 
+[node name="DoorQuest" type="Node3D" parent="Door"]
+script = ExtResource("updater")
+quest_to_update = ExtResource("shared_quest")
+update_type = 1
+world_flag = Array[ExtResource("flag")]([SubResource("targets")])
+
+[node name="ButtonQuest" type="Node3D" parent="Button"]
+script = ExtResource("updater")
+quest_to_update = ExtResource("personal_quest")
+update_type = 1
+world_flag = Array[ExtResource("flag")]([SubResource("archive")])
+
+[connection signal="door_state_changed" from="Door" to="Door/DoorQuest" method="update_quest" unbinds=1]
+[connection signal="pressed" from="Button" to="Button/ButtonQuest" method="update_quest"]
 [connection signal="body_entered" from="Hazard" to="Hazard" method="_on_body_entered"]
 [connection signal="body_exited" from="Hazard" to="Hazard" method="_on_body_exited"]
 [connection signal="body_entered" from="AttributeZone" to="AttributeZone" method="_on_body_entered"]

@@ -6,6 +6,7 @@ const MemoryPeer := preload("memory_peer.gd")
 
 var _network := {}
 var _branches: Array[Facade] = []
+var _branch_roots: Dictionary[Facade, Node] = {}
 
 
 class MemoryTransport:
@@ -35,11 +36,17 @@ class MemoryTransport:
 		peer = link
 
 
-func _branch(id: int) -> Facade:
+func _branch(id: int, level_root: Node = null) -> Facade:
 	var branch := Facade.new()
 	branch.name = "Branch%d" % id
-	add_child(branch)
-	get_tree().set_multiplayer(SceneMultiplayer.new(), branch.get_path())
+	var parent := level_root if level_root else self
+	parent.add_child(branch)
+	var root := level_root if level_root else branch
+	var api := SceneMultiplayer.new()
+	get_tree().set_multiplayer(api, root.get_path())
+	# Tests using current_scene can assign the level the same API as its session.
+	api.root_path = branch.get_path()
+	_branch_roots[branch] = root
 	branch.transport_factory = func() -> Transport: return MemoryTransport.new(_network, id)
 	_branches.append(branch)
 	return branch
@@ -56,9 +63,12 @@ func _pump() -> void:
 func after_test() -> void:
 	for branch: Facade in _branches:
 		branch.disconnect_session()
-		get_tree().set_multiplayer(null, branch.get_path())
+		var root := _branch_roots[branch]
+		branch.multiplayer.root_path = root.get_path()
+		get_tree().set_multiplayer(null, root.get_path())
 		branch.free()
 	_branches.clear()
+	_branch_roots.clear()
 	_network.clear()
 
 

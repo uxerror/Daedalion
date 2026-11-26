@@ -23,6 +23,7 @@ var _respawn_error := ""
 var _npc_shots := 0
 var _npc_deaths := 0
 var _burn_removals := 0
+var _quest_events := 0
 
 
 class LossChannel:
@@ -101,6 +102,9 @@ func _ready() -> void:
 				_npc_deaths += int(event == &"death")
 	)
 	$FireStand/Grass1.tree_exiting.connect(func(): _burn_removals += 1, CONNECT_ONE_SHOT)
+	CogitoNet.player_world.quests.notified.connect(
+		func(_event: StringName, _quest: CogitoQuest): _quest_events += 1
+	)
 	_control = OS.get_environment("COGITO_TEST_CONTROL")
 	CogitoNet.player_world.bind_level(self, Transform3D(Basis.IDENTITY, Vector3.UP), "arena")
 	CogitoNet.player_world.death.respawn_rejected.connect(func(why: String): _respawn_error = why)
@@ -172,6 +176,10 @@ func _physics_process(_delta: float) -> void:
 		"picking": $PickDoor/Pick.lockpick_ui.visible,
 		"cutscene_starts": _cutscene_starts,
 		"cutscene": $Cutscene.player_reference != null,
+		"shared_quest": CogitoNet.player_world.quests.journal().flags.get("TargetsShot", 0),
+		"personal_quest":
+		CogitoNet.player_world.quests.journal(true).flags.get("ArchiveAccessed", false),
+		"quest_events": _quest_events,
 		"cut_used": $Cutscene.has_been_triggered,
 	}
 	if "received_bytes" in multiplayer.multiplayer_peer:

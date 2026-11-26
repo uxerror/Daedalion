@@ -27,6 +27,7 @@ Documentation for Daedalion 1.3.1; docs for other versions: browse the docs/ fol
 | [Attribute system](attribute-system.md) | Give a player or prop health, stamina or a custom value. |
 | [NPCs](npc.md) | Set patrol routes and tune hearing, sight and behaviour. |
 | [Elements](elements.md) | Combine fire, water, shock, cold and poison. |
+| [Quests](quests.md) | Author objectives, flags and shared or personal progression. |
 | [Saves](saves.md) | Manage slots and edit levels that players have visited. |
 | [Save format](save-format.md) | Inspect JSON files, resource references and legacy conversion. |
 

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="CogitoQuest" format=3]
+
+[ext_resource type="Script" path="res://addons/cogito/QuestSystem/CustomResources/cogito_quest.gd" id="quest"]
+[ext_resource type="AudioStream" path="res://addons/cogito/Assets/Audio/Phazorknight/Cogito_QuestComplete.wav" id="authored"]
+
+[resource]
+script = ExtResource("quest")
+scope = 1
+quest_name = "personal_delivery"
+quest_title = "Personal delivery"
+audio_on_fail = ExtResource("authored")

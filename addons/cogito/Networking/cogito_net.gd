@@ -177,7 +177,6 @@ func _attach(
 	add_child(_session)
 	_session.ready_for_play.connect(session_ready.emit)
 	_session.failed.connect(_session_failure)
-	_session.joined.connect(player_joined.emit)
 	_session.left.connect(player_left.emit)
 	_session.rejected.connect(_peer_rejected)
 	player_world = NET_PLAYERS.new()
@@ -191,6 +190,11 @@ func _attach(
 	player_world.death.screen_scene = death_screen_scene
 	player_world.death.damage_policy = damage_policy
 	player_world.local_changed.connect(local_player_changed.emit)
+	if role != Mode.CLIENT:
+		var defaults := CogitoGlobals.cogito_settings.get_new_game_world_dict()
+		player_world.quests.world.flags = defaults.duplicate(true)
+		_session.joined.connect(_quest_baseline)
+	_session.joined.connect(player_joined.emit)
 	_session.add_child(player_world)
 	_session.attach(api)
 	api.server_relay = false
@@ -198,6 +202,10 @@ func _attach(
 	var scene := get_tree().current_scene
 	if scene and scene.multiplayer == api and scene.has_method("bind_network_players"):
 		scene.call_deferred("bind_network_players")
+
+
+func _quest_baseline(id: String) -> void:
+	player_world.quests.baseline(_session.for_id(id).peer_id)
 
 
 func _peer_rejected(peer_id: int, reason: String) -> void:

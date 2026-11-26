@@ -24,6 +24,11 @@ func _process(delta: float) -> void:
 
 
 func check_for_power() -> void:
+	var endpoint := preload("../Networking/net_quests.gd").endpoint(self)
+	if endpoint:
+		endpoint.world_flags_changed.connect(_read_power.bind(endpoint))
+		_read_power(endpoint)
+		return
 	await CogitoSceneManager.is_node_ready()
 	var property_value = CogitoSceneManager._current_world_dict.get(world_state_property)
 	CogitoGlobals.debug_log(true, "cogito_rotator_tool", "world_dict: " + str(world_state_property) + " = " + str(property_value) )
@@ -32,3 +37,12 @@ func check_for_power() -> void:
 		is_rotating = true
 	else:
 		is_rotating = false
+
+
+func _read_power(endpoint: Node) -> void:
+	var ledger: Dictionary = (
+		endpoint.world.flags
+		if multiplayer.is_server()
+		else endpoint.journal_flags(CogitoQuest.Scope.SHARED)
+	)
+	is_rotating = ledger.get(world_state_property, false) == true

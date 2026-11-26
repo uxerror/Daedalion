@@ -74,7 +74,8 @@ func close():
 			animation_player.play(close_animation)
 	interaction_text = tr(text_when_closed)
 	object_state_updated.emit(interaction_text)
-	container_closed.emit()
+	if multiplayer.multiplayer_peer is OfflineMultiplayerPeer:
+		container_closed.emit()
 
 
 func set_state():

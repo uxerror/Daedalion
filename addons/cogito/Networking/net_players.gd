@@ -32,6 +32,8 @@ var command_channel := CHANNEL.new()
 var local_actor: CogitoPlayerAdvanced
 ## Replicated object registry and state for this online branch.
 var world := WORLD.new()
+## World and personal quest progression for this session.
+var quests := preload("net_quests.gd").new()
 ## Reliable gameplay requests and private results for this session.
 var interactions := INTERACTIONS.new()
 ## Private player inventories, viewer grants and level-local runtime objects.
@@ -69,6 +71,8 @@ var _elapsed := 0.0
 
 
 func _ready() -> void:
+	quests.name = "Quests"
+	add_child(quests)
 	elements.name = "Elements"
 	add_child(elements)
 	npcs.name = "Npcs"
@@ -139,6 +143,8 @@ func bind_level(root: Node, start: Transform3D, key: String) -> void:
 	spawner.track_authored()
 	root.tree_exiting.connect(_level_exiting, CONNECT_ONE_SHOT)
 	if multiplayer.is_server():
+		if not _session.local_id.is_empty():
+			quests.baseline(1)
 		for record in _session.records():
 			_joined(record.player_id)
 	else:
@@ -212,6 +218,7 @@ func _level_ready(key: String, nonce: int) -> void:
 		_release_subscription(peer)
 	_bindings[peer] = nonce
 	_ready_levels[peer] = key
+	quests.baseline(peer)
 	for id in _avatars:
 		if _visible(peer, id):
 			_send_spawn(peer, id)

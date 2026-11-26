@@ -713,6 +713,8 @@ class Scenario:
         self.drive(first, "Ada", roster, [self.server, second])
         self.drive(second, "Ben", roster, [self.server, first])
         self.panels(first, second, "Ada", "Ben")
+        self.sample(first, lambda s: s["shared_quest"] == 5 and s["quest_events"] == 2)
+        self.sample(second, lambda s: s["shared_quest"] == 5 and s["quest_events"] == 4)
         self.physics(first, second, "Ada", "Ben", roster)
         self.devices(first, second, "Ada", "Ben")
         self.inventories(first, second, "Ada", "Ben")
@@ -727,6 +729,8 @@ class Scenario:
         self.state(first, ["Ada", "Ben", "Cy"])
         self.state(second, ["Ada", "Ben", "Cy"])
         baseline = self.sample(late, lambda s: s["epoch"] > 0)
+        if baseline["shared_quest"] != 5 or baseline["quest_events"] or baseline["personal_quest"]:
+            raise CheckFailed("late join did not restore only the shared journal silently")
         if (not baseline["open"] or not baseline["keydoor_open"] or baseline["locked"]
                 or baseline["keydoor_locked"] or baseline["events"] or not baseline["wheel_open"]
                 or not baseline["picked"] or not baseline["cut_used"] or baseline["cutscene_starts"]):
@@ -792,6 +796,8 @@ class Scenario:
         self.drive(self.server, "Host", roster, [self.server, client])
         self.drive(client, "Ada", roster, [self.server, client])
         self.panels(self.server, client, "Host")
+        self.sample(client, lambda s: s["personal_quest"] and s["quest_events"] == 4)
+        self.sample(self.server, lambda s: not s["personal_quest"] and s["quest_events"] == 2)
         self.physics(self.server, client, "Host", "Ada", roster)
         self.devices(self.server, client, "Host", "Ada")
         self.inventories(self.server, client, "Host", "Ada")

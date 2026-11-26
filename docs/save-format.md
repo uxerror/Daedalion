@@ -155,3 +155,10 @@ objectives use their authored ID and occurrence within that ID. For legacy
 saves or new objectives, the loader evaluates the saved flags in objective
 order and preserves the saved quest group. Legacy counters remain in
 `player_active_quest_progression`.
+
+### Multiplayer quests
+
+Online games keep shared quests and flags on the server. Set a quest's **Scope** to
+**Personal** to track it by player identity. The offline slot loader continues to restore
+its original quest groups and world dictionary. See [Quests and world flags](networking.md#quests-and-world-flags).
+

@@ -108,12 +108,18 @@ func detach(peer: int, actor: CogitoPlayer) -> void:
 	_last_request.erase(peer)
 
 
+## Count retained holdings for world-unique and capped quest drops, including absent owners.
+func held_count(item: InventoryItemPD) -> int:
+	var count := 0
+	for model in _profiles.values():
+		for slot: InventorySlotPD in model.data.find_slots(item.name):
+			count += slot.quantity
+	return count
+
+
 ## Query durable holdings when rolling unique loot, including disconnected players.
 func owns(item: InventoryItemPD) -> bool:
-	for model in _profiles.values():
-		if not model.data.find_slots(item.name).is_empty():
-			return true
-	return false
+	return held_count(item) > 0
 
 
 func _dirty(_inv: CogitoInventory, peer: int) -> void:

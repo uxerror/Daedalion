@@ -49,21 +49,34 @@ func get_description(flags: Dictionary) -> String:
 	return tr(objective_description) + " [%s]" % ObjectiveState.keys()[objective_state] + numeric_descs
 
 func update(flags: Dictionary, previous_objective_completed: bool) -> ObjectiveState:
+	return evaluate(flags, previous_objective_completed, null)
+
+
+## Evaluate conditions in the supplied session. Online completed objectives are latched.
+func evaluate(
+	flags: Dictionary, previous_objective_completed: bool, context: CogitoQuestContext
+) -> ObjectiveState:
+	if context and objective_state == ObjectiveState.Completed:
+		return objective_state
 	## If objective state is hidden, check reveal flags
 	if objective_state == ObjectiveState.Hidden:
 		if reveal_on_completion_of_previous_objective and previous_objective_completed:
 			objective_state = ObjectiveState.Active
 		else:
 			for group in reveal_flags:
-				if group.meets_criteria(flags):
+				if _matches(group, flags, context):
 					objective_state = ObjectiveState.Active
 	
 	for group in completion_flags:
-		if group.meets_criteria(flags):
+		if _matches(group, flags, context):
 			objective_state = ObjectiveState.Completed
 			
 	for group in failure_flags:
-		if group.meets_criteria(flags):
+		if _matches(group, flags, context):
 			objective_state = ObjectiveState.Failed
 
 	return objective_state
+
+
+func _matches(group: CogitoFlagGroup, flags: Dictionary, context: CogitoQuestContext) -> bool:
+	return group.meets_in_context(flags, context) if context else group.meets_criteria(flags)

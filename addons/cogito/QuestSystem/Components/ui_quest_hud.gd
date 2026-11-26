@@ -5,6 +5,8 @@ extends Node
 ## Reference to how a single quest is displayed in the QuestHUD
 @export var quest_entry : PackedScene
 
+var _quests: Node
+
 @onready var quest_display: PanelContainer = $QuestDisplay
 
 # Quest groups:
@@ -16,10 +18,18 @@ extends Node
 @export var player_hud  : CogitoPlayerHudManager
 
 func _ready():
-	CogitoQuestManager.quest_activated.connect(_on_quest_activated)
-	CogitoQuestManager.quest_completed.connect(_on_quest_completed)
-	CogitoQuestManager.quest_failed.connect(_on_quest_failed)
-	CogitoQuestManager.quest_updated.connect(_on_quest_updated)
+	_quests = preload("../../Networking/net_quests.gd").endpoint(self)
+	if _quests:
+		_quests.journal_changed.connect(_refresh_visible)
+		if player_hud.is_node_ready():
+			_quests.bind_hud(_network_notification)
+		else:
+			player_hud.ready.connect(_quests.bind_hud.bind(_network_notification), CONNECT_ONE_SHOT)
+	else:
+		CogitoQuestManager.quest_activated.connect(_on_quest_activated)
+		CogitoQuestManager.quest_completed.connect(_on_quest_completed)
+		CogitoQuestManager.quest_failed.connect(_on_quest_failed)
+		CogitoQuestManager.quest_updated.connect(_on_quest_updated)
 	#player_hud = get_parent()
 	
 	#Hooking up quest display to player inventory toggle.
@@ -27,6 +37,11 @@ func _ready():
 	player_hud.hide_inventory.connect(_hide_quest_display)
 	
 	quest_display.hide()
+
+
+func _exit_tree() -> void:
+	if is_instance_valid(_quests):
+		_quests.unbind_hud(_network_notification)
 
 
 func _show_quest_display():
@@ -39,37 +54,39 @@ func _hide_quest_display():
 	quest_display.hide()
 
 
+func _network_notification(event: StringName, definition: CogitoQuest) -> void:
+	_on_set_quest_notification(null, tr("QUEST_" + String(event)) + ": " + tr(definition.quest_title))
+
+
+func _refresh_visible() -> void:
+	if quest_display.visible:
+		_show_quest_display()
+
+
 func update_active_quests():
-	#Clearing out group entries:
-	for node in active_group.get_children():
-		node.queue_free()
-	
-	for quest in CogitoQuestManager.get_active_quests():
-		var instanced_quest_entry: QuestEntry = quest_entry.instantiate()
-		active_group.add_child(instanced_quest_entry)
-		instanced_quest_entry.set_quest_info(quest)
+	_fill(active_group, CogitoQuest.QuestState.Active, CogitoQuestManager.active)
 
 
 func update_completed_quests():
-	#Clearing out group entries:
-	for node in completed_group.get_children():
-		node.queue_free()
-	
-	for quest in CogitoQuestManager.get_completed_quests():
-		var instanced_quest_entry: QuestEntry = quest_entry.instantiate()
-		completed_group.add_child(instanced_quest_entry)
-		instanced_quest_entry.set_quest_info(quest)
+	_fill(completed_group, CogitoQuest.QuestState.Completed, CogitoQuestManager.completed)
 
 
 func update_failed_quests():
-	#Clearing out group entries:
-	for node in failed_group.get_children():
+	_fill(failed_group, CogitoQuest.QuestState.Failed, CogitoQuestManager.failed)
+
+
+func _fill(group: VBoxContainer, state: CogitoQuest.QuestState, offline: CogitoQuestGroup) -> void:
+	for node in group.get_children():
+		group.remove_child(node)
 		node.queue_free()
-	
-	for quest in CogitoQuestManager.get_failed_quests():
-		var instanced_quest_entry: QuestEntry = quest_entry.instantiate()
-		failed_group.add_child(instanced_quest_entry)
-		instanced_quest_entry.set_quest_info(quest)
+	var entries: Array[CogitoQuest] = _quests.entries(state) if _quests else offline.quests
+	for quest in entries:
+		var entry := quest_entry.instantiate() as QuestEntry
+		group.add_child(entry)
+		var flags: Dictionary = (
+			_quests.journal_flags(quest.scope) if _quests else CogitoSceneManager._current_world_dict
+		)
+		entry.set_quest_info(quest, flags)
 
 
 # Called when the node enters the scene tree for the first time.

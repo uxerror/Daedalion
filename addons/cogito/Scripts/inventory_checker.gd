@@ -2,6 +2,8 @@ extends Node
 
 signal item_found
 
+const Stock := preload("../Networking/net_stock.gd")
+
 @export var container_to_check : CogitoContainer
 @export var item_to_check_for : InventoryItemPD
 
@@ -14,7 +16,14 @@ func _ready() -> void:
 
 func is_item_in_inventory(sought_item:InventoryItemPD, inventory: CogitoInventory) -> bool:
 	for slot in inventory.inventory_slots:
-		if slot != null and slot.inventory_item == sought_item:
+		if slot == null:
+			continue
+		if slot.inventory_item == sought_item:
+			return true
+		if (
+			not multiplayer.multiplayer_peer is OfflineMultiplayerPeer
+			and Stock.definition(slot.inventory_item) == sought_item
+		):
 			return true
 	
 	return false

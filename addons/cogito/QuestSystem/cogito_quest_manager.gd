@@ -6,6 +6,7 @@ signal quest_updated(quest: CogitoQuest) #Emitted when a quests gets updated (us
 signal quest_completed(quest: CogitoQuest) #Emitted when a quest gets completed / moved to the completed quests group.
 signal quest_failed(quest: CogitoQuest) #Emitted when a quest gets moved to the failed quests group.
 
+const STATE := CogitoQuest.QuestState
 const AvailableQuests = preload("./QuestGroups/available_quests_group.gd")
 const ActiveQuests = preload("./QuestGroups/active_quests_group.gd")
 const CompletedQuests = preload("./QuestGroups/completed_quests_group.gd")
@@ -32,7 +33,16 @@ func remember_defaults(quest: CogitoQuest) -> void:
 			_objective_defaults[objective] = objective.objective_state
 
 
+## Recover authored defaults even if an offline game already used the cached definition.
+func initial_objective_state(
+	objective: CogitoQuestObjective
+) -> CogitoQuestObjective.ObjectiveState:
+	return _objective_defaults.get(objective, objective.objective_state)
+
+
 func reset_playthrough() -> void:
+	if CogitoNet.is_online():
+		return
 	available.clear_group()
 	_clear_progress()
 
@@ -51,6 +61,8 @@ func _clear_progress() -> void:
 
 ## Install all groups before objective conditions can read the world or inventory.
 func restore_quests(state: CogitoPlayerState) -> void:
+	if CogitoNet.is_online():
+		return
 	_clear_progress()
 	for quest in state.player_active_quests:
 		if quest:
@@ -83,7 +95,12 @@ func _init() -> void:
 
 
 ## Starts a given quest by calling its start() method and moving it to the active group
-func start_quest(quest: CogitoQuest) -> CogitoQuest:
+func start_quest(quest: CogitoQuest, subject_id := "") -> CogitoQuest:
+	if CogitoNet.player_world:
+		CogitoNet.player_world.quests.advance(
+			quest, CogitoQuestUpdater.UpdateType.Start, [], subject_id
+		)
+		return quest
 	assert(quest != null)
 
 	if active.is_quest_inside(quest):
@@ -109,7 +126,12 @@ func start_quest(quest: CogitoQuest) -> CogitoQuest:
 
 
 ## Moves a quest to the completed group. Quest needs to be active to be completed.
-func complete_quest(quest: CogitoQuest) -> CogitoQuest:
+func complete_quest(quest: CogitoQuest, subject_id := "") -> CogitoQuest:
+	if CogitoNet.player_world:
+		CogitoNet.player_world.quests.advance(
+			quest, CogitoQuestUpdater.UpdateType.Complete, [], subject_id
+		)
+		return quest
 	if not active.is_quest_inside(quest):
 		return quest
 
@@ -127,7 +149,12 @@ func complete_quest(quest: CogitoQuest) -> CogitoQuest:
 
 
 ## Moves a quest to the failed group. Quest needs to be active to be completed.
-func fail_quest(quest: CogitoQuest) -> CogitoQuest:
+func fail_quest(quest: CogitoQuest, subject_id := "") -> CogitoQuest:
+	if CogitoNet.player_world:
+		CogitoNet.player_world.quests.advance(
+			quest, CogitoQuestUpdater.UpdateType.Fail, [], subject_id
+		)
+		return quest
 	if not active.is_quest_inside(quest):
 		return quest
 
@@ -142,7 +169,14 @@ func fail_quest(quest: CogitoQuest) -> CogitoQuest:
 
 
 ## Updates the quest state with an optional world flag added to the world state. Quest needs to be active.
-func update_quest(quest: CogitoQuest, flags: Array[WorldFlag]) -> CogitoQuest:
+func update_quest(
+	quest: CogitoQuest, flags: Array[WorldFlag], subject_id := ""
+) -> CogitoQuest:
+	if CogitoNet.player_world:
+		CogitoNet.player_world.quests.advance(
+			quest, CogitoQuestUpdater.UpdateType.Update, flags, subject_id
+		)
+		return quest
 	if not active.is_quest_inside(quest):
 		return quest
 	
@@ -172,41 +206,55 @@ func get_available_quests() -> Array[CogitoQuest]:
 	return available.quests
 
 
-func get_active_quests() -> Array[CogitoQuest]:
+func get_active_quests(subject_id := "") -> Array[CogitoQuest]:
+	if CogitoNet.player_world:
+		return CogitoNet.player_world.quests.authority_entries(STATE.Active, subject_id)
 	return active.quests
 
 
-func get_completed_quests() -> Array[CogitoQuest]:
+func get_completed_quests(subject_id := "") -> Array[CogitoQuest]:
+	if CogitoNet.player_world:
+		return CogitoNet.player_world.quests.authority_entries(STATE.Completed, subject_id)
 	return completed.quests
 
 
-func get_failed_quests() -> Array[CogitoQuest]:
+func get_failed_quests(subject_id := "") -> Array[CogitoQuest]:
+	if CogitoNet.player_world:
+		return CogitoNet.player_world.quests.authority_entries(STATE.Failed, subject_id)
 	return failed.quests
 
 
 ## Gets a quest that's neither in the active, completed or failed groups
-func is_quest_available(quest: CogitoQuest) -> bool:
+func is_quest_available(quest: CogitoQuest, subject_id := "") -> bool:
+	if CogitoNet.player_world:
+		return CogitoNet.player_world.quests.state_of(quest, subject_id) == STATE.NotStarted
 	if not (active.is_quest_inside(quest) or completed.is_quest_inside(quest) or failed.is_quest_inside(quest)):
 		return true
 	return false
 
 
 ## Checks if a quest is currently in the active group.
-func is_quest_active(quest: CogitoQuest) -> bool:
+func is_quest_active(quest: CogitoQuest, subject_id := "") -> bool:
+	if CogitoNet.player_world:
+		return CogitoNet.player_world.quests.state_of(quest, subject_id) == STATE.Active
 	if active.is_quest_inside(quest):
 		return true
 	return false
 
 
 ## Checks if a quest is currently in the completed group.
-func is_quest_completed(quest: CogitoQuest) -> bool:
+func is_quest_completed(quest: CogitoQuest, subject_id := "") -> bool:
+	if CogitoNet.player_world:
+		return CogitoNet.player_world.quests.state_of(quest, subject_id) == STATE.Completed
 	if completed.is_quest_inside(quest):
 		return true
 	return false
 
 
 ## Checks if a quest is in a given group. Given group name string needs to match child node name (as added in _ready)
-func is_quest_in_group(quest: CogitoQuest, group_name: String) -> bool:
+func is_quest_in_group(quest: CogitoQuest, group_name: String, subject_id := "") -> bool:
+	if CogitoNet.player_world:
+		return _ledger_in_group(CogitoNet.player_world.quests.state_of(quest, subject_id), group_name)
 	if group_name.is_empty():
 		for group in get_children():
 			if group.is_quest_inside(quest): return true
@@ -217,8 +265,19 @@ func is_quest_in_group(quest: CogitoQuest, group_name: String) -> bool:
 	return false
 
 
+## Online group membership derived from a ledger state; an empty name means any started group.
+func _ledger_in_group(state: int, group_name: String) -> bool:
+	if group_name.is_empty():
+		return state != STATE.NotStarted
+	if group_name == "Available":
+		return state == STATE.NotStarted
+	return STATE.keys()[state] == group_name
+
+
 ## Force moves a quest to a group.
 func move_quest_to_group(quest: CogitoQuest, old_group: String, new_group: String) -> CogitoQuest:
+	if CogitoNet.is_online():
+		return quest
 	if old_group == new_group: return
 
 	var old_group_instance: CogitoQuestGroup = get_node_or_null(old_group)
@@ -234,6 +293,8 @@ func move_quest_to_group(quest: CogitoQuest, old_group: String, new_group: Strin
 
 ## Clears a group. Given group name string needs to match child node name (as added in _ready)
 func reset_group(group_name: String) -> void:
+	if CogitoNet.is_online():
+		return
 	if group_name.is_empty():
 		for group in get_children():
 			group.reset()

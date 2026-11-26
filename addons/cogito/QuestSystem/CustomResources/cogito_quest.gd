@@ -10,6 +10,11 @@ enum QuestState {
 	Failed
 }
 
+enum Scope { SHARED, PERSONAL }
+
+## Online progression belongs to the world by default. PERSONAL binds progress to player_id.
+@export var scope := Scope.SHARED
+
 # Unique quest identifier (for internal reference)
 #@export var id: int
 
@@ -43,6 +48,9 @@ enum QuestState {
 # Audio played when the quest starts
 @export var audio_on_start: AudioStream
 
+## Optional cue for a live objective update.
+@export var audio_on_update: AudioStream
+
 # Audio played when the quest is completed
 @export var audio_on_complete: AudioStream
 
@@ -52,6 +60,9 @@ enum QuestState {
 # Starts the quest
 # Parameter _mute: if true, doesn't play start audio
 func start(_mute: bool = false) -> void:
+	if CogitoNet.player_world:
+		CogitoNet.player_world.quests.advance(self, CogitoQuestUpdater.UpdateType.Start)
+		return
 	CogitoQuestManager.remember_defaults(self)
 	# Play start audio if available and not muted
 	if audio_on_start and not _mute:
@@ -67,8 +78,16 @@ func start(_mute: bool = false) -> void:
 
 # Updates the quest by updating each associated objective against the world state
 func update() -> QuestState:
+	if CogitoNet.player_world:
+		var quests := CogitoNet.player_world.quests
+		quests.advance(self, CogitoQuestUpdater.UpdateType.Update)
+		return quests.state_of(self, quests.signal_subject)
 	CogitoQuestManager.remember_defaults(self)
-	var world_state = CogitoSceneManager._current_world_dict
+	return evaluate(CogitoSceneManager._current_world_dict, null)
+
+
+## Evaluate a mutable quest instance against explicit world or personal flags.
+func evaluate(world_state: Dictionary, context: CogitoQuestContext) -> QuestState:
 	# Do not update the quest if the state is completed or inactive
 	if quest_state == QuestState.Completed or quest_state == QuestState.NotStarted:
 		return quest_state
@@ -82,7 +101,11 @@ func update() -> QuestState:
 	# Update all quest objectives based on new world flags
 	var previous_objective_state: CogitoQuestObjective.ObjectiveState = CogitoQuestObjective.ObjectiveState.Active
 	for objective in quest_objectives:
-		var objective_state = objective.update(world_state, previous_objective_state == CogitoQuestObjective.ObjectiveState.Completed)
+		var previous_done: bool = previous_objective_state == cq.Completed
+		var objective_state := (
+			objective.evaluate(world_state, previous_done, context)
+			if context else objective.update(world_state, previous_done)
+		)
 		
 		# Fail the quest if the objective fails and is required
 		if objective.required_to_complete and objective_state == cq.Failed:
@@ -100,6 +123,9 @@ func update() -> QuestState:
 # Completes the quest
 # Parameter _mute: if true, doesn't play completion audio
 func complete(_mute: bool = false) -> void:
+	if CogitoNet.player_world:
+		CogitoNet.player_world.quests.advance(self, CogitoQuestUpdater.UpdateType.Complete)
+		return
 	CogitoQuestManager.remember_defaults(self)
 	# Play completion audio if available and not muted
 	if audio_on_complete and not _mute:
@@ -112,6 +138,9 @@ func complete(_mute: bool = false) -> void:
 # Marks the quest as failed
 # Parameter _mute: if true, doesn't play failure audio
 func failed(_mute: bool = false) -> void:
+	if CogitoNet.player_world:
+		CogitoNet.player_world.quests.advance(self, CogitoQuestUpdater.UpdateType.Fail)
+		return
 	CogitoQuestManager.remember_defaults(self)
 	# Play failure audio if available and not muted
 	if audio_on_fail and not _mute:

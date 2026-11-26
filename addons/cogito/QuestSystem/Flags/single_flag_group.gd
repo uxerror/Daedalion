@@ -19,3 +19,7 @@ func get_numeric_descriptions(world_flags: Dictionary) -> Array[String]:
 ## Test the single flag against the existing flags on the quest
 func meets_criteria(world_flags: Dictionary) -> bool:
 	return flag.check(world_flags)
+
+
+func meets_in_context(world_flags: Dictionary, context: CogitoQuestContext) -> bool:
+	return flag.check_in_context(world_flags, context) if context else meets_criteria(world_flags)

@@ -19,6 +19,9 @@ enum DropType {
 @export var quantity_min : int = 1
 ## Maximum quantity to roll for during loot generation. Script will assume 1 unit if this value is not present.
 @export var quantity_max : int = 15
+## Optional shared quest definition for online world drops. Legacy numeric IDs are also supported.
+@export var quest_definition: CogitoQuest
+
 ## If this item is not used for Quests, leave at -1. Quest ID associated with this drop. If there is a matching quest ID in active quests, quest item will be dropped. You need to set drop type to quest for this to function.
 @export var quest_id : int = -1
 ## Maximum amount of quest items there can be. Player inventory and the loot drop inventory is referenced against this to cap quest items. If omitted script will assume a value of 1.

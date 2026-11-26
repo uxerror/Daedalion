@@ -434,7 +434,11 @@ func _act(
 		return {"ok": false, "reason": why}
 	_hint_actor = pic
 	_captured_hints = []
+	var quests: Node = get_parent().quests
+	var previous: String = quests.signal_subject
+	quests.signal_subject = pic.player.get_meta(&"net_player_id")
 	var result := ACTIONS.commit(node, action, pic, request.get("payload"))
+	quests.signal_subject = previous
 	get_parent().inventory.flush_actor(pic.player)
 	if result.get("view") in ["keypad", "read"]:
 		_views[peer] = component

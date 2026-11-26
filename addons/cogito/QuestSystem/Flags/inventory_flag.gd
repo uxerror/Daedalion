@@ -14,3 +14,7 @@ func check(_flags: Dictionary) -> bool:
 	if not player or not player.inventory_data or not expected_item:
 		return false
 	return not player.inventory_data.find_slots(expected_item.name).is_empty()
+
+
+func check_in_context(flags: Dictionary, context: CogitoQuestContext) -> bool:
+	return context.holds(expected_item) if context else check(flags)

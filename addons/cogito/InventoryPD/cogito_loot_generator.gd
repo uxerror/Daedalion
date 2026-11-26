@@ -46,7 +46,7 @@ func generate(loot_table: LootTable, amount: int, debug: bool = false) -> Array[
 			input_array.append_array(chance_drops_table)
 			
 		var offline := not is_inside_tree() or multiplayer.multiplayer_peer is OfflineMultiplayerPeer
-		if quest_drops_table.size() > 0 and offline:
+		if not quest_drops_table.is_empty():
 			input_array.append_array(quest_drops_table)
 			
 		output_array = _roll_for_randomized_items(input_array, amount)
@@ -67,6 +67,9 @@ func generate(loot_table: LootTable, amount: int, debug: bool = false) -> Array[
 
 ## Set up references to player in order to query loot bags and player inventory so we can check for unique and quest drops.
 func _set_up_references():
+	if server_spawner(self):
+		_player_inventory = null
+		return
 	var player := CogitoLevel.local_player(self)
 	_player_inventory = player.inventory_data if player else null
 
@@ -192,6 +195,7 @@ func _roll_for_randomized_items(_items: Array[LootDropEntry], _amount: int) -> A
 	var _item_weights: PackedFloat32Array = []
 	## Failsafe counter, will break the while loop when it hits 1000 iterations.
 	var _failsafe: int = 0
+	var reserved := {}
 	
 	if _items.is_empty():
 		CogitoGlobals.debug_log(debug_prints, "Loot Component/Loot Generator", "_roll_for_randomized_items(): Passed item array was empty! Returning empty lootdrop array...")
@@ -206,8 +210,12 @@ func _roll_for_randomized_items(_items: Array[LootDropEntry], _amount: int) -> A
 		## Winning loot table entry which will be added to a separate array.
 		var _winner = _inventory_items[_rng.rand_weighted(_item_weights)]
 		
+		if spawner and _winner.droptype == LootDropEntry.DropType.QUEST:
+			var rolled: LootDropEntry = spawner.roll_quest_drop(_winner, reserved)
+			if rolled:
+				_result.append(rolled)
 		# Handle Unique Items
-		if _winner.inventory_item.is_unique: # A unique item means there can be only one, highlander style. So it will not drop as long as player holds it in his inventory. We could scour all inventories to find a copy but I think that falls beyond the intended scope of the property.
+		elif _winner.inventory_item.is_unique: # A unique item means there can be only one, highlander style. So it will not drop as long as player holds it in his inventory. We could scour all inventories to find a copy but I think that falls beyond the intended scope of the property.
 			if not _is_unique_found(_winner.inventory_item): # Check player's inventory and other loot bags for a copy.
 				if not _result.has(_winner): # Check if we've already have a copy of this unique item waiting to be dropped.
 					_result.append(_winner) 

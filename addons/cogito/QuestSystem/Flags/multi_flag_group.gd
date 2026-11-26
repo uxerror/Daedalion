@@ -24,3 +24,15 @@ func meets_criteria(quest_flags: Dictionary) -> bool:
 		if not flag.check(quest_flags):
 			return false
 	return true
+
+
+func meets_in_context(world_flags: Dictionary, context: CogitoQuestContext) -> bool:
+	if not context:
+		return meets_criteria(world_flags)
+	var items: Array[InventoryItemPD] = []
+	for flag in flags:
+		if flag is InventoryFlag:
+			items.append(flag.expected_item)
+		elif not flag.check_in_context(world_flags, context):
+			return false
+	return items.is_empty() or context.holds_all(items)

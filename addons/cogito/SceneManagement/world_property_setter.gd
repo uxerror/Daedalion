@@ -1,6 +1,8 @@
 class_name CogitoWorldPropertySetter
 extends Node
 
+const Quests := preload("../Networking/net_quests.gd")
+
 ## Properties to set when a TRUE bool signal is received. Also used when a void signal is received.
 @export var properties_to_set_ON : Dictionary
 ## Properties to set when a FALSE bool signal is received
@@ -18,6 +20,12 @@ func on_void_signal():
 
 
 func set_properties(properties_to_set: Dictionary) -> void:
+	var endpoint := Quests.endpoint(self)
+	if endpoint:
+		endpoint.set_world_flags(properties_to_set)
+		return
+	if is_inside_tree() and not multiplayer.multiplayer_peer is OfflineMultiplayerPeer:
+		return
 	var world_dict = CogitoSceneManager._current_world_dict
 	
 	for property in properties_to_set:

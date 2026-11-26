@@ -1,6 +1,6 @@
 # Multiplayer sessions
 
-Daedalion 1.4 MP7 gives each admitted identity a server-owned Advanced player and private inventory. The server simulates world interactions, pickups, shared containers, vendor transactions and equipped items. It also simulates rigid bodies, grants exclusive carry and seat ownership and drives vehicles from their occupant’s movement commands. Hitscan, melee and ballistic impacts resolve in the shooter’s server world. The server owns survival meters, damage, death and individual respawns. It also owns NPC perception, combat, loot and draggable corpses. Offline death uses the existing save-slot reload screen.
+Daedalion 1.4 MP8 gives each admitted identity a server-owned Advanced player and private inventory. The server simulates world interactions, pickups, shared containers, vendor transactions and equipped items. It also simulates rigid bodies, grants exclusive carry and seat ownership and drives vehicles from their occupant’s movement commands. Hitscan, melee and ballistic impacts resolve in the shooter’s server world. The server owns survival meters, damage, death and individual respawns. It also owns NPC perception, combat, loot and draggable corpses. Offline death uses the existing save-slot reload screen.
 
 ## Try the Laboratory
 
@@ -99,7 +99,7 @@ respawn_delay=10.0
 | `respawn_delay` | Finite, nonnegative seconds, default `10.0`. Zero enables immediate requests. | `--respawn-delay 1.5` |
 | `display_name` | `Host` for the listen player. Clients supply their own name in join credentials, default `Player`. | Config file |
 
-The protocol version is 11. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
+The protocol version is 12. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
 
 The dedicated level starts empty and simulates admitted remote avatars. Their first-person cameras, HUDs and light-meter cameras are omitted. The default demo boot prevents the menu subtree from entering the tree. Dedicated startup skips solo save recovery and cleanup, the fade panel, game options, graphics and input-map setup by Cogito's menu autoload. The engine still loads project resources, Cogito settings and the existing autoload nodes, including InputHelper, DebugLine, InputRouter, audio and quest services. Full export stripping is scheduled for MP11.
 
@@ -641,14 +641,99 @@ objects. Give matching components the same names on every peer. Use
 authority signals. Custom property fields or novel area reactions need corresponding
 capture and silent apply support in `net_element_state.gd`.
 
+## Quests and world flags
+
+A listen host and a dedicated server run the same quest logic. Server physics, validated
+MP2 actions, successful MP3 pickups and authoritative destruction can advance a quest.
+Each `CogitoQuestUpdater` in Update mode commits once per scope and level-relative trigger
+identity. Two players can enter the same area in one tick. Other targets with the same
+quest still increment its numeric counter independently. In the Laboratory, destroy five
+targets with either player's weapon and check both journals. In the Lobby, either player
+can steal and deliver the laptop. The fridge checks its server contents on close. The real
+laptop completes delivery and the fake fails it.
+
+### Scope and storage
+
+Save the quest as a standalone `CogitoQuest` resource shipped to every peer. Set its
+**Scope** in the inspector. `SHARED` (default) puts it in the world ledger. `PERSONAL` puts
+it in the instigator's ledger, keyed by durable `player_id`. The Lobby archive uses
+`PERSONAL`. Each player can enter the archive independently. A personal trigger needs an
+admitted subject. An actorless environmental signal can progress a shared quest.
+
+`CogitoNet.player_world.quests` owns the ledgers for the lifetime of the session. Use
+`world.capture()` and `personal[player_id].capture()` on that endpoint for a detached
+dictionary containing revision, quest rows, flag values and one-shot trigger receipts.
+Quest keys are resource paths. Objective keys are standalone resource paths or the authored
+integer objective ID and its occurrence within the quest for built-ins. Each row holds
+quest and objective states. Evaluation copies the quest and each objective and shares
+read-only conditions. Descriptions, localization and audio come from the authored asset.
+A respawn or connection takeover keeps the same ledgers. MP9 will handle publication to
+`world.v2.json` and `player_<id>.v2.json`.
+
+Shared flags start with the game's new-world settings. `CogitoWorldPropertySetter` writes
+absolute values to the world ledger. An updater applies its authored world flags in the
+quest's scope. Boolean values replace and numeric values accumulate. A personal quest
+reads world flags overlaid with its own values. Evaluation happens at the authored update
+or completion trigger, as in single-player. Completed objectives retain their state after
+a drop or departure. A terminal quest ignores subsequent triggers.
+
+### Writing triggers and conditions
+
+Use `CogitoQuestUpdater.update_quest(actor)` from a server gameplay signal. Body entry
+passes the entering actor. Synchronous MP2 interactions, MP3 pickups and weapon damage
+also supply their server instigator to existing void signals. Capture the actor's identity
+before scheduling a delayed personal trigger. For a scripted trigger, use the session
+endpoint on authority, pass the stable receipt when an update should be one-shot, and use
+`state_of(definition, player_id)` to query gameplay progress.
+
+```gdscript
+# actor is the server-resolved CogitoPlayer. This also works in separate level hosts.
+var quests := preload("res://addons/cogito/Networking/net_quests.gd").endpoint(self)
+var player_id: String = actor.get_meta(&"net_player_id")
+quests.advance(definition, CogitoQuestUpdater.UpdateType.Start, [], player_id)
+quests.advance(definition, CogitoQuestUpdater.UpdateType.Update, flags, player_id, "clinic/fuse")
+```
+
+A custom predicate based only on the flag dictionary can keep implementing
+`CogitoFlag.check(flags)`. For subject-dependent conditions override
+`check_in_context(flags, context)`. A custom group forwards that context from
+`meets_in_context(flags, context)` to its children. `CogitoQuestContext` carries scope,
+subject ID and the connected party's authoritative actor bindings across levels.
+`context.holds(item)` and `holds_all(items)` compare inventory item names as offline.
+By default one connected member must hold all items in an AND group. In personal scope
+only the subject can satisfy the condition. Set `quests.party_inventory_policy` to a
+callable taking `(items, context)` to change shared eligibility or aggregation.
+
+World-unique loot checks retained server inventories, including disconnected holders.
+For public quest drops, select the active shared quest in `LootDropEntry.quest_definition`,
+or use the existing numeric `quest_id` with a game quest exposing a matching `id`.
+`quests.world_drop_policy(entry, quests)` can select another public-drop eligibility rule.
+
+### Delivery and presentation
+
+Reliable channel 0 orders quest data with session admission. Each shared revision goes
+to every admitted player regardless of level or spatial interest. Personal revisions go
+only to the current owner connection. A live delta contains changed flags, the affected
+quest row and its event. Duplicate revisions are ignored. Admission, reconnect and level
+binding send full world and owner baselines. Applying a baseline refreshes the open journal
+silently. The dedicated server has no recipient journal. The listen player gets the same
+local presentation path as a client.
+
+Use `journal()` and `journal(true)` for detached shared and owner views. Subscribe to
+`journal_changed` to refresh a custom HUD and `notified(event, definition)` for live hints.
+Start, update, completion and failure use the quest's authored audio and the existing
+configured transition cues. The optional `audio_on_update` supplies a cue for updates.
+Baselines only install state. Award gameplay rewards from the server-only
+`committed(event, definition, owner_id)` signal. Shared events have an empty owner ID.
+
 ## Current limitations
 
 - One active level is supported. Translation includes network latency. Prediction, rollback and coordinated travel remain future work.
 - There is no lag compensation. The server tests targets where they are when the command is consumed. A moving target may have left the crosshair by then. Ballistic replicas can briefly overshoot until the authoritative impact arrives.
 - Recovered projectiles become independent rigid pickups. Attachment to moving hit targets and procedural debris need their own lifecycle. Online corpses use the single-torso approximation described above.
 - Living NPCs are bound from the shared level scene. A game that creates new living NPCs at runtime needs an archetype and spawn adapter. Authored mannequin corpses and loot already have runtime records.
-- Custom debris and fragment spawns still need a network archetype. Authored elemental burnout has a level-scoped removal record. Quest inventory flags retain their offline evaluation until MP8 defines a network quest subject.
-- Inventories, attribute profiles and respawn deadlines are retained for one server process. MP9 covers saving world objects and player profiles to disk. The offline save format is unchanged.
+- Custom debris and fragment spawns still need a network archetype. Authored elemental burnout has a level-scoped removal record.
+- Quest ledgers, inventories, attribute profiles and respawn deadlines are retained for one server process. MP9 covers saving world objects and player profiles to disk. The offline save format is unchanged.
 - A linked custom object needs its own state adapter to appear on observers. Use level-authored motion/visual tracks for replica animations. Method, nested-animation and audio tracks on door/switch replica players are removed at bind.
 - The sender repeats four frames. A burst that loses every copy of an edge can still lose the action. Artificial loss in the process test covers individual packet loss. LAN feel under jitter and mannequin animation need a visual playtest.
 
@@ -670,3 +755,9 @@ The listen scenario operates the freezer, holds movement through the lock, then 
 thaw. The arena instances the same stand scenes as the Laboratory. For the manual check,
 toggle each stand from the other window, leave a burning stand beyond 96 m, return after
 burnout and press RESET. On the cold stand, drop the ball before resetting it.
+
+
+The real Laboratory gdUnit fixture collects and equips the authored laser rifle over the
+client protocols and fires it at all five targets. The second client loads a different level
+and still receives the journal. The process harness also checks a shared door quest, an
+owner-only button quest on listen, and a silent late join.

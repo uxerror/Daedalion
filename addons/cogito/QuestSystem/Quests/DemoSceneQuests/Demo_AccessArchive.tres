@@ -6,6 +6,7 @@
 
 [resource]
 script = ExtResource("1_53ru2")
+scope = 1
 quest_name = "demo_access_archive"
 quest_title = "Gain access to the archive."
 quest_objectives = Array[ExtResource("1_tl1bj")]([ExtResource("2_td8du")])

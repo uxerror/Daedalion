@@ -112,6 +112,7 @@ func transaction(peer: int, player: STOCK, op: String, args: Array) -> String:
 	if view.is_empty() or args[-2] != view.token:
 		return "Container closed"
 	if op == "close":
+		view.box.container_closed.emit()
 		forget(peer)
 		return ""
 	var box := view.box as CogitoContainer

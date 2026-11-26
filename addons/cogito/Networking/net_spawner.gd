@@ -74,6 +74,33 @@ func spawn_item(stack: InventorySlotPD, count: int, pos: Vector3) -> Node3D:
 	return _spawn(spec, pos)
 
 
+## Reserve an eligible public quest drop against retained profiles and live world holdings.
+func roll_quest_drop(entry: LootDropEntry, reserved: Dictionary) -> LootDropEntry:
+	if not get_parent().quests.allows_world_drop(entry):
+		return null
+	var item := entry.inventory_item
+	var count: int = get_parent().inventory.held_count(item) + reserved.get(item.name, 0)
+	for node: Node in get_parent().world.entities.objects.values():
+		if node.is_queued_for_deletion():
+			continue
+		if node is CogitoContainer:
+			for slot in node.inventory_data.find_slots(item.name):
+				count += slot.quantity
+		elif node is RigidBody3D:
+			var pickup := _pickup(node)
+			if pickup and pickup.slot_data and pickup.slot_data.inventory_item.name == item.name:
+				count += pickup.slot_data.quantity
+	var limit := 1 if item.is_unique else entry.quest_item_total_count
+	var amount := mini(limit - count, rng.randi_range(entry.quantity_min, entry.quantity_max))
+	if amount <= 0:
+		return null
+	reserved[item.name] = int(reserved.get(item.name, 0)) + amount
+	var rolled := entry.duplicate() as LootDropEntry
+	rolled.quantity_min = amount
+	rolled.quantity_max = amount
+	return rolled
+
+
 ## Roll an independent mutable stack from a server loot table entry.
 func roll_stack(entry: LootDropEntry) -> InventorySlotPD:
 	var template := InventorySlotPD.new()
@@ -234,8 +261,9 @@ func collect(
 	var node := component.get_parent()
 	var world: Node = get_parent().world
 	var id: String = world.entities.id_for(node)
-	if not multiplayer.is_server() or id.is_empty() or node.is_queued_for_deletion():
-		return {"ok": false, "reason": "Item already taken"}
+	var rejection := _pickup_error(node, id, component)
+	if not rejection.is_empty():
+		return {"ok": false, "reason": rejection}
 	var inv := pic.get_inventory()
 	var remaining := 0
 	if component is BackpackComponent:
@@ -274,9 +302,29 @@ func collect(
 	world.publish(id, state.duplicate())
 	if not remaining:
 		node.queue_free()
+	var quests: Node = get_parent().quests
+	var previous: String = quests.signal_subject
+	quests.signal_subject = pic.player.get_meta(&"net_player_id")
 	component.was_interacted_with.emit(component.interaction_text, component.input_map_action)
+	if component is ExtendedPickupInteraction and not use:
+		var base := component.pickup as PickupComponent
+		base.was_interacted_with.emit(base.interaction_text, base.input_map_action)
+	quests.signal_subject = previous
 	inv.inventory_updated.emit(inv)
 	return {"ok": true}
+
+
+func _pickup_error(node: Node, id: String, component: InteractionComponent) -> String:
+	if not multiplayer.is_server() or id.is_empty() or node.is_queued_for_deletion():
+		return "Item already taken"
+	var pickup := component as PickupComponent
+	if component is ExtendedPickupInteraction:
+		pickup = component.pickup
+	if pickup:
+		var item := pickup.slot_data.inventory_item
+		if item.is_unique and get_parent().inventory.owns(item):
+			return "Unique item already held"
+	return ""
 
 
 func _collect_money(pic: PlayerInteractionComponent, item: CurrencyItemPD, count: int) -> int:

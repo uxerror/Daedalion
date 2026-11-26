@@ -28,7 +28,11 @@ func hit(target: Node, amount: float, actor: Node3D, dir: Vector3, pos: Vector3)
 	if target.owner is CogitoNPC and target == target.owner.head:
 		target = target.owner
 	if target.has_signal("damage_received"):
+		var quests: Node = get_parent().quests
+		var previous: String = quests.signal_subject
+		quests.signal_subject = actor.get_meta(&"net_player_id", "")
 		target.emit_signal("damage_received", amount, actor, dir, pos)
+		quests.signal_subject = previous
 	elif target is CogitoPlayer:
 		target.receive_elemental_damage(amount, CogitoProperties.Element.PHYSICAL, actor, dir, pos)
 
