@@ -99,7 +99,7 @@ respawn_delay=10.0
 | `respawn_delay` | Finite, nonnegative seconds, default `10.0`. Zero enables immediate requests. | `--respawn-delay 1.5` |
 | `display_name` | `Host` for the listen player. Clients supply their own name in join credentials, default `Player`. | Config file |
 
-The protocol version is 9. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
+The protocol version is 10. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
 
 The dedicated level starts empty and simulates admitted remote avatars. Their first-person cameras, HUDs and light-meter cameras are omitted. The default demo boot prevents the menu subtree from entering the tree. Dedicated startup skips solo save recovery and cleanup, the fade panel, game options, graphics and input-map setup by Cogito's menu autoload. The engine still loads project resources, Cogito settings and the existing autoload nodes, including InputHelper, DebugLine, InputRouter, audio and quest services. Full export stripping is scheduled for MP11.
 
@@ -425,7 +425,10 @@ Completed shots and impacts have no baseline record.
 **Feedback.** Trigger and reload input can immediately play local sound, muzzle flash
 and viewmodel animation. Aim adjusts the owner's field of view. The owner pose carries
 an acknowledgement used to stop rejected cosmetic playback silently. Accepted fire,
-reload and confirmed impact events reach level observers once. The owner receives the
+reload and confirmed impact events reach level observers once. A hitscan weapon with an
+authored ray scene (the laser rifle's `laser_ray_prefab`) draws it like offline: the owner
+predicts it from the viewmodel muzzle to its own camera hit and drops it with a rejected
+shot; observers draw it from the server's fire event, which carries the trace end. The owner receives the
 confirmed impact position and normal for the authored impact effect and decal. Game
 presentation code can subscribe to `player_world.combat.presented(actor, event, point)`,
 `player_world.projectiles.launched(id, visual)` and `ended(id, impact)`. The dedicated server keeps only simulation data and passes a null visual.

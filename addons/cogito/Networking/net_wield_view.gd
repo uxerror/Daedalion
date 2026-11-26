@@ -7,6 +7,7 @@ const PROFILE := preload("net_wield_profile.gd")
 var model: Node3D
 var animation: AnimationPlayer
 var light: SpotLight3D
+var muzzle: Node3D
 var camera: Camera3D
 var _normal_fov := 75.0
 
@@ -22,6 +23,7 @@ func clear() -> void:
 	model = null
 	animation = null
 	light = null
+	muzzle = null
 
 
 ## Install a local viewmodel or the remote mannequin's head-mounted light.
@@ -44,6 +46,7 @@ func equip(actor: CogitoPlayerAdvanced, item: WieldableItemPD, profile: PROFILE)
 			_normal_fov = camera.fov
 		play(profile.equip_clip)
 		light = model.get_node_or_null("SpotLight3D")
+		muzzle = model.find_child("Bullet_Point", true, false) as Node3D
 	elif profile.kind == &"light":
 		light = SpotLight3D.new()
 		model = light

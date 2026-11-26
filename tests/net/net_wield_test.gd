@@ -2,6 +2,7 @@ extends "memory_session_suite.gd"
 
 const GRID := preload("res://addons/cogito/Networking/net_grid.gd")
 const ACTION := CogitoPlayerCommand.Action
+const LaserRay := preload("res://addons/cogito/PackedScenes/laser_ray.gd")
 
 var _server: Facade
 var _owner: Facade
@@ -298,3 +299,31 @@ func test_owner_viewmodel_stays_visible_when_firing_after_equip(_timeout := 1500
 	assert_bool(mesh.visible).is_true()
 	view.cancel()
 	assert_bool(mesh.visible).is_true()
+
+
+func _rays(branch: Facade) -> Array[Node]:
+	var level := branch.player_world.active_level()
+	return level.find_children("*", "", true, false).filter(
+		func(node: Node) -> bool: return node.get_script() == LaserRay
+	)
+
+
+func test_rifle_draws_laser_ray_for_owner_and_observers(_timeout := 15000) -> void:
+	_open()
+	var rifle := _grant("LaserRifle")
+	_equip(rifle)
+	await _ticks(3)
+	var id := _owner.local_player_id()
+	var remote := _owner.player_world.avatar_for(id).wield
+	var cmd := CogitoPlayerCommand.new()
+	cmd.sequence = _sequence + 1
+	cmd.add_edge(ACTION.PRIMARY)
+	remote.predict(cmd, 1.0)
+	# Offline the rifle draws its laser_ray_prefab from the muzzle on every shot.
+	assert_int(_rays(_owner).size()).is_equal(1)
+	_tick(ACTION.PRIMARY)
+	await _ticks(2)
+	assert_int(_rays(_other).size()).is_equal(1)
+	# The shooter keeps its predicted ray and gets no second one from the server.
+	assert_int(_rays(_owner).size()).is_equal(1)
+	assert_float(rifle.inventory_item.charge_current).is_equal(99.0)

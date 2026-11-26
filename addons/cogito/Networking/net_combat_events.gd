@@ -8,6 +8,7 @@ signal presented(actor: CogitoPlayerAdvanced, event: StringName, point: Vector3)
 signal npc_presented(npc: CogitoNPC, event: StringName, point: Vector3)
 
 const PROFILE := preload("net_wield_profile.gd")
+const MUZZLE_AHEAD := 0.5
 
 
 ## Trace in this actor's physics world, ignoring the shooter's own collision geometry.
@@ -33,8 +34,15 @@ func hit(target: Node, amount: float, actor: Node3D, dir: Vector3, pos: Vector3)
 
 
 ## Broadcast the accepted event to live observers. Only impact confirmation returns to the owner.
+## A hitscan fire event carries the beam end in [param end].
 func broadcast(
-	id: String, life: int, item: String, event: StringName, point: Vector3, normal := Vector3.ZERO
+	id: String,
+	life: int,
+	item: String,
+	event: StringName,
+	point: Vector3,
+	normal := Vector3.ZERO,
+	end := Vector3.ZERO
 ) -> void:
 	var players := get_parent()
 	var actor: CogitoPlayerAdvanced = players.avatar_for(id).actor
@@ -42,9 +50,9 @@ func broadcast(
 	var epoch: int = players.world.entities.epoch
 	for peer: int in players.observers():
 		if event == &"impact" or peer != shooter_peer:
-			_event.rpc_id(peer, epoch, id, life, item, event, point, normal)
+			_event.rpc_id(peer, epoch, id, life, item, event, point, normal, end)
 	if players.local_actor and (actor != players.local_actor or event == &"impact"):
-		_event(epoch, id, life, item, event, point, normal)
+		_event(epoch, id, life, item, event, point, normal, end)
 
 
 @rpc("authority", "call_remote", "reliable", 2)
@@ -55,7 +63,8 @@ func _event(
 	item: String,
 	event: StringName,
 	point: Vector3,
-	normal: Vector3
+	normal: Vector3,
+	end: Vector3
 ) -> void:
 	var players := get_parent()
 	var avatar: Variant = players.avatar_for(id)
@@ -63,6 +72,9 @@ func _event(
 		return
 	var profile: PROFILE = players.wield_profile(item)
 	present(avatar.actor, profile, event, point, normal)
+	if event == &"fire" and end != Vector3.ZERO:
+		# Observers have no viewmodel muzzle: start the beam just ahead of the eye.
+		beam(avatar.actor, profile, point + point.direction_to(end) * MUZZLE_AHEAD, end)
 
 
 ## Resolve the selected NPC weapon once. Only the authority traces or launches a flight.
@@ -159,6 +171,16 @@ func present(
 	if profile.kind in [&"rifle", &"pistol"] and event == &"fire":
 		_flash(actor, point)
 	return audio
+
+
+## Draw the weapon's authored laser ray in the actor's level, as the offline rifle does.
+func beam(actor: Node3D, profile: PROFILE, start: Vector3, end: Vector3) -> Node:
+	if not profile.tracer or start.is_equal_approx(end):
+		return null
+	var ray := profile.tracer.instantiate()
+	ray.draw_ray(start, end)
+	CogitoLevel.root_of(actor).add_child(ray)
+	return ray
 
 
 func _flash(actor: Node3D, point: Vector3) -> void:

@@ -23,6 +23,7 @@ var reload_sound: AudioStream
 var decal: PackedScene
 var decal_texture: Texture2D
 var impact_scene: PackedScene
+var tracer: PackedScene
 var equip_clip: StringName
 var fire_clip: StringName
 var reload_clip: StringName
@@ -57,6 +58,7 @@ func configure(item: WieldableItemPD) -> void:
 		decal = node.bullet_decal_prefab if node.decal_spawn else null
 		decal_texture = node.decal_texture
 		impact_scene = node.collision_scene
+		tracer = node.laser_ray_prefab
 	elif node is MELEE:
 		kind = &"melee"
 		stamina = node.stamina_cost if node.uses_stamina else 0

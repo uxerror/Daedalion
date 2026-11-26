@@ -29,6 +29,7 @@ var _prediction_delay := 0.0
 var _predicted_sequence := -1
 var _pending_sequence := -1
 var _predicted_sound: AudioStreamPlayer3D
+var _predicted_beam: Node
 
 
 ## Toggle the validated inventory stack. A switched or removed stack cancels pending reload.
@@ -213,10 +214,16 @@ func _primary() -> void:
 	_cooldown = profile.interval
 	var combat: COMBAT = players.combat
 	accepted_sequence = actor.current_command.sequence
-	combat.broadcast(player_id, life, public_item, &"fire", point)
+	var collision := {}
+	var end := Vector3.ZERO
+	if profile.kind in [&"rifle", &"melee"]:
+		end = point + dir * item.wieldable_range
+		collision = COMBAT.trace(actor, point, end)
+		if not collision.is_empty():
+			end = collision.position
+	combat.broadcast(player_id, life, public_item, &"fire", point, Vector3.ZERO, end)
 	match profile.kind:
 		&"rifle", &"melee":
-			var collision := COMBAT.trace(actor, point, point + dir * item.wieldable_range)
 			if not collision.is_empty():
 				combat.hit(
 					collision.collider, item.wieldable_damage, actor, dir, collision.position
@@ -352,6 +359,21 @@ func predict(command: CogitoPlayerCommand, delta: float) -> void:
 		_predicted_sound = players.combat.present(
 			actor, profile, &"fire" if firing else &"reload", eye, Vector3.ZERO
 		)
+		if firing:
+			_predicted_beam = _predict_beam(owner_item)
+
+
+## The owner's ray runs from the viewmodel muzzle to its own camera hit, like offline.
+func _predict_beam(owner_item: WieldableItemPD) -> Node:
+	if not profile.tracer:
+		return null
+	var aim := actor.get_aim_transform()
+	var end := aim.origin - aim.basis.z.normalized() * owner_item.wieldable_range
+	var collision := COMBAT.trace(actor, aim.origin, end)
+	if not collision.is_empty():
+		end = collision.position
+	var start := _view.muzzle.global_position if _view.muzzle else aim.origin
+	return players.combat.beam(actor, profile, start, end)
 
 
 ## Stop a rejected prediction once an owner pose acknowledges its input.
@@ -363,4 +385,6 @@ func reconcile(ack: int, accepted: int) -> void:
 		_prediction_delay = 0
 		if is_instance_valid(_predicted_sound):
 			_predicted_sound.queue_free()
+		if is_instance_valid(_predicted_beam):
+			_predicted_beam.queue_free()
 	_pending_sequence = -1
