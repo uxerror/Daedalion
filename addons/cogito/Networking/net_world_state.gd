@@ -176,7 +176,9 @@ func subscribe(peer: int, nonce: int) -> void:
 			state = node.network_state.at_send_time(node.net_state())
 		if not node and not state.get("removed", false):
 			continue
-		if node is Node3D and state.has("pose"):
+		# Spawner specs carry a global pose; refresh it for objects that moved since spawn.
+		# Authored adapters (the spinner's local knob pose) keep their own meaning.
+		if node is Node3D and state.has("pose") and get_parent().spawner.owns(id):
 			state = state.duplicate()
 			state.pose = node.global_transform
 		var row := [id, revisions[id], state]
@@ -290,6 +292,11 @@ func _delta(key: String, epoch: int, change: Array) -> void:
 		_set_holder(change[0], change[2])
 		revisions[change[0]] = change[1]
 		return
+	# A destroyed object's death effects play on its copy before the copy is removed.
+	var dying: Node = entities.live_object(change[0]) if change[3] == &"death" else null
+	if is_instance_valid(dying):
+		for health in dying.find_children("*", "CogitoHealthAttribute", false, false):
+			health.present_net_death(get_parent().spawner)
 	if apply_state(change[0], change[1], change[2], false):
 		var node := entities.objects[String(change[0])]
 		if node.has_method("present_net_event"):

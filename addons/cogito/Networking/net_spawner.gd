@@ -219,7 +219,23 @@ func _instantiate(id: String, spec: Dictionary) -> Node3D:
 
 
 ## Release carry ownership and retain one removal record for a destroyed object.
-func remove_world_object(node: Node) -> void:
+## True for runtime objects created by this spawner, whose spec pose is global.
+func owns(id: String) -> bool:
+	return _live.has(id)
+
+
+## Place an authored death drop that is an inventory pickup as a networked item.
+## Returns false for other scenes, which stay local presentation on every peer.
+func spawn_death_drop(scene: PackedScene, pos: Vector3) -> bool:
+	var stack := STOCK.pickup_template(scene)
+	if not stack:
+		return false
+	if multiplayer.is_server():
+		spawn_item(stack, stack.quantity, pos)
+	return true
+
+
+func remove_world_object(node: Node, event: StringName = &"") -> void:
 	var world: Node = get_parent().world
 	var id: String = world.entities.id_for(node)
 	if not multiplayer.is_server() or id.is_empty() or world.is_removed(id):
@@ -227,7 +243,7 @@ func remove_world_object(node: Node) -> void:
 	if node.has_meta(&"net_carrier"):
 		get_parent().carry.release(node.get_meta(&"net_carrier"))
 	_live.erase(id)
-	world.publish(id, {"removed": true})
+	world.publish(id, {"removed": true}, event)
 
 
 func _despawn(id: String) -> void:

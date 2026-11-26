@@ -33,6 +33,23 @@ func _ready() -> void:
 	attribute_changed.emit(attribute_name,value_current,value_max,true)
 
 
+## Death sound and spawn_on_death scenes. Online, a pickup scene becomes one networked item
+## through [param spawner] (server only); other scenes are local effects on every peer.
+func present_net_death(spawner: Node = null) -> void:
+	parent_position = get_parent().global_position
+	parent_rotation = get_parent().global_rotation
+	if sound_on_death:
+		CogitoAudio.play_sound_3d_in(self, sound_on_death, parent_position)
+	for scene in spawn_on_death:
+		if not scene or (spawner and spawner.spawn_death_drop(scene, parent_position)):
+			continue
+		var spawned_object = scene.instantiate()
+		spawned_object.position = parent_position
+		spawned_object.rotation = parent_rotation
+		spawning_on_death.emit(spawned_object)
+		CogitoLevel.spawn_parent(self).add_child(spawned_object)
+
+
 func on_health_change(_health_name:String, _health_current:float, _health_max:float, has_increased:bool):
 	if !has_increased:
 		damage_taken.emit()
@@ -53,24 +70,18 @@ func on_death(_attribute_name:String, _value_current:float, _value_max:float):
 	if npc and npc.network_state:
 		npc.network_state.die()
 		return
+	var world: Node = get_parent().get_meta(&"cogito_net_world", null)
+	if world and not world.multiplayer.is_server():
+		return
 	death.emit()
-	parent_position = get_parent().global_position
-	parent_rotation = get_parent().global_rotation
-	
-	
-	if sound_on_death:
-		CogitoAudio.play_sound_3d_in(self, sound_on_death, parent_position)
-	
-	for scene in spawn_on_death:
-		if scene:
-			var spawned_object = scene.instantiate()
-			spawned_object.position = parent_position
-			spawned_object.rotation = parent_rotation
-			spawning_on_death.emit(spawned_object)
-			CogitoLevel.spawn_parent(self).add_child(spawned_object)
+	var spawner: Node = world.get_parent().spawner if world else null
+	present_net_death(spawner)
 	
 	for nodepath in destroy_on_death:
 		var target := get_node_or_null(nodepath)
+		if target and world and target == get_parent():
+			# Online, observers replay the death effects from this removal.
+			spawner.remove_world_object(target, &"death")
 		if target:
 			CogitoSceneManager.register_destroyed_node(target)
 			target.queue_free()

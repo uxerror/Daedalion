@@ -3,6 +3,8 @@ class_name CogitoMeter
 extends Node3D
 
 signal value_changed
+## Publishes the authoritative value online.
+signal net_changed(event: StringName)
 signal value_changed_normalized(val_normalized:float)
 signal maximum_reached
 signal minimum_reached
@@ -71,6 +73,8 @@ func change_value(change:float) -> void:
 			trigger_event_actions()
 	
 	update_display_label()
+	if has_meta(&"cogito_net_world"):
+		net_changed.emit(&"value")
 
 
 func increase_value() -> void:
@@ -93,6 +97,18 @@ func trigger_event_actions() -> void:
 	if destroy_on_event:
 		for node in destroy_on_event:
 			node.queue_free()
+
+
+## Displayed value replicated to observers.
+func net_state() -> Dictionary:
+	return {"value": current_value}
+
+
+## Show the authoritative value without emitting gameplay signals or meter events.
+func apply_net_state(state: Dictionary, _silent: bool) -> void:
+	current_value = state.value
+	previous_value = current_value
+	update_display_label()
 
 
 func set_state():
