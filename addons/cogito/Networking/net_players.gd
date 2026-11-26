@@ -199,7 +199,7 @@ func _exit_tree() -> void:
 		_level.tree_exiting.disconnect(_level_exiting)
 		_level_exiting()
 	if persistence and not _secondary:
-		persistence.files.close()
+		persistence.close()
 
 
 func _level_exiting() -> void:
@@ -357,6 +357,9 @@ func _create(id: String, life: int, start: Transform3D, initial_pose: Dictionary
 	avatar.wield.life = life
 	avatar.wield.owner_peer = _peer_by_id[id]
 	avatar.actor.set_meta(&"net_wield", avatar.wield)
+	if persistence:
+		avatar.actor.set_meta(&"profile_name", _session.for_id(id).display_name)
+		persistence.mark_dirty()
 	inventory.attach(avatar.actor, id, _peer_by_id[id], life)
 	if not initial_pose.is_empty():
 		avatar.receive(initial_pose)
@@ -403,7 +406,7 @@ func _spawn(key: String, id: String, life: int, frame: Dictionary) -> void:
 
 func _remove(id: String) -> void:
 	if persistence and _avatars.has(id):
-		persistence.lives.retained[id] = persistence.lives.capture(id, _avatars[id].actor, self)
+		persistence.departing(id, _avatars[id].actor, self)
 	var peer := int(_peer_by_id.get(id, 0))
 	carry.release(peer, false)
 	if multiplayer.is_server() and _avatars.has(id):
@@ -429,6 +432,9 @@ func _remove(id: String) -> void:
 	containers.forget(peer)
 	avatar.wield.clear()
 	inventory.detach(peer, avatar.actor)
+	if persistence:
+		inventory.restore(id, persistence.lives.pending[id].stock)
+		death.forget(id)
 	avatar.despawn()
 	if local:
 		local_actor = null
@@ -504,9 +510,17 @@ func save_world() -> Error:
 	return persistence.save(self, Engine.get_physics_frames()) if persistence else ERR_UNAUTHORIZED
 
 
+## Signal a durable change to the authority writer when this level belongs to a world.
+func mark_world_dirty() -> void:
+	if persistence:
+		persistence.mark_dirty()
+
+
 func _physics_process(delta: float) -> void:
-	if persistence and _session.local_id.is_empty():
+	if persistence:
 		persistence.poll(self, Engine.get_physics_frames())
+		if not is_inside_tree():
+			return
 	if _avatars.is_empty():
 		return
 	carry.flush_rotation()

@@ -188,6 +188,12 @@ UID/path resolution as solo saves. The payload resource contains a `fields` dict
 | `scene_<token>.v2.json` | `world_scene` | Durable level key, scene path, scoped `CogitoSceneState`, entity states and tombstones, runtime lifecycle records, body motion, ballistic flights, container stock and NPC perception |
 | `player_<digest>.v2.json` | `profile` | Server-issued identity, level and local pose, death state, inventory and equipment, currencies, attributes, actor elements and personal quest progression |
 
+Layout 1 profiles additionally support `display_name` and `last_seen` (UTC Unix seconds at
+capture). Old and imported rows can omit these fields. Listing reports an empty name and
+zero for unknown values. The optional boolean `unplayed` identifies an unchanged new life
+for conservative rebind protection. Profile rebinding changes the embedded ID, filename
+and manifest index atomically, including removal of the source member.
+
 Each index maps an ID to the SHA-256 digest of the referenced file. The empty player
 index is valid. Player filenames contain only the full SHA-256 of the ID. Lowercase,
 portable level keys normally appear verbatim. Other keys use `hash-<sha256>`; that
@@ -201,5 +207,5 @@ codec kind, ID and required fields. Only a complete directory can be sealed as
 generation, then a verified ready generation. An interrupted writing directory is
 ineligible. A damaged candidate ahead of a valid fallback is moved aside for diagnosis.
 If all published candidates are unreadable, opening fails and retains them. The operator's
-`save.request` and the writer claim live outside all generations.
+`save.request`, `stop.request`, `list.request`, `rebind.request` and the writer claim live outside all generations.
 

@@ -32,7 +32,8 @@ New saves use data-only v2 JSON. A compatible legacy binary state is read when i
 
 ## Multiplayer saves
 
-The listen host's **Save** button and the dedicated server's `save.request` publish one
-world generation, including offline players. Start the same named world to resume it.
+Both authorities autosave dirty worlds, checkpoint departures and flush on orderly shutdown.
+The listen host's **Save** button and the operator's `save.request` also publish a world
+generation, including offline players. Start the same named world to resume it.
 An explicit solo import copies a slot to a new world and designates one profile as its
 owner. See [multiplayer world saves and import](networking.md#save-and-reopen-a-world).

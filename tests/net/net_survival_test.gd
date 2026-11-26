@@ -50,7 +50,8 @@ func before_test() -> void:
 	_server = _branch(1)
 	_policy = CountingPolicy.new()
 	_server.respawn_policy = _policy
-	_server.start_server({"save_dir": "user://net/survival", "respawn_delay": 0.0})
+	var directory := create_temp_dir("survival-%d" % Time.get_ticks_usec())
+	_server.start_server({"save_dir": directory, "respawn_delay": 0.0})
 	_server.player_world.bind_level(_level_root, Transform3D(Basis.IDENTITY, Vector3.UP), "arena")
 	_owner = _observer(2)
 	_other = _observer(3)
@@ -215,7 +216,7 @@ func test_sender_bound_respawn_deadline_and_stale_life() -> void:
 	assert_str(death.try_respawn(_id, remote.lifetime)).is_equal("Player is alive")
 
 
-func test_dead_reconnect_preserves_deadline_and_automatic_policy() -> void:
+func test_dead_reconnect_restores_life_once_and_keeps_holdings() -> void:
 	var players := _server.player_world
 	var stack := InventorySlotPD.new()
 	stack.inventory_item = preload("res://addons/cogito/InventoryPD/Items/Cogito_LaserRifle.tres")
@@ -233,7 +234,7 @@ func test_dead_reconnect_preserves_deadline_and_automatic_policy() -> void:
 	players.get_parent().config.respawn_delay = 2.0
 	_victim.decrease_attribute("health", 100)
 	_pump()
-	var deadline: float = players.death._deadlines[_id]
+	assert_bool(players.death._deadlines.has(_id)).is_true()
 	_owner.disconnect_session()
 	_pump()
 	var again := _branch(4)
@@ -241,17 +242,23 @@ func test_dead_reconnect_preserves_deadline_and_automatic_policy() -> void:
 	_arena(again)
 	_pump()
 	assert_str(again.local_player_id()).is_equal(_id)
-	assert_bool(again.local_player().is_dead).is_true()
-	assert_float(players.death._deadlines[_id]).is_equal(deadline)
+	assert_bool(again.local_player().is_dead).is_false()
+	assert_bool(players.death._deadlines.has(_id)).is_false()
 	assert_array(_policy.deaths).contains_exactly([_id])
 	assert_array(releases).contains_exactly([true, false])
-	_policy.automatic = true
-	players.death._deadlines[_id] = Time.get_ticks_msec()
-	await _ticks(3)
-	assert_bool(again.local_player().is_dead).is_false()
-	assert_object(players.avatar_for(_id).wield.stack).is_same(equipped)
+	var restored := players.avatar_for(_id).actor.inventory_data.find_slots("Laser Rifle")
+	assert_int(restored.size()).is_equal(1)
+	assert_object(players.avatar_for(_id).wield.stack).is_same(restored[0])
 	assert_int(players.avatar_for(_id).actor.saved_quest_progression.clinic).is_equal(2)
 	assert_array(_policy.deaths).contains_exactly([_id])
+	# The automatic policy still governs a death while the player remains connected.
+	_policy.automatic = true
+	players.get_parent().config.respawn_delay = 0.0
+	players.avatar_for(_id).actor.decrease_attribute("health", 1000)
+	assert_bool(players.avatar_for(_id).actor.is_dead).is_true()
+	await _ticks(3)
+	assert_bool(again.local_player().is_dead).is_false()
+	assert_array(_policy.deaths).contains_exactly([_id, _id])
 
 
 func test_immediate_respawn_disabled_points_and_fallback() -> void:

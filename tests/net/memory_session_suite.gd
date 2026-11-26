@@ -62,6 +62,9 @@ func _pump() -> void:
 
 func after_test() -> void:
 	for branch: Facade in _branches:
+		if branch.player_world and branch.player_world.persistence:
+			branch.player_world.persistence.close()
+			branch.player_world.persistence = null
 		branch.disconnect_session()
 		var root := _branch_roots[branch]
 		branch.multiplayer.root_path = root.get_path()

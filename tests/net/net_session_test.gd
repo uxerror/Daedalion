@@ -197,6 +197,7 @@ func test_avatar_late_join_move_remove_and_reconnect(_timeout := 15000) -> void:
 	assert_bool(remote.is_physics_processing()).is_false()
 	assert_float(remote.position.distance_to(avatar.actor.position)).is_less(0.05)
 	assert_bool(second.local_player().name != old_name).is_true()
+	var left_pose := avatar.actor.position
 	first.disconnect_session()
 	_pump()
 	assert_object(server.player_world.avatar_for(id)).is_null()
@@ -210,7 +211,7 @@ func test_avatar_late_join_move_remove_and_reconnect(_timeout := 15000) -> void:
 	assert_str(again.local_player_id()).is_equal(id)
 	assert_str(String(fresh.actor.name)).is_equal(String(old_name))
 	assert_int(fresh.lifetime).is_greater(avatar.lifetime)
-	assert_float(fresh.actor.position.z).is_zero()
+	assert_vector(fresh.actor.position).is_equal(left_pose)
 	await _ticks(2)
 
 

@@ -42,7 +42,9 @@ func _run() -> void:
 			err = ERR_UNCONFIGURED
 		else:
 			err = facade.save_world()
-	facade.disconnect_session()
+	var close_error: Error = facade.disconnect_session()
+	if err == OK:
+		err = close_error
 	var files: RefCounted = load("res://addons/cogito/SceneManagement/cogito_world_files.gd").new()
 	if err == OK:
 		err = files.open(options.save_dir, options.world)
@@ -60,7 +62,7 @@ func _run() -> void:
 		err == OK
 		and not original.is_empty()
 		and _digest(source) == original
-		and files.manifest.get("generation") == 2
+		and files.manifest.get("generation") == 3  # import, manual save, final flush
 		and files.profiles.size() == 1
 		and not files.scenes.is_empty()
 		and (slot != "11" or runtime == 2)

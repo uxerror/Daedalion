@@ -169,6 +169,8 @@ static func _profile(id: String, key: String, player: CogitoPlayerAdvancedState)
 	var health: Vector2 = player.player_attributes.get("health", Vector2.ONE)
 	return {
 		"id": id,
+		"display_name": "",
+		"last_seen": 0,
 		"level": key,
 		"pose": Transform3D(Basis.from_euler(player.player_rotation), player.player_position),
 		"crouched": player.player_try_crouch,

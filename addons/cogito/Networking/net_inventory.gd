@@ -116,6 +116,11 @@ func restore(id: String, fields: Dictionary) -> void:
 	_profiles[id] = model
 
 
+## Remove an offline model after its private record has moved to another identity.
+func forget_profile(id: String) -> void:
+	_profiles.erase(id)
+
+
 ## Drop per-connection state, keeping the server model, quickslot aliases and wallet.
 func detach(peer: int, actor: CogitoPlayer) -> void:
 	var model: STOCK = _live.get(peer)
@@ -177,6 +182,8 @@ func _refresh(peer: int, publish := true) -> void:
 	var extra: Dictionary = actor.get_meta(&"net_wield").private_fields(model)
 	extra.money = _values(actor.player_currencies)
 	var delta := model.refresh(extra)
+	if not delta.is_empty():
+		get_parent().mark_world_dirty()
 	if delta.is_empty() or not publish:
 		return
 	if peer == 1 and actor.player_hud is CogitoPlayerHudManager:

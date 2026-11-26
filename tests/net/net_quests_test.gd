@@ -26,7 +26,9 @@ func before_test() -> void:
 	get_tree().root.add_child(_scene)
 	get_tree().current_scene = _scene
 	_server = _branch(1, _scene)
-	_server.host({"save_dir": "user://net/mp8", "respawn_delay": 0.0})
+	_server.host(
+		{"save_dir": create_temp_dir("mp8-%d" % Time.get_ticks_usec()), "respawn_delay": 0.0}
+	)
 	_server.player_world.bind_level(_scene, Transform3D(Basis.IDENTITY, Vector3.UP), "arena")
 	_owner = _observer(2)
 	_other = _observer(3)

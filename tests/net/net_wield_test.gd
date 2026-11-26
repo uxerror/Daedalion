@@ -13,7 +13,7 @@ var _sequence := 1000
 
 func _open() -> void:
 	_server = _branch(1)
-	_server.start_server({"save_dir": "user://net/wield"})
+	_server.start_server({"save_dir": create_temp_dir("wield-%d" % Time.get_ticks_usec())})
 	_arena(_server)
 	_owner = _observer(2)
 	_other = _observer(3)

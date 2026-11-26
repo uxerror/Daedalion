@@ -38,7 +38,8 @@ func before_test() -> void:
 	get_tree().current_scene = _level_root
 	_server = _branch(1)
 	_server.npc_target_policy = CountingPolicy.new()
-	_server.start_server({"save_dir": "user://net/npcs", "friendly_fire": false})
+	var directory := create_temp_dir("npcs-%d" % Time.get_ticks_usec())
+	_server.start_server({"save_dir": directory, "friendly_fire": false})
 	_server.player_world.bind_level(_level_root, Transform3D.IDENTITY, "arena")
 	_guard = _level_root.get_node("Guard")
 	_a = _observer(2)

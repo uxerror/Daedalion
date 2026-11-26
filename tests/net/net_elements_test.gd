@@ -19,7 +19,8 @@ func before_test() -> void:
 	get_tree().root.add_child(_level_root)
 	get_tree().current_scene = _level_root
 	_server = _branch(1)
-	_server.start_server({"save_dir": "user://net/mp7", "friendly_fire": false})
+	var directory := create_temp_dir("mp7-%d" % Time.get_ticks_usec())
+	_server.start_server({"save_dir": directory, "friendly_fire": false})
 	_server.player_world.bind_level(_level_root, Transform3D.IDENTITY, "arena")
 	_owner = _observer(2)
 	_actor = _server.player_world.avatar_for(_owner.local_player_id()).actor

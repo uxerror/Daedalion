@@ -47,6 +47,8 @@ var match_legacy_object: Callable
 ## Optional server callbacks () -> Dictionary and (Dictionary) -> void.
 var capture_shared_state: Callable
 var apply_shared_state: Callable
+## Optional (target_profile) -> bool for operator rebind protection.
+var profile_has_progress: Callable
 ## Default target selection resource for server NPCs without a per-NPC override.
 var npc_target_policy: CogitoNpcTargetPolicy
 ## Optional owner-only Control implementing open_online(actor, seconds, request) and close_online().
@@ -105,6 +107,8 @@ func _serve(input: Dictionary, role: Mode) -> Error:
 	var config := NetConfig.server_config(input, listen)
 	if config.has("reason"):
 		return _report(config.reason, ERR_INVALID_PARAMETER)
+	if not config.profile_command.is_empty():
+		return _report("Profile commands require the dedicated CLI", ERR_INVALID_PARAMETER)
 	var provider := _provider()
 	var err := provider.open_server(config.save_dir)
 	if err != OK:
@@ -128,14 +132,16 @@ func _serve_world(
 		persistence.placement = reconnect_policy
 	persistence.match_legacy_object = match_legacy_object
 	persistence.capture_shared = capture_shared_state
+	persistence.operator.has_progress = profile_has_progress
 	persistence.apply_shared = apply_shared_state
 	var adapter := _transport()
 	err = adapter.open_server(config, listen)
 	if err != OK:
-		persistence.files.close()
+		persistence.close()
 		return _report("Cannot bind %s:%d" % [config.bind, config.port], err)
 	_attach(role, adapter.peer, provider, config, scope, profile)
 	player_world.persistence = persistence
+	persistence.stop_requested.connect(_stop_requested.bind(_session), CONNECT_DEFERRED)
 	persistence.install(player_world)
 	if not persistence.files.manifest.is_empty():
 		adapter.peer.refuse_new_connections = true
@@ -180,6 +186,8 @@ func import_solo(slot: String, player_id: String) -> Error:
 	var persistence := player_world.persistence
 	if persistence.busy:
 		return ERR_BUSY
+	if persistence.can_flush() or persistence.restore_error != OK:
+		return ERR_UNCONFIGURED
 	persistence.busy = true
 	var err := preload("net_solo_import.gd").copy(slot, player_id, persistence.files)
 	if err == OK:
@@ -245,7 +253,6 @@ func _attach(
 	add_child(_session)
 	_session.ready_for_play.connect(session_ready.emit)
 	_session.failed.connect(_session_failure)
-	_session.left.connect(player_left.emit)
 	_session.rejected.connect(_peer_rejected)
 	player_world = NET_PLAYERS.new()
 	player_world.name = "Players"
@@ -264,6 +271,7 @@ func _attach(
 		_session.joined.connect(_quest_baseline)
 	_session.joined.connect(player_joined.emit)
 	_session.add_child(player_world)
+	_session.left.connect(player_left.emit)
 	_session.attach(api)
 	api.server_relay = false
 	api.multiplayer_peer = peer
@@ -300,16 +308,41 @@ func _notification(what: int) -> void:
 		disconnect_session()
 
 
-## Closes the session, drops all records and restores the branch's original offline peer.
-func disconnect_session() -> void:
-	if _session == null:
+func _stop_requested(expected: Session) -> void:
+	if _session != expected:
 		return
+	var err := disconnect_session()
+	print("NET STOP ", error_string(err))
+	get_tree().quit(0 if err == OK else 1)
+
+
+func _close_if_current(expected: Session) -> void:
+	if _session == expected:
+		disconnect_session()
+
+
+## Flush the last active tick before releasing actors and the writer claim. One final
+## attempt bypasses backoff, including for motion or custom state without a dirty event.
+func disconnect_session() -> Error:
+	if _session == null:
+		return OK
+	var persistence := player_world.persistence
+	if persistence and persistence.in_capture():
+		# A game callback inside capture must unwind before its nodes or lock are released.
+		_close_if_current.call_deferred(_session)
+		return ERR_BUSY
+	var err := OK
+	if persistence and persistence.can_flush():
+		err = persistence.flush(player_world, Engine.get_physics_frames())
+		if err != OK:
+			printerr("NET FINAL SAVE ", error_string(err))
+	player_world.persistence = null
 	var api := multiplayer as SceneMultiplayer
 	var peer := api.multiplayer_peer
 	var old_records := _session.records()
 	player_world.clear()
-	if player_world.persistence:
-		player_world.persistence.files.close()
+	if persistence:
+		persistence.close()
 	player_world = null
 	_session.detach()
 	if _mode == Mode.CLIENT and peer != null and 1 in api.get_peers():
@@ -326,6 +359,7 @@ func disconnect_session() -> void:
 	_mode = Mode.OFFLINE
 	for record: Dictionary in old_records:
 		player_left.emit(record.player_id)
+	return err
 
 
 ## Returns the selected role, including CLIENT while admission is pending.

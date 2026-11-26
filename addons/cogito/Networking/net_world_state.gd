@@ -272,6 +272,9 @@ func _changed(event: StringName, id: String) -> void:
 		return
 	var state: Dictionary = node.net_state()
 	if node is CogitoNPC:
+		var old: Dictionary = _states.get(id, {})
+		if old.get("health") != state.health or old.get("dead") != state.dead:
+			get_parent().mark_world_dirty()
 		# Active observers receive NPC state on the interest stream after baseline acknowledgement.
 		revisions[id] = revisions.get(id, 0) + 1
 		_states[id] = state
@@ -281,6 +284,7 @@ func _changed(event: StringName, id: String) -> void:
 
 ## Publish server-owned lifecycle records using the same baseline and acknowledgement as devices.
 func publish(id: String, state: Dictionary, event: StringName = &"") -> void:
+	get_parent().mark_world_dirty()
 	revisions[id] = revisions.get(id, 0) + 1
 	_states[id] = state
 	if state.get("removed", false):

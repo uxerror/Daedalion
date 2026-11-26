@@ -12,9 +12,11 @@ var _root: Node3D
 var _server: Facade
 var _events: Array[StringName] = []
 var _restore_count := 0
+var _now := 0
 
 
 func before_test() -> void:
+	_now = 0
 	_dir = create_temp_dir("world-%d" % Time.get_ticks_usec())
 	_previous = get_tree().current_scene
 	_boot()
@@ -27,6 +29,7 @@ func _boot() -> void:
 	_server = _branch(1, _root)
 	_server.apply_shared_state = func(_state: Dictionary): _restore_count += 1
 	assert_int(_server.start_server({"save_dir": _dir})).is_equal(OK)
+	_server.player_world.persistence.clock = func() -> int: return _now
 	_server.player_world.bind_level(_root, Transform3D(Basis.IDENTITY, Vector3.UP), "arena")
 
 
@@ -244,9 +247,15 @@ func test_second_live_level_and_unloaded_level_carried_forward() -> void:
 	var files := _server.player_world.persistence.files
 	assert_int(files.scenes.size()).is_equal(2)
 	var digest: String = files.manifest.levels.other
+	var stock := InventorySlotPD.new()
+	stock.inventory_item = Rifle
+	Grid.insert(box.inventory_data, stock, 1, false)
 	host.unload_level(&"other")
 	await get_tree().process_frame
 	await get_tree().process_frame
+	assert_int(_server.save_world()).is_equal(OK)
+	assert_str(files.manifest.levels.other).is_not_equal(digest)
+	digest = files.manifest.levels.other
 	assert_int(_server.save_world()).is_equal(OK)
 	assert_str(files.manifest.levels.other).is_equal(digest)
 	_restart()
@@ -255,4 +264,260 @@ func test_second_live_level_and_unloaded_level_carried_forward() -> void:
 	level = host.load_level(Arena.resource_path, &"other")
 	_server.player_world.bind_level(level, Transform3D.IDENTITY, "other")
 	box = level.get_node("SharedBox") as CogitoContainer
-	assert_bool(box.inventory_data.inventory_slots.all(func(stack): return stack == null)).is_true()
+	assert_int(box.inventory_data.find_slots("Laser Rifle").size()).is_equal(1)
+
+
+func _poll_at(now: int) -> void:
+	_now = now
+	var players := _server.player_world
+	players.persistence.poll(players, Engine.get_physics_frames())
+	assert_bool(players.persistence.reap(players, Time.get_ticks_msec() + 3000)).is_true()
+
+
+func test_autosave_only_dirty_zero_off_and_manual_resets_deadline() -> void:
+	var players := _server.player_world
+	var writer := players.persistence
+	_poll_at(59999)
+	assert_dict(writer.files.manifest).is_empty()
+	_poll_at(60000)
+	assert_int(writer.files.manifest.generation).is_equal(1)
+	_poll_at(120000)
+	assert_int(writer.files.manifest.generation).is_equal(1)
+	_poll_at(125000)
+	assert_int(_server.save_world()).is_equal(OK)
+	players.quests.set_world_flags({"progress": true})
+	_poll_at(180000)
+	assert_int(writer.files.manifest.generation).is_equal(2)
+	_poll_at(185000)
+	assert_int(writer.files.manifest.generation).is_equal(3)
+	players.get_parent().config.autosave_seconds = 0
+	players.quests.set_world_flags({"progress": false})
+	_poll_at(999999)
+	assert_int(writer.files.manifest.generation).is_equal(3)
+	assert_bool(writer.dirty).is_true()
+
+
+func test_departure_burst_reconnect_and_takeover_before_publication() -> void:
+	var a := _join_with_starter(2, 1901)
+	var b := _join(3, 1902)
+	var ada := a.local_player_id()
+	var ben := b.local_player_id()
+	var players := _server.player_world
+	var writer := players.persistence
+	assert_int(_server.save_world()).is_equal(OK)
+	var actor := players.avatar_for(ada).actor
+	actor.player_currencies.credits.value_current = 19
+	actor.position = Vector3(9, 2, 4)
+	players.quests.advance(PersonalQuest, CogitoQuestUpdater.UpdateType.Start, [], ada)
+	a.disconnect_session()
+	_pump()
+	_poll_at(150)
+	b.disconnect_session()
+	_pump()
+	_events.clear()
+	a = _join(4, 1901)
+	actor = players.avatar_for(ada).actor
+	assert_vector(actor.position).is_equal(Vector3(9, 2, 4))
+	assert_float(actor.player_currencies.credits.value_current).is_equal(19.0)
+	actor.player_currencies.credits.value_current = 27
+	# A second proof for Ada removes the stale incarnation synchronously on the same tick.
+	var replacement := _join(5, 1901)
+	assert_str(replacement.local_player_id()).is_equal(ada)
+	actor = players.avatar_for(ada).actor
+	assert_float(actor.player_currencies.credits.value_current).is_equal(27.0)
+	assert_int(actor.inventory_data.find_slots("Laser Rifle").size()).is_equal(1)
+	assert_array(_events).is_empty()
+	_poll_at(249)
+	assert_int(writer.files.manifest.generation).is_equal(1)
+	_poll_at(250)
+	assert_int(writer.files.manifest.generation).is_equal(2)
+	assert_bool(writer.files.profiles.has(ben)).is_true()
+	assert_float(writer.files.profiles[ada].stock.money.credits[0]).is_equal(27.0)
+	assert_dict(writer.lives.retained).is_empty()
+
+
+func test_fault_preserves_generation_and_retries_newest_departure(
+	operation: String,
+	_test_parameters := [["write profile"], ["publish staging"], ["after publish"]]
+) -> void:
+	var client := _join(2, 1901)
+	var id := client.local_player_id()
+	var players := _server.player_world
+	var writer := players.persistence
+	assert_int(_server.save_world()).is_equal(OK)
+	var manifest := writer.files.directory.path_join("current/world.v2.json")
+	var digest := FileAccess.get_sha256(manifest)
+	players.avatar_for(id).actor.player_currencies.credits.value_current = 33
+	client.disconnect_session()
+	_pump()
+	var results: Array[int] = []
+	writer.save_finished.connect(func(err: Error, _generation: int): results.append(err))
+	writer.files.storage.fail_before = func(op: String) -> bool: return op == operation
+	_poll_at(250)
+	assert_array(results).contains_exactly([ERR_CANT_CREATE])
+	assert_str(FileAccess.get_sha256(manifest)).is_equal(digest)
+	var verified := Facade.Persistence.Files._read(manifest.get_base_dir())
+	assert_float(verified.profiles[id].stock.money.credits[0]).is_equal(10.0)
+	assert_int(writer.files.manifest.generation).is_equal(1)
+	for tick in 100:
+		_poll_at(251 + tick)
+	assert_int(results.size()).is_equal(1)
+	_poll_at(1250)
+	assert_int(results.size()).is_equal(2)
+	assert_bool(writer.dirty).is_true()
+	assert_int(writer.lives.retained.size()).is_equal(1)
+	writer.files.storage.fail_before = Callable()
+	_poll_at(3249)
+	assert_int(results.size()).is_equal(2)
+	_poll_at(3250)
+	assert_array(results).contains_exactly([ERR_CANT_CREATE, ERR_CANT_CREATE, OK])
+	assert_bool(writer.dirty).is_false()
+	assert_dict(writer.lives.retained).is_empty()
+	_restart()
+	var restored: Dictionary = _server.player_world.persistence.files.profiles[id]
+	assert_float(restored.stock.money.credits[0]).is_equal(33.0)
+
+
+func test_orderly_close_captures_unannounced_last_tick() -> void:
+	var client := _join(2, 1901)
+	var id := client.local_player_id()
+	assert_int(_server.save_world()).is_equal(OK)
+	_server.player_world.avatar_for(id).actor.player_currencies.credits.value_current = 73
+	assert_int(_server.disconnect_session()).is_equal(OK)
+	_restart()
+	var files := _server.player_world.persistence.files
+	assert_int(files.manifest.generation).is_equal(2)
+	assert_float(files.profiles[id].stock.money.credits[0]).is_equal(73.0)
+
+
+func _request(command: String, body: String) -> void:
+	var writer := _server.player_world.persistence
+	var path := writer.files.directory.path_join(command + ".request")
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_string(body)
+	file.close()
+	_poll_at(_now + 1000)
+	assert_bool(FileAccess.file_exists(path)).is_false()
+
+
+func test_running_list_rebind_and_connected_target_protection() -> void:
+	var a := _join_with_starter(2, 1901)
+	var b := _join(3, 1902)
+	var ada := a.local_player_id()
+	var ben := b.local_player_id()
+	var players := _server.player_world
+	var files := players.persistence.files
+	players.avatar_for(ada).actor.player_currencies.credits.value_current = 39
+	assert_int(_server.save_world()).is_equal(OK)
+	_request("list", "")
+	_request("rebind", ada + " " + ben + " force")
+	assert_int(files.manifest.generation).is_equal(1)
+	a.disconnect_session()
+	_pump()
+	_request("rebind", ada + " " + ben + " force")
+	assert_bool(files.profiles.has(ada)).is_true()
+	b.disconnect_session()
+	_pump()
+	_request("rebind", ada + " " + ben)
+	assert_bool(files.profiles.has(ada)).is_true()
+	_request("rebind", ada + " " + ben + " force")
+	assert_bool(files.profiles.has(ada)).is_false()
+	assert_str(files.profiles[ben].id).is_equal(ben)
+	assert_str(files.profiles[ben].display_name).is_equal("Player")
+	assert_int(files.profiles[ben].last_seen).is_greater(0)
+	var again := _join(4, 1902)
+	assert_str(again.local_player_id()).is_equal(ben)
+	var actor := players.avatar_for(ben).actor
+	assert_float(actor.player_currencies.credits.value_current).is_equal(39.0)
+	assert_int(actor.inventory_data.find_slots("Laser Rifle").size()).is_equal(1)
+	_join(5, 1901)
+	assert_array(players.avatar_for(ada).actor.inventory_data.find_slots("Laser Rifle")).is_empty()
+
+
+func test_publication_in_flight_coalesces_manual_leave_and_reconnect() -> void:
+	var a := _join(2, 1901)
+	var id := a.local_player_id()
+	var players := _server.player_world
+	var writer := players.persistence
+	assert_int(_server.save_world()).is_equal(OK)
+	players.avatar_for(id).actor.player_currencies.credits.value_current = 13
+	writer.request_save()
+	writer.poll(players, 100)
+	# No owner-thread reap occurs during this tick, regardless of disk speed.
+	for request in 10:
+		assert_int(_server.save_world()).is_equal(ERR_BUSY)
+	players.avatar_for(id).actor.player_currencies.credits.value_current = 28
+	a.disconnect_session()
+	_pump()
+	_join(3, 1901)
+	assert_float(players.avatar_for(id).actor.player_currencies.credits.value_current).is_equal(
+		28.0
+	)
+	players.avatar_for(id).actor.player_currencies.credits.value_current = 48
+	assert_bool(writer.reap(players, Time.get_ticks_msec() + 3000)).is_true()
+	assert_float(writer.files.profiles[id].stock.money.credits[0]).is_equal(13.0)
+	assert_float(writer.lives.retained[id].stock.money.credits[0]).is_equal(28.0)
+	_poll_at(200)
+	assert_float(writer.files.profiles[id].stock.money.credits[0]).is_equal(48.0)
+	_poll_at(500)
+	assert_int(writer.files.manifest.generation).is_equal(3)
+
+
+func test_failed_final_flush_releases_claim_and_old_generation_reopens() -> void:
+	var players := _server.player_world
+	assert_int(_server.save_world()).is_equal(OK)
+	players.quests.set_world_flags({"last": true})
+	players.persistence.files.storage.fail_before = func(op: String) -> bool:
+		return op == "after publish"
+	assert_int(_server.disconnect_session()).is_equal(ERR_CANT_CREATE)
+	_restart()
+	assert_int(_server.player_world.persistence.files.manifest.generation).is_equal(1)
+	assert_bool(_server.player_world.quests.world.flags.has("last")).is_false()
+
+
+func test_rebind_refused_if_identity_returns_while_staging() -> void:
+	var a := _join(2, 1901)
+	var id := a.local_player_id()
+	var players := _server.player_world
+	var writer := players.persistence
+	assert_int(_server.save_world()).is_equal(OK)
+	a.disconnect_session()
+	_pump()
+	var path := writer.files.directory.path_join("rebind.request")
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_string(id + " reassigned")
+	file.close()
+	writer.poll(players, 1)
+	var returned := _join(3, 1901)
+	assert_str(returned.local_player_id()).is_equal(id)
+	assert_bool(writer.reap(players, Time.get_ticks_msec() + 3000)).is_true()
+	assert_int(writer.last_error).is_equal(ERR_ALREADY_IN_USE)
+	assert_int(writer.files.manifest.generation).is_equal(1)
+	assert_bool(writer.files.profiles.has("reassigned")).is_false()
+	_poll_at(1000)
+	assert_int(writer.files.manifest.generation).is_equal(2)
+	assert_bool(writer.files.profiles.has(id)).is_true()
+
+
+func test_timed_out_shutdown_keeps_claim_until_worker_releases_it() -> void:
+	var players := _server.player_world
+	var writer := players.persistence
+	assert_int(_server.save_world()).is_equal(OK)
+	var gate := Semaphore.new()
+	writer.files.storage.fail_before = func(op: String) -> bool:
+		if op == "create staging":
+			gate.wait()
+		return false
+	writer.shutdown_wait_msec = 5
+	var err := _server.disconnect_session()
+	var other := Facade.Persistence.Files.new()
+	var claimed := other.open(_dir, "default")
+	gate.post()
+	assert_int(err).is_equal(ERR_TIMEOUT)
+	assert_int(claimed).is_equal(ERR_BUSY)
+	var deadline := Time.get_ticks_msec() + 3000
+	while claimed == ERR_BUSY and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+		claimed = other.open(_dir, "default")
+	assert_int(claimed).is_equal(OK)
+	other.close()

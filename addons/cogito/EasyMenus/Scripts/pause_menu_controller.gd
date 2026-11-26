@@ -82,6 +82,11 @@ func _ready() -> void:
 	temp_screenshot = CogitoSceneManager.grab_screenshot(CogitoGlobals.screenshot_scale)
 	options_tab_menu.hide()
 	update_load_related_gui()
+	var writer := CogitoNet.player_world.persistence if CogitoNet.player_world else null
+	if writer and CogitoNet.mode() == CogitoNet.Mode.LISTEN_HOST:
+		writer.save_finished.connect(_world_save_finished)
+		if writer.last_error != OK:
+			_world_save_finished(writer.last_error, 0)
 	if _pauses_world:
 		nodes_to_focus[0].grab_focus.call_deferred()
 	else:
@@ -229,9 +234,10 @@ func _on_quit_button_pressed():
 
 func _on_save_button_pressed() -> void:
 	if CogitoNet.is_online():
-		if CogitoNet.mode() == CogitoNet.Mode.LISTEN_HOST:
-			var err := CogitoNet.save_world()
-			save_button.text = tr("World saved") if err == OK else error_string(err)
+		var writer := CogitoNet.player_world.persistence if CogitoNet.player_world else null
+		if writer and CogitoNet.mode() == CogitoNet.Mode.LISTEN_HOST:
+			writer.request_save()
+			save_button.text = tr("Saving world…")
 		return
 	CogitoSceneManager._screenshot_to_save = temp_screenshot
 	save_load_menu.initialize()
@@ -243,6 +249,13 @@ func _on_save_button_pressed() -> void:
 	CogitoSceneManager.pause_menu = self
 	CogitoSceneManager.save_load_menu = save_load_menu
 	CogitoSceneManager.game_menu = game_menu
+
+
+func _world_save_finished(err: Error, _generation: int) -> void:
+	if err == OK:
+		save_button.text = tr("World saved")
+	else:
+		save_button.text = CogitoNet.player_world.persistence.failure_message
 
 
 func _on_load_button_pressed() -> void:

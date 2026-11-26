@@ -10,7 +10,9 @@ var _level_root: Node3D
 
 func before_test() -> void:
 	_server = _branch(1)
-	_server.start_server({"save_dir": "user://net/physics-actions"})
+	_server.start_server(
+		{"save_dir": create_temp_dir("physics-actions-%d" % Time.get_ticks_usec())}
+	)
 	_level_root = _arena(_server)
 	_a = _observer(2)
 	_b = _observer(3)

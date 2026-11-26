@@ -144,6 +144,8 @@ func _physics_process(_delta: float) -> void:
 	if FileAccess.file_exists(file):
 		_order += 1
 		_execute(JSON.parse_string(FileAccess.get_file_as_string(file)))
+	if not CogitoNet.is_online():
+		return
 	var actors := {}
 	for record in CogitoNet.players():
 		var avatar := CogitoNet.player_world.avatar_for(record.player_id)
@@ -182,6 +184,8 @@ func _physics_process(_delta: float) -> void:
 		"quest_events": _quest_events,
 		"cut_used": $Cutscene.has_been_triggered,
 	}
+	if CogitoNet.is_server():
+		data.generation = CogitoNet.player_world.persistence.files.manifest.get("generation", 0)
 	if "received_bytes" in multiplayer.multiplayer_peer:
 		data.rx = multiplayer.multiplayer_peer.received_bytes
 	data.merge(_inventory_sample())
@@ -507,14 +511,33 @@ func _execute(order: Dictionary) -> void:
 	match order.op:
 		"element_stage":
 			_element_stage(order)
-		"save_world":
+		"fail_final_write":
+			CogitoNet.player_world.persistence.files.storage.fail_before = func(op: String) -> bool:
+				return op == "after publish"
+		"wallet", "interrupt_save":
+			for member in CogitoNet.players():
+				if member.display_name == order.who:
+					var actor := CogitoNet.player_world.avatar_for(member.player_id).actor
+					actor.player_currencies.credits.value_current = order.value
+					CogitoNet.player_world.inventory.flush_actor(actor)
+			if order.op == "interrupt_save":
+				var writer := CogitoNet.player_world.persistence
+				writer.files.storage.fail_before = _pause_staging
+				writer.request_save()
+		"save_world", "quit_host":
 			var actor := CogitoNet.local_player() as CogitoPlayerAdvanced
 			var menu := actor.pause_menu.instantiate() as CogitoPauseMenu
 			actor.add_child(menu)
-			if menu.save_button.is_visible_in_tree() and not menu.load_button.is_visible_in_tree():
+			if order.op == "quit_host":
+				actor.player_currencies.credits.value_current = order.value
+				menu._on_quit_button_pressed.call_deferred()
+			elif (
+				menu.save_button.is_visible_in_tree() and not menu.load_button.is_visible_in_tree()
+			):
 				menu.save_button.pressed.emit()
-				print("NET MANUAL ", menu.save_button.text)
-			menu.close_pause_menu()
+				CogitoNet.player_world.persistence.save_finished.connect(
+					_manual_finished.bind(menu), CONNECT_ONE_SHOT
+				)
 		"npc_stage":
 			_stage_npc(order)
 		"drag_corpse":
@@ -661,3 +684,15 @@ func stage_physics(players: Node, place: String, first: String) -> void:
 		crate.global_transform = Transform3D(Basis.IDENTITY, center + Vector3(0, 1.25, -1.4))
 		crate.linear_velocity = Vector3.ZERO
 		crate.angular_velocity = Vector3.ZERO
+
+
+func _pause_staging(operation: String) -> bool:
+	if operation == "write world_scene":
+		print("NET STAGING")
+		OS.delay_msec(2000)
+	return false
+
+
+func _manual_finished(_err: Error, _generation_id: int, menu: CogitoPauseMenu) -> void:
+	print("NET MANUAL ", menu.save_button.text)
+	menu.close_pause_menu()

@@ -104,6 +104,7 @@ func _changed(_inv: CogitoInventory, box: CogitoContainer) -> void:
 	var model: STOCK = _models[box]
 	var delta := model.refresh()
 	if not delta.is_empty():
+		get_parent().mark_world_dirty()
 		for peer: int in _views:
 			if _views[peer].box == box:
 				_send(peer, _views[peer], model, delta, false)

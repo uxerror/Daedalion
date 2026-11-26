@@ -173,7 +173,11 @@ static func _valid_member(fields: Dictionary, level: bool) -> bool:
 			and fields.containers.values().all(Stock.valid_projection)
 		)
 	return (
-		fields.get("level") is String
+		fields.get("display_name", "") is String
+		and fields.get("last_seen", 0) is int
+		and fields.get("last_seen", 0) >= 0
+		and fields.get("unplayed", false) is bool
+		and fields.get("level") is String
 		and fields.get("pose") is Transform3D
 		and fields.pose.is_finite()
 		and fields.get("dead") is bool
@@ -229,11 +233,30 @@ static func _ledger_valid(data: Variant) -> bool:
 
 ## Copy unchanged members from the prior generation, then verify the whole staged manifest.
 func commit(
-	world: Dictionary, levels: Dictionary, players: Dictionary, aliases := PackedStringArray()
+	world: Dictionary,
+	levels: Dictionary,
+	players: Dictionary,
+	aliases := PackedStringArray(),
+	removed_players := PackedStringArray()
 ) -> Error:
 	if _claim.is_empty():
 		return ERR_UNAUTHORIZED
-	var next := world.duplicate(true)
+	var batch := prepare(world, levels, players, aliases, removed_players)
+	var err := publish(batch)
+	if err == OK:
+		accept(batch)
+	return err
+
+
+## Freeze indexes on the owner thread. The publisher only accesses this isolated batch.
+func prepare(
+	world: Dictionary,
+	levels: Dictionary,
+	players: Dictionary,
+	aliases: PackedStringArray,
+	removed_players: PackedStringArray
+) -> Dictionary:
+	var next := world.duplicate_deep(Resource.DEEP_DUPLICATE_INTERNAL)
 	next.id = directory.get_file()
 	next.layout = 1
 	next.generation = manifest.get("generation", 0) + 1
@@ -243,15 +266,43 @@ func commit(
 	for alias in aliases:
 		next.levels.erase(alias)
 		skip.append(_filename(alias, "world_scene"))
-	var writer := _stage.bind(next, levels, players)
-	var err := storage.replace(SLOT, "" if manifest.is_empty() else SLOT, writer, skip)
-	if err == OK:
-		for alias in aliases:
-			scenes.erase(alias)
-		manifest = next
-		scenes.merge(levels, true)
-		profiles.merge(players, true)
-	return err
+	for id in removed_players:
+		next.players.erase(id)
+		skip.append(_filename(id, "profile"))
+	return {
+		"world": next,
+		"scenes": levels,
+		"profiles": players,
+		"source": "" if manifest.is_empty() else SLOT,
+		"skip": skip,
+		"aliases": aliases,
+		"removed": removed_players,
+	}
+
+
+## Only the serialized writer calls this. Never touch live caches or scene nodes here.
+func publish(batch: Dictionary, stage_only := false) -> Error:
+	if _claim.is_empty():
+		return ERR_UNAUTHORIZED
+	var writer := _stage.bind(batch.world, batch.scenes, batch.profiles)
+	var err := storage.stage(SLOT, batch.source, writer, batch.skip)
+	return err if err != OK or stage_only else seal()
+
+
+## Hot profile moves do their final roster check and these renames in one main-thread turn.
+func seal() -> Error:
+	return storage.publish_staged(SLOT, storage.before.bind("after publish"))
+
+
+## Install verified indexes on the owner thread after the publication barrier.
+func accept(batch: Dictionary) -> void:
+	for alias: String in batch.aliases:
+		scenes.erase(alias)
+	for id: String in batch.removed:
+		profiles.erase(id)
+	manifest = batch.world
+	scenes.merge(batch.scenes, true)
+	profiles.merge(batch.profiles, true)
 
 
 func _stage(path: String, world: Dictionary, levels: Dictionary, players: Dictionary) -> Error:
@@ -260,13 +311,15 @@ func _stage(path: String, world: Dictionary, levels: Dictionary, players: Dictio
 		var index: Dictionary = world.levels if kind == "world_scene" else world.players
 		for id: String in records:
 			var file := path.path_join(_filename(id, kind))
-			var member_error := _write(file, kind, records[id])
+			var member_error := storage.before("write " + kind)
+			if member_error == OK:
+				member_error = storage.check(_write(file, kind, records[id]), file)
 			if member_error != OK:
 				return member_error
 			index[id] = FileAccess.get_sha256(file)
-	var err := _write(path.path_join(MANIFEST), "world", world)
+	var err := storage.check(_write(path.path_join(MANIFEST), "world", world), MANIFEST)
 	if err == OK:
 		err = storage.before("verify world")
 	if err == OK and _read(path).is_empty():
-		err = ERR_FILE_CORRUPT
+		err = storage.check(ERR_FILE_CORRUPT, "verify staged world")
 	return err

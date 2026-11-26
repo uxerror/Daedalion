@@ -1,5 +1,6 @@
 extends GdUnitTestSuite
 
+const ProfileTools := preload("res://addons/cogito/Networking/net_profile_tools.gd")
 const Files := preload("res://addons/cogito/SceneManagement/cogito_world_files.gd")
 
 var _files: Files
@@ -60,10 +61,8 @@ func test_recovery_prefers_complete_backup_to_damaged_live() -> void:
 	recovered.close()
 
 
-func test_lost_member_keeps_previous_generation(
-	prefix: String, _test_parameters := [["player_"], ["scene_"]]
-) -> void:
-	var profile := {
+func _layout_one_profile() -> Dictionary:
+	return {
 		"id": "a/b",
 		"level": "lab",
 		"pose": Transform3D.IDENTITY,
@@ -81,6 +80,12 @@ func test_lost_member_keeps_previous_generation(
 			"equipped": 0
 		}
 	}
+
+
+func test_lost_member_keeps_previous_generation(
+	prefix: String, _test_parameters := [["player_"], ["scene_"]]
+) -> void:
+	var profile := _layout_one_profile()
 	assert_int(_save({"a/b": profile})).is_equal(OK)
 	var staging := _files.directory.path_join(".writing-current")
 	_files.storage.fail_before = func(op: String) -> bool:
@@ -96,3 +101,49 @@ func test_lost_member_keeps_previous_generation(
 	assert_int(restarted.manifest.generation).is_equal(1)
 	assert_bool(restarted.profiles.has("a/b")).is_true()
 	restarted.close()
+
+
+func test_abandoned_staging_never_replaces_complete_world() -> void:
+	assert_int(_save({})).is_equal(OK)
+	var staging := _files.directory.path_join(".writing-current")
+	assert_int(DirAccess.make_dir_absolute(staging)).is_equal(OK)
+	var partial := FileAccess.open(staging.path_join("world.v2.json"), FileAccess.WRITE)
+	partial.store_string("{")
+	partial.close()
+	_files.close()
+	assert_int(_files.open(_dir, "test")).is_equal(OK)
+	assert_int(_files.manifest.generation).is_equal(1)
+	assert_bool(DirAccess.dir_exists_absolute(staging)).is_false()
+
+
+func test_stopped_tools_move_layout_one_profile_with_exclusive_claim() -> void:
+	var tools := ProfileTools.new()
+	var empty := _layout_one_profile()
+	empty.id = "newly-issued"
+	empty.unplayed = true
+	var used := _layout_one_profile()
+	used.id = "returnee"
+	used.stock.money = {"credits": PackedFloat64Array([50, 100])}
+	assert_int(_save({"a/b": _layout_one_profile(), empty.id: empty, used.id: used})).is_equal(OK)
+	var config := {"world": "test", "save_dir": _dir, "profile_command": "list"}
+	assert_int(tools.stopped(config)).is_equal(ERR_BUSY)
+	_files.close()
+	assert_int(tools.stopped(config)).is_equal(OK)
+	config.profile_command = "rebind a/b returnee"
+	assert_int(tools.stopped(config)).is_equal(ERR_ALREADY_EXISTS)
+	config.profile_command = "rebind a/b newly-issued"
+	assert_int(tools.stopped(config)).is_equal(OK)
+	assert_int(_files.open(_dir, "test")).is_equal(OK)
+	assert_int(_files.manifest.generation).is_equal(2)
+	assert_int(_files.manifest.layout).is_equal(1)
+	assert_bool(_files.profiles.has("a/b")).is_false()
+	assert_str(_files.profiles["newly-issued"].id).is_equal("newly-issued")
+	_files.close()
+	config.profile_command = "rebind newly-issued returnee force"
+	assert_int(tools.stopped(config)).is_equal(OK)
+	assert_int(_files.open(_dir, "test")).is_equal(OK)
+	assert_int(_files.manifest.generation).is_equal(3)
+	assert_array(_files.profiles.keys()).contains_exactly(["returnee"])
+	assert_dict(_files.profiles.returnee.stock.money).is_empty()
+	var members := DirAccess.get_files_at(_files.directory.path_join("current"))
+	assert_int(members.size()).is_equal(3)

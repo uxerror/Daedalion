@@ -48,6 +48,7 @@ class Role:
         self.order = 0
         self.tail = deque(maxlen=25)
         self.expected_failure = expected_failure
+        self.expected_exit = 0
         self.stopping = False
         self.exited = False
         self.killed = False
@@ -141,7 +142,7 @@ class Scenario:
                 raise CheckFailed(f"{SCENARIO_SECONDS} s scenario deadline exceeded during exit") from None
             if role.bind_failed and role is self.server:
                 raise BindFailed(f"could not bind UDP {self.port}")
-            if not role.stopping or (rc != 0 and not role.killed):
+            if not role.stopping or (rc != role.expected_exit and not role.killed):
                 raise CheckFailed(f"{role.directory.name} exited ({rc})")
             return
         role.tail.append(line)
@@ -167,7 +168,7 @@ class Scenario:
                     return line
             self.next_line()
 
-    def start(self, dedicated, restart=False, friendly_fire=True, world="default", host_identity=None):
+    def start(self, dedicated, restart=False, friendly_fire=True, world="default", host_identity=None, autosave=60):
         for attempt in range(3):
             if not restart:
                 self.port = 17777 if self.file_transport else available_port()
@@ -176,16 +177,19 @@ class Scenario:
                 self.bus.mkdir()
             if dedicated and self.file_transport:
                 self.server = self.fixture("dedicated", "authority", extra=(
-                    "--world", world, "--friendly-fire", str(friendly_fire).lower()))
+                    "--world", world, "--autosave-seconds", str(autosave),
+                    "--friendly-fire", str(friendly_fire).lower()))
             elif dedicated:
                 self.server = self.launch("dedicated", [
                     "--", "--server", "--bind", "127.0.0.1", "--port", str(self.port),
                     "--level", "res://tests/net/process_arena.tscn", "--world", world,
+                    "--autosave-seconds", str(autosave),
                     "--respawn-delay", "1.5", "--friendly-fire", str(friendly_fire).lower(),
                     "--max-players", "4", "--save-dir", str(self.directory / "world"),
                 ])
             else:
-                self.server = self.fixture("Host", "host", host_identity, extra=("--world", world))
+                self.server = self.fixture("Host", "host", host_identity, extra=(
+                    "--world", world, "--autosave-seconds", str(autosave)))
             try:
                 self.wait_line(self.server, lambda line: line == f"NET READY port={self.port}")
                 return
@@ -822,7 +826,7 @@ class Scenario:
 
     def persistence(self, dedicated):
         world = "restart"
-        self.start(dedicated, world=world)
+        self.start(dedicated, world=world, autosave=2)
         original_server = self.server
         first_name = "Ada" if dedicated else "Host"
         first = self.fixture("Ada", "client") if dedicated else self.server
@@ -833,22 +837,43 @@ class Scenario:
         self.state(first, names)
         for role in (first, second):
             self.sample(role, lambda s: s["epoch"] > 0)
+        world_dir = self.directory / "world" / "worlds" / world
+        if dedicated:
+            (world_dir / "save.request").touch()
+            self.wait_line(self.server, lambda line: line.startswith("NET SAVE OK generation="))
+        else:
+            self.order(self.server, op="save_world")
+            self.wait_line(self.server, lambda line: line == "NET MANUAL World saved")
         self.order(self.server, op="inventory_stage", place="start", first=first_name)
         self.use(second, "LooseItem/PickupComponent")
         self.order(self.server, op="stage", first=first_name)
         self.use(first, "Door/Use")
         self.stationary(self.server, names)
-        saved = self.server.samples[-1]
-        self.stop(second)
-        self.pose(self.server, [first_name])
+        saved = self.order(self.server, op="wallet", who="Ben", value=43)
+        self.sample(self.server, lambda s: s["generation"] > saved["generation"])
+        (world_dir / "list.request").touch()
+        self.wait_line(self.server, lambda line: line == "NET LIST OK count=2")
+        for _ in names:
+            line = self.wait_line(self.server, lambda line: line.startswith("NET PROFILE "))
+            row = json.loads(line.removeprefix("NET PROFILE "))
+            name = row["display_name"]
+            if (row["player_id"] != roster[name] or row["last_level"] != "arena" or row["dead"]
+                    or row["last_seen"] <= 0
+                    or row["item_count"] != sum(saved["inventories"][name]["items"].values())):
+                raise CheckFailed(f"wrong live profile listing: {row}")
         if dedicated:
-            (self.directory / "world" / "worlds" / world / "save.request").touch()
-            self.wait_line(self.server, lambda line: line.startswith("NET SAVE OK generation=1"))
-            self.stop(first)
+            # Deliberately kill inside the NEXT transaction. Both identities are still live.
+            self.order(self.server, op="interrupt_save", who="Ben", value=44)
+            self.wait_line(self.server, lambda line: line == "NET STAGING")
+            self.server.kill()
+            first.kill()
+            second.kill()
         else:
-            self.order(self.server, op="save_world")
-            self.wait_line(self.server, lambda line: line == "NET MANUAL World saved")
-        self.server.kill()
+            self.stop(second)
+            self.pose(self.server, [first_name])
+            self.server.stopping = True
+            self.order(self.server, op="quit_host", value=51)
+            saved["inventories"][first_name]["wallet"] = 51
         while not self.server.exited:
             self.next_line()
         self.start(dedicated, restart=True, world=world,
@@ -872,6 +897,36 @@ class Scenario:
                     or math.dist(result["actors"][name], saved["actors"][name]) > 0.15):
                 raise CheckFailed(f"{name}: restart changed holdings or placement: "
                                   f"{saved['actors'][name]} -> {result['actors'][name]}")
+        if dedicated:
+            self.order(self.server, op="wallet", who="Ben", value=61)
+            self.stop(later)
+            self.pose(self.server, [first_name])
+            self.server.stopping = True
+            owner.expected_failure = "Server disconnected"
+            (world_dir / "stop.request").touch()
+            self.wait_line(self.server, lambda line: line == "NET STOP OK")
+            owner.kill()
+            while not self.server.exited:
+                self.next_line()
+            self.start(True, restart=True, world=world)
+            returned = self.fixture("Ben", "client", second)
+            self.state(returned, ["Ben"])
+            self.sample(returned, lambda s: s["inventories"].get("Ben", {}).get("wallet") == 61)
+            self.stop(returned)
+            self.pose(self.server, [])
+            (world_dir / "rebind.request").write_text(f"{roster['Ben']} {roster[first_name]} force")
+            self.wait_line(self.server, lambda line: line.startswith("NET REBIND OK "))
+            moved = self.fixture("Ada", "client", first)
+            self.state(moved, ["Ada"])
+            self.sample(moved, lambda s: s["inventories"].get("Ada", {}).get("wallet") == 61)
+            self.stop(moved)
+            self.order(self.server, op="fail_final_write")
+            self.server.expected_exit = 1
+            self.server.stopping = True
+            (world_dir / "stop.request").touch()
+            self.wait_line(self.server, lambda line: line.startswith("NET FINAL SAVE "))
+            while not self.server.exited:
+                self.next_line()
         print("PASS world restart and offline profile", "dedicated" if dedicated else "listen")
 
 

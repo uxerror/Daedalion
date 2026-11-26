@@ -38,6 +38,7 @@ func _bind(id: String, component: Node3D) -> void:
 
 func _flag_changed(id: String) -> void:
 	_urgent[id] = true
+	get_parent().mark_world_dirty()
 
 
 func _untrack(id: String) -> void:

@@ -2,7 +2,7 @@
 
 Daedalion 1.4 gives each admitted identity a server-owned Advanced player and private inventory. The server simulates world interactions, pickups, shared containers, vendor transactions and equipped items. It also simulates rigid bodies, grants exclusive carry and seat ownership and drives vehicles from their occupant’s movement commands. Hitscan, melee and ballistic impacts resolve in the shooter’s server world. The server owns survival meters, damage, death and individual respawns. It also owns NPC perception, combat, loot and draggable corpses. Offline death uses the existing save-slot reload screen.
 
-MP9a adds manual, transactional world saves for listen hosts and dedicated servers. Reopening a named world restores its last complete generation and each returning identity's private profile.
+Listen hosts and dedicated servers publish transactional world saves on request, on a dirty autosave interval, after departures and at orderly shutdown. Reopening a named world restores its last complete generation and each returning identity's private profile.
 
 ## Try the Laboratory
 
@@ -24,7 +24,7 @@ For a dedicated session, start the simulation first and use the same join comman
 nice -n 19 godot --headless --path . -- --server --bind 0.0.0.0 --port 7777
 ```
 
-For a two-machine test, pass an SSH destination and optional UDP port to the helper. It copies the project with rsync to `~/daedalion`, imports it with the remote `godot`, and runs the dedicated server in the foreground. Use a LAN hostname or IPv4 address your client can resolve. The script prints the local join command. Ctrl-C in the SSH terminal stops the server. Both machines need compatible Godot builds and the host needs the selected UDP port open.
+For a two-machine test, pass an SSH destination and optional UDP port to the helper. It copies the project with rsync to `~/daedalion`, imports it with the remote `godot`, and runs the dedicated server in the foreground. Use a LAN hostname or IPv4 address your client can resolve. The script prints the local join command. Use the world's `stop.request` for an orderly shutdown before closing the SSH session. Both machines need compatible Godot builds and the host needs the selected UDP port open.
 
 ```sh
 tools/run_lan_test.sh maintainer@192.168.1.10 7777
@@ -96,7 +96,8 @@ respawn_delay=10.0
 | `max_players` | ENet supports up to 4095 remote connections. Omitting the limit requests that ceiling. A listen host counts its local player, allowing up to 4096 total. | `--max-players` |
 | `save_dir` | `user://net/server`. Give each server its own writable directory. | `--save-dir` |
 | `world` | `default`. One directory name below `<save_dir>/worlds`. | `--world` |
-| `autosave_seconds` | Nonnegative integer, default 60. Zero means off. Reserved for the MP9b timer. | `--autosave-seconds` |
+| `autosave_seconds` | Dirty autosave interval on both authorities, in seconds. Default 60. Zero disables periodic saves. | `--autosave-seconds` |
+| `profile_command` | Empty. Dedicated one-shot administration before transport startup. | `--profile-command 'list'` or `--profile-command 'rebind OLD NEW [force]'` |
 | `import_slot` | Empty. A named solo slot to copy into a new world before binding its first level. | `--import-slot` |
 | `import_player` | Empty. Dedicated import requires an explicit recipient player ID. | `--import-player` |
 | `content_version` | The `version` string from `addons/cogito/plugin.cfg`. Include the plugin config in an export or supply a game release or content hash. Set the same value in client join credentials. | Config file |
@@ -122,13 +123,62 @@ nice -n 19 godot --path . -- --host --world expedition
 nice -n 19 godot --headless --path . -- --server --world expedition --save-dir /srv/daedalion
 ```
 
-Use **Save** in the listen host's pause menu, or call `CogitoNet.save_world() -> Error`
-on the authority. A client has no Save or Load control. On dedicated, create an empty
-request file in the running world's directory. For the second command above, run
-`touch /srv/daedalion/worlds/expedition/save.request`. The authority consumes the file
-within about one second and writes the result, e.g. `NET SAVE OK generation=2`, to stdout.
-The same path works with an empty roster. A nested save returns `ERR_BUSY`. A disk error
-leaves the last published generation readable. Saving again requires a new request.
+Use **Save** in the listen host's pause menu. The button shows progress, then the result.
+On either authority a local operator can create `<world>/save.request`. Requests are polled
+about once per second. The result appears on stdout, for example `NET SAVE OK generation=2`.
+A successful manual save resets the autosave deadline. Clients have no save or load control.
+
+Both authorities check for dirty state at `autosave_seconds` (60 by default). Zero turns off
+this timer. The first visit, admissions, departures, entity publication, NPC health/death,
+element flag changes, inventory/wallet and container revisions, and quest ledger commits
+mark the world dirty. At the deadline the server also compares each connected player's pose
+(displacement of at least 0.25 level units), crouch, death and meters (one unit or a changed
+maximum) with its committed record. Ambient NPC wander, rotating views and free body motion
+are captured alongside the next change. An empty, settled world can stay at the same generation
+indefinitely. Games changing private systems or custom shared data call
+`CogitoNet.player_world.mark_world_dirty()` at their own mutation boundary.
+
+A departing player's complete profile is captured before releasing their actor. The first
+departure starts a 250 ms checkpoint deadline. Further departures share it, so a busy lobby
+cannot postpone the first player's checkpoint. Reconnect and takeover use the latest in-memory
+row, including its pose and equipment. A level unload freezes the outgoing level while its
+nodes are valid. One coordinator captures the live levels, shared state and private profiles
+on one server tick and owns publication. The worker writes and verifies an isolated snapshot.
+Incoming gameplay can continue. The authority acknowledges only the exact departed and
+unloaded rows included in a successful generation. A newer capture of the same ID stays queued.
+
+For game code, `CogitoNet.player_world.persistence.request_save()` coalesces requests and
+`save_finished(result, generation)` reports completion. The synchronous `CogitoNet.save_world()`
+API still returns its immediate publication result when idle. If a worker is publishing,
+the API returns `ERR_BUSY` and queues one fresh capture. A recursive call from the capture
+hook returns `ERR_BUSY` without recursively scheduling that hook. Solo import is exclusive
+and runs before level binding.
+
+A write error retains the last complete generation and the pending changes. Errors appear in
+the host HUD and pause menu and as `NET SAVE` lines on stderr. Retry starts after 1 second,
+doubles to a 60-second cap, and captures fresh state. A successful retry resets backoff.
+The operator can also request an immediate manual attempt. Games may configure
+`checkpoint_msec`, `retry_initial_msec`, `retry_cap_msec`, `movement_threshold`,
+`attribute_threshold` and `shutdown_wait_msec` on the authority's persistence coordinator.
+
+### Stop a persistent world
+
+For dedicated Linux Godot 4.7.2, run the following in another terminal and wait for
+`NET STOP OK` and process exit before restarting or taking a backup.
+
+```sh
+touch /srv/daedalion/worlds/expedition/stop.request
+```
+
+The tested headless binary terminated on both SIGINT and SIGTERM without a close notification
+or tree-exit callback. Configure service supervisors to create the file and wait for exit.
+Window close, **Quit**, **Back to main menu**, and `CogitoNet.disconnect_session()` on a
+listen host flush the current tick before teardown. The final flush bypasses retry backoff.
+It allows three seconds in total to drain an existing worker and publish the final snapshot.
+A failed final attempt reports the error. Dedicated exits with code 1. A timed-out worker
+retains the directory claim until it finishes or the process dies. After a crash or SIGKILL,
+restart selects the last complete generation. Changes after its capture can be lost. A disk
+fault can extend that window beyond the configured interval.
 
 One local process holds a writer claim from startup through session close. Another
 process opening that directory receives `ERR_BUSY`. Startup removes claims of dead PIDs.
@@ -140,8 +190,8 @@ A lost client secret starts a new profile. The original player record stays in t
 All bound levels and connected actors are captured synchronously at one server physics
 tick. A player who left contributes their last private state. The transaction copies
 unloaded visited levels and previously committed offline profiles into the next
-generation. A level host retains a first visit in memory when it unloads that instance
-before its first commit. The manifest verifies each member before publication. See the
+generation. A level host retains its latest snapshot when it unloads an instance
+before publication. The manifest verifies each member before publication. See the
 [world layout and recovery rules](save-format.md#multiplayer-world-generations).
 
 On startup the authority verifies the generation, installs the shared and per-identity
@@ -161,6 +211,41 @@ policy. New identities receive the usual starters. Override
 before opening the session. Set `CogitoNet.capture_shared_state` (returns a codec-compatible
 dictionary) and `CogitoNet.apply_shared_state` (accepts that dictionary) for game-owned
 shared data. Apply restores values directly and should avoid rewards and presentation events.
+
+### List and rebind profiles
+
+With the server stopped, the dedicated entry point takes the normal world writer claim,
+recovers the world, runs one command and exits. A list prints one `NET PROFILE` JSON row
+per ID and an ending count. Fields include display name, last level, UTC Unix last-seen
+seconds, death flag and total inventory quantity. A successful rebind publishes one
+generation and removes the old private file. Use a new ID issued through enrollment.
+
+```sh
+nice -n 19 godot --headless --path . -- --server --save-dir /srv/daedalion --world expedition --profile-command list
+nice -n 19 godot --headless --path . -- --server --save-dir /srv/daedalion --world expedition --profile-command 'rebind OLD_ID NEW_ID'
+```
+
+With a running authority, create requests in its world directory. Publish the text file by
+rename so the server sees a complete command. Submit one request per filename at a time.
+
+```sh
+cd /srv/daedalion/worlds/expedition
+touch list.request
+printf '%s %s\n' OLD_ID NEW_ID > rebind.tmp
+mv rebind.tmp rebind.request
+```
+
+List includes live and recently departed players. Both IDs must be disconnected for a move,
+including a forced move. `NET REBIND Already in use` reports a connected party,
+`Already exists` a protected target, and `Does not exist` a missing source. An absent target
+is allowed. A captured, unchanged new life with empty inventory, zero currency and no private
+progress is also eligible. A changed life, any holdings, quests, death, or an older profile
+whose initial state is unknown requires the literal third word `force`. For example, write
+`OLD_ID NEW_ID force` to the running request or pass `'rebind OLD_ID NEW_ID force'` to the
+one-shot command. This replaces the target's entire private record. The old credentials
+subsequently enter as a fresh character. The owner identity registry stays separate.
+Games can set `CogitoNet.profile_has_progress = callable` before startup. It receives the
+target profile and returns true when the operator must explicitly force replacement.
 
 ### Import a solo slot
 
@@ -192,9 +277,23 @@ Each normalized address and port has its own profile in `user://net/identity.cfg
 
 On first admission the client generates a random 96-byte secret. The server sends a fresh 32-byte nonce. The client returns an HMAC-SHA256 proof and, for enrollment only, a SHA-256 verifier. HMAC normalizes a key this long to its SHA-256 digest, allowing the server to check the proof with the stored verifier. The server issues a random 128-bit ID and persists the verifier in `<save_dir>/identities.cfg`. On reconnect the client presents its ID and answers a new challenge using only the proof. A second connection that proves the same ID replaces the live one: the older peer receives "Signed in from another session" and is dropped, so a client that crashed can rejoin before the transport times out. The listen host's own identity cannot be taken over. An unknown ID starts a new enrollment with a fresh secret.
 
-Keep the verifier registry private. A verifier is sufficient to produce proofs, and native ENet sends registration traffic without encryption. The default provider is intended for trusted networks. Back up both stores to retain identities. With the game stopped, removing the client profile (or the entire client file) starts a new identity on the next join. Removing the server registry resets every binding in that server directory. There is no account-recovery flow in MP0.
+Keep the verifier registry private. A verifier is sufficient to produce proofs, and native ENet sends registration traffic without encryption. The default provider is intended for trusted networks. Back up both stores to retain identities. With the game stopped, removing the client profile (or the entire client file) starts a new identity on the next join. Removing the server registry resets every binding in that server directory. With a lost key the default provider enrolls a new identity. Recover progress through an operator rebind or a game account provider.
 
 A game can assign a subclass of `addons/cogito/Networking/net_identity.gd` to `CogitoNet.identity_provider` before opening a session. Override `open_server`, `load_client`, `is_known`, `respond`, `authenticate` and `save_client` to implement enrollment, proof and persistence. Join credentials are available to `load_client`. Only the claimed ID, versions, response and display name travel over the control endpoint. A custom provider should put only wire-safe values in its response. The server always applies the capacity and single-login checks.
+
+For example, a game provider can return its account's durable character ID after validating
+a fresh challenge with its account service. Here `accounts` is the game's trusted server-side
+service and `ticket` is its proof bound to this server and nonce. Pair this with a client
+`respond` implementation that obtains such a ticket, and the provider's store methods.
+
+```gdscript
+# In a net_identity.gd subclass installed before opening the session.
+func authenticate(_claim: String, nonce: PackedByteArray, reply: Dictionary) -> String:
+	var account_id: String = accounts.verify_ticket(reply.get("ticket"), nonce)
+	if account_id.is_empty():
+		return ""
+	return accounts.character_id_for(account_id)
+```
 
 For a transport extension, assign a zero-argument `Callable` to `CogitoNet.transport_factory`. It returns an `enet_transport.gd` subclass implementing `open_server(config, listen)` and `open_client(address, port)` and exposing its resulting `MultiplayerPeer` through `peer`. The built-in adapter uses ENet. Session RPCs use reliable channel 0 at `/root/CogitoNet/Session`.
 
@@ -214,7 +313,7 @@ func open_session() -> Error:
 	return CogitoNet.host({"port": 7777})
 ```
 
-Reliable spawn RPCs use the stable session endpoint `Session/Players`. A client announces its level key after both admission and level setup. The server sends a new observer the **current** poses of existing players. This handshake lets slow loaders receive the same baseline as other observers. Spawn names derive from the durable identity. Commands and poses carry a server-issued incarnation number, so late packets from a departed avatar cannot affect its replacement. Roster removal releases held actions, carry and seat ownership and removes the avatar. Reconnect creates a new avatar at the normal join spawn and restores its private attributes. A dead identity remains dead with its existing server deadline.
+Reliable spawn RPCs use the stable session endpoint `Session/Players`. A client announces its level key after both admission and level setup. The server sends a new observer the **current** poses of existing players. This handshake lets slow loaders receive the same baseline as other observers. Spawn names derive from the durable identity. Commands and poses carry a server-issued incarnation number, so late packets from a departed avatar cannot affect its replacement. Roster removal releases held actions, carry and seat ownership and removes the avatar. Reconnect restores the departing profile into a new incarnation using the reconnect placement policy. A dead returnee respawns alive with retained holdings.
 
 | Role | Movement and view |
 | --- | --- |
@@ -622,7 +721,7 @@ Player damage enters through `victim.decrease_attribute(name, amount, source)`. 
 
 At zero health the server marks the current incarnation dead once, releases its interaction, carry, seat and driver grants, clears held input and holsters the weapon. The mannequin’s rig tips onto its side. Movement, interaction and combat are rejected while dead. Only the owner sees the death screen and countdown. Esc opens their pause menu, the mouse is released and other players and the server clock continue. The default policy retains inventory, wallet, quickslots, selected equipment and quest state. A weapon holstered to carry a body is re-equipped after respawn.
 
-The button sends a reliable request containing only the owner’s observed incarnation. The server resolves the sender, checks death and the monotonic deadline, and selects a spawn. Success assigns a new incarnation and pose revision, discards the old command and interpolation history, sends a private baseline, closes the death screen and restores gameplay input. An early, duplicate or stale request cannot change state. A reconnect to the same server process retains the original deadline. A stored zero-health profile without a deadline is immediately eligible. Both paths restore the death presentation silently, without charging a second penalty.
+The button sends a reliable request containing only the owner’s observed incarnation. The server resolves the sender, checks death and the monotonic deadline, and selects a spawn. Success assigns a new incarnation and pose revision, discards the old command and interpolation history, sends a private baseline, closes the death screen and restores gameplay input. An early, duplicate or stale request cannot change state. The deadline governs the connected incarnation. On reconnect the persistent profile applies the respawn policy once and restores the holdings left by the original death.
 
 ### Authoring respawns
 
@@ -815,15 +914,13 @@ Baselines only install state. Award gameplay rewards from the server-only
 - Recovered projectiles become independent rigid pickups. Attachment to moving hit targets and procedural debris need their own lifecycle. Online corpses use the single-torso approximation described above.
 - Living NPCs are bound from the shared level scene. A game that creates new living NPCs at runtime needs an archetype and spawn adapter. Authored mannequin corpses and loot already have runtime records.
 - Custom debris and fragment spawns still need a network archetype. Authored elemental burnout has a level-scoped removal record.
-- World saves are manual. MP9b covers periodic autosave, checkpoint on leave, racing reconnects, write retry, shutdown flush and operator profile rebinding. Gameplay since the last successful manual save is lost when the process exits.
+- Per-player travel must freeze outgoing state before releasing the level and share the existing writer and completion barrier. The synchronous save API can block for a full generation. Normal autosave, leave checkpoints, operator requests and pause-menu saves stage and verify on a worker. A running rebind checks both identities again before the main thread seals the move.
 - A linked custom object needs its own state adapter to appear on observers. Use level-authored motion/visual tracks for replica animations. Method, nested-animation and audio tracks on door/switch replica players are removed at bind.
 - The sender repeats four frames. A burst that loses every copy of an edge can still lose the action. Artificial loss in the process test covers individual packet loss. LAN feel under jitter and mannequin animation need a visual playtest.
 
 ## Verification
 
-The `persistent_dedicated` and `persistent_listen` process scenarios save a modified room
-with an offline profile, terminate the authority, reopen the world and check both owners'
-inventories and poses after rejoining. Each remote connection gets a new peer ID.
+The persistence process scenarios check manual saves, dirty autosave and restoration of both owners' inventories and poses. Dedicated receives SIGKILL during the next staged generation, then tests a departing client, orderly stop and live rebind. Listen closes through the pause-menu Quit action with a final wallet change. Each remote connection gets a new peer ID.
 Use `python tools/check_multiplayer.py --scenario persistent_dedicated` or
 `--scenario persistent_listen` for ENet. Add `--file-transport` in a socket-free environment.
 

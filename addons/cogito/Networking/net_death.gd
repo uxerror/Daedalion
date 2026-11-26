@@ -68,6 +68,12 @@ func attach(id: String, actor: CogitoPlayerAdvanced) -> void:
 		present(actor, true, remaining(id))
 
 
+## The persistent life supersedes the connection-scoped death record on a new admission.
+func forget(id: String) -> void:
+	_profiles.erase(id)
+	_deadlines.erase(id)
+
+
 ## Seconds until the server will accept a request.
 func remaining(id: String) -> float:
 	return maxf(0, (float(_deadlines.get(id, 0)) - Time.get_ticks_msec()) / 1000.0)

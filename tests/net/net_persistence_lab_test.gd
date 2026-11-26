@@ -107,7 +107,22 @@ func test_laboratory_restart(_timeout := 90000) -> void:
 		await _ticks(2)
 	var journal := _client.player_world.quests.journal()
 	assert_bool(journal.quests.is_empty()).is_false()
-	assert_int(_server.save_world()).is_equal(OK)
+	var writer := _server.player_world.persistence
+	var now := [100]
+	writer.clock = func() -> int: return now[0]
+	_client.disconnect_session()
+	_pump()
+	assert_bool(writer.lives.retained.has(id)).is_true()
+	now[0] += writer.checkpoint_msec
+	writer.poll(_server.player_world, Engine.get_physics_frames())
+	assert_bool(writer.reap(_server.player_world, Time.get_ticks_msec() + 3000)).is_true()
+	assert_int(writer.files.manifest.generation).is_equal(1)
+	var timing := [
+		writer.capture_usec / 1000.0,
+		writer.commit_usec / 1000.0,
+		(writer.capture_usec + writer.commit_usec) / 1000.0,
+	]
+	print("LAB CHECKPOINT capture_ms=%.3f commit_ms=%.3f total_ms=%.3f" % timing)
 	after_test()
 	_boot()
 	mirror = _join(7)

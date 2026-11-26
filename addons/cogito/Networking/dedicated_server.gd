@@ -1,6 +1,7 @@
 extends Node
 ## Simulation-only main scene for standard and dedicated-feature builds.
 
+const ProfileTools := preload("net_profile_tools.gd")
 const NetConfig := preload("net_config.gd")
 
 
@@ -9,6 +10,13 @@ func _ready() -> void:
 	if config.has("reason"):
 		push_error("CogitoNet: " + String(config.reason))
 		get_tree().quit(1)
+		return
+	if not config.profile_command.is_empty():
+		var tools := ProfileTools.new()
+		tools.has_progress = CogitoNet.profile_has_progress
+		var err := tools.stopped(config)
+		print("NET PROFILE COMMAND ", error_string(err))
+		get_tree().quit(0 if err == OK else 1)
 		return
 	if CogitoNet.start_server(config) != OK:
 		get_tree().quit(1)

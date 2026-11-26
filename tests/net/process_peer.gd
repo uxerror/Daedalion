@@ -20,6 +20,7 @@ func _ready() -> void:
 		var config := {
 			"port": port,
 			"world": _args.get("--world", "default"),
+			"autosave_seconds": int(_args.get("--autosave-seconds", "60")),
 			"save_dir": _args["--save-dir"],
 			"friendly_fire": _args.get("--friendly-fire", "true") == "true",
 			"respawn_delay": 1.5,
@@ -32,6 +33,7 @@ func _ready() -> void:
 		var config := {
 			"port": port,
 			"world": _args.get("--world", "default"),
+			"autosave_seconds": int(_args.get("--autosave-seconds", "60")),
 			"bind": "127.0.0.1",
 			"display_name": "Host",
 			"max_players": 2,

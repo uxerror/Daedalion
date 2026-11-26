@@ -17,6 +17,7 @@ const PREFIXES := [WRITING, READY, PREVIOUS]
 var root: String
 ## Test seam. Return true to simulate an I/O error before the named operation.
 var fail_before: Callable
+var last_failure := ""
 
 
 func _init(directory: String) -> void:
@@ -30,8 +31,10 @@ func valid_slot(slot: String) -> bool:
 func check(error: Error, operation: String) -> Error:
 	if error != OK:
 		var message := "%s: %s" % [operation, error_string(error)]
+		last_failure = message
 		push_warning(message)
-		CogitoGlobals.debug_log(true, "SlotStorage", message)
+		if OS.get_thread_caller_id() == OS.get_main_thread_id():
+			CogitoGlobals.debug_log(true, "SlotStorage", message)
 	return error
 
 
@@ -110,15 +113,19 @@ func replace(
 	skip := PackedStringArray(),
 	after_publish := Callable()
 ) -> Error:
+	var error := stage(slot, source, writer, skip)
+	return publish_staged(slot, after_publish) if error == OK else error
+
+
+## Prepare and verify an ineligible .writing directory under the caller's exclusive claim.
+func stage(slot: String, source: String, writer: Callable, skip: PackedStringArray) -> Error:
+	last_failure = ""
 	if not valid_slot(slot) or (not source.is_empty() and not valid_slot(source)):
 		return check(ERR_INVALID_PARAMETER, slot)
 	var error := recover(slot)
 	if error != OK:
 		return error
 	var writing := root.path_join(WRITING + slot)
-	var ready := root.path_join(READY + slot)
-	var previous := root.path_join(PREVIOUS + slot)
-	var live := root.path_join(slot)
 	error = before("create staging")
 	if error == OK:
 		error = check(DirAccess.make_dir_recursive_absolute(writing), writing)
@@ -126,8 +133,20 @@ func replace(
 		error = _copy_files(root.path_join(source), writing, skip)
 	if error == OK and writer.is_valid():
 		error = writer.call(writing)
-	if error == OK:
-		error = _rename(writing, ready, "seal staging")
+	if error != OK:
+		remove_directory(writing)
+	return error
+
+
+## Seal only after any final eligibility check. Roll back a reported publication failure.
+func publish_staged(slot: String, after_publish: Callable) -> Error:
+	if not valid_slot(slot):
+		return ERR_INVALID_PARAMETER
+	var writing := root.path_join(WRITING + slot)
+	var ready := root.path_join(READY + slot)
+	var previous := root.path_join(PREVIOUS + slot)
+	var live := root.path_join(slot)
+	var error := _rename(writing, ready, "seal staging")
 	if error == OK and DirAccess.dir_exists_absolute(live):
 		error = _rename(live, previous, "back up live")
 	if error == OK:
