@@ -75,7 +75,12 @@ func test_private_meters_public_fraction_and_silent_replica() -> void:
 	transport.capture = true
 	_victim.player_attributes.strength.set_attribute(7, 11)
 	_victim.player_attributes.health.value_current = 40
+	# Non-urgent meters are paced by wall time (NetAttributes.INTERVAL_MSEC); after a heavy suite
+	# the engine catches up with bursts of physics frames, so a fixed tick count can be too short.
+	var deadline := Time.get_ticks_msec() + 3 * Attributes.INTERVAL_MSEC
 	await _ticks(12)
+	while Time.get_ticks_msec() < deadline:
+		await _ticks(1)
 	assert_float(replica.player_attributes.strength.value_current).is_equal(7.0)
 	assert_float(replica.player_attributes.strength.value_max).is_equal(11.0)
 	assert_float(observed.health_fraction).is_equal(0.4)
