@@ -19,6 +19,7 @@ func _ready() -> void:
 	if _args["--role"] == "authority":
 		var config := {
 			"port": port,
+			"world": _args.get("--world", "default"),
 			"save_dir": _args["--save-dir"],
 			"friendly_fire": _args.get("--friendly-fire", "true") == "true",
 			"respawn_delay": 1.5,
@@ -30,6 +31,7 @@ func _ready() -> void:
 	elif _args["--role"] == "host":
 		var config := {
 			"port": port,
+			"world": _args.get("--world", "default"),
 			"bind": "127.0.0.1",
 			"display_name": "Host",
 			"max_players": 2,

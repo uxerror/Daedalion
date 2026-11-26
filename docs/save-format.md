@@ -162,3 +162,44 @@ Online games keep shared quests and flags on the server. Set a quest's **Scope**
 **Personal** to track it by player identity. The offline slot loader continues to restore
 its original quest groups and world dictionary. See [Quests and world flags](networking.md#quests-and-world-flags).
 
+## Multiplayer world generations
+
+Each authority owns a directory under its configured server save directory. A world
+with one visited room and two identities has this structure (hashes abbreviated).
+
+```text
+<save_dir>/
+  identities.cfg
+  worlds/expedition/
+    writer-4312-<nonce>.lock
+    current/
+      world.v2.json
+      scene_lab.v2.json
+      player_0dcc…e7.v2.json
+      player_b981…5c.v2.json
+```
+
+These members use the v2 data-only envelope, typed values and the same resource
+UID/path resolution as solo saves. The payload resource contains a `fields` dictionary.
+
+| Filename | Codec kind | Required information |
+| --- | --- | --- |
+| `world.v2.json` | `world` | World ID, layout version 1, generation, committed physics tick, active level key, level and player indexes, shared quest ledger and game-owned shared fields |
+| `scene_<token>.v2.json` | `world_scene` | Durable level key, scene path, scoped `CogitoSceneState`, entity states and tombstones, runtime lifecycle records, body motion, ballistic flights, container stock and NPC perception |
+| `player_<digest>.v2.json` | `profile` | Server-issued identity, level and local pose, death state, inventory and equipment, currencies, attributes, actor elements and personal quest progression |
+
+Each index maps an ID to the SHA-256 digest of the referenced file. The empty player
+index is valid. Player filenames contain only the full SHA-256 of the ID. Lowercase,
+portable level keys normally appear verbatim. Other keys use `hash-<sha256>`; that
+prefix is reserved. Credentials belong to the separate identity registry.
+
+The publisher copies committed members into `.writing-current`, replaces the captured
+members and manifest, then reads every referenced member back and verifies its digest,
+codec kind, ID and required fields. Only a complete directory can be sealed as
+`.ready-current` and renamed into place. During the swap, the old generation lives at
+`.previous-current`. Recovery prefers a verified `current`, then a verified previous
+generation, then a verified ready generation. An interrupted writing directory is
+ineligible. A damaged candidate ahead of a valid fallback is moved aside for diagnosis.
+If all published candidates are unreadable, opening fails and retains them. The operator's
+`save.request` and the writer claim live outside all generations.
+

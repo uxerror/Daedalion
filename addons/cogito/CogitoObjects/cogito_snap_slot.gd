@@ -267,6 +267,19 @@ func apply_net_state(state: Dictionary, _silent: bool) -> void:
 		component.interaction_text = interaction_text
 
 
+## Reattach the authority's saved joint only after runtime bodies exist.
+func restore_network_binding(body: Node) -> void:
+	if not is_holding_object:
+		return
+	if not body is RigidBody3D or body.has_meta(&"net_snap_slot"):
+		is_holding_object = false
+		snapped_id = ""
+		return
+	body.set_meta(&"net_snap_slot", self)
+	body.tree_exiting.connect(release_body.bind(body), CONNECT_ONE_SHOT)
+	body.freeze = true
+
+
 ## Play a live placement or removal sound.
 func present_net_event(event: StringName) -> void:
 	var sound := object_placement_sound if event == &"placed" else object_removed_sound

@@ -15,6 +15,38 @@ var _elapsed := 0.0
 var _batch_number := 0
 
 
+## Freeze physical state independently of interest and observer interpolation.
+func capture() -> Dictionary:
+	var records := {}
+	for id in _bodies:
+		var body := _bodies[id]
+		if CogitoPersistentId.is_disappearing(body):
+			continue
+		var row := {"transform": body.transform}
+		if body is RigidBody3D:
+			row.linear = body.linear_velocity
+			row.angular = body.angular_velocity
+			row.sleeping = body.sleeping
+			row.frozen = body.freeze and not body.has_meta(&"net_carrier")
+		records[id] = row
+	return records
+
+
+## Restore after runtime bodies are registered, before physics advances.
+func restore(records: Dictionary) -> void:
+	for id: String in records:
+		var body := _bodies.get(id) as Node3D
+		if body and not CogitoPersistentId.is_disappearing(body):
+			var row: Dictionary = records[id]
+			body.transform = row.transform
+			if body is RigidBody3D and row.has("linear"):
+				body.freeze = row.get("frozen", body.freeze)
+				body.linear_velocity = row.linear
+				body.angular_velocity = row.angular
+				body.sleeping = row.sleeping
+			body.reset_physics_interpolation()
+
+
 ## Register an authored or spawned body before its first observer baseline.
 func track(id: String, body: Node3D) -> void:
 	if _bodies.has(id):

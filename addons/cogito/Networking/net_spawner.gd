@@ -74,6 +74,40 @@ func spawn_item(stack: InventorySlotPD, count: int, pos: Vector3) -> Node3D:
 	return _spawn(spec, pos)
 
 
+## Convert a solo Persist instance to the same lifecycle record used by a live network spawn.
+func import_object(source: Node3D) -> Node3D:
+	var scene := load(source.scene_file_path) as PackedScene
+	var pickup := _pickup(source)
+	var target: Node3D
+	if pickup and pickup.slot_data:
+		target = spawn_item(pickup.slot_data, pickup.slot_data.quantity, source.global_position)
+	elif source is CogitoContainer and scene in _bags.values():
+		target = _spawn({"bag": _bags.find_key(scene)}, source.global_position)
+		if target:
+			target.inventory_data = source.inventory_data
+	elif scene and Corpse.is_ragdoll(scene):
+		var world: Node = get_parent().world
+		for id: String in world.entities.objects:
+			var npc := world.entities.live_object(id) as CogitoNPC
+			if npc:
+				var index := npc.health.spawn_on_death.find(scene)
+				if index >= 0:
+					target = _spawn({"corpse": id, "index": index}, source.global_position)
+					break
+	if target:
+		target.global_transform = source.global_transform
+		if target is RigidBody3D and source is RigidBody3D:
+			target.linear_velocity = source.linear_velocity
+			target.angular_velocity = source.angular_velocity
+			target.sleeping = source.sleeping
+		var world: Node = get_parent().world
+		var target_id: String = world.entities.id_for(target)
+		var spec: Dictionary = _live[target_id].spec
+		spec.pose = target.global_transform
+		world.publish(target_id, spec)
+	return target
+
+
 ## Reserve an eligible public quest drop against retained profiles and live world holdings.
 func roll_quest_drop(entry: LootDropEntry, reserved: Dictionary) -> LootDropEntry:
 	if not get_parent().quests.allows_world_drop(entry):
@@ -212,13 +246,13 @@ func _instantiate(id: String, spec: Dictionary) -> Node3D:
 		# Some authored ammo drops reuse the projectile prefab as their pickup model.
 		node.set_meta(&"cogito_item_drop", true)
 	node.transform = world.entities.root.global_transform.affine_inverse() * spec.pose
+	CogitoPersistentId.restore(node, id)
 	world.entities.root.add_child(node)
 	world.entities.register_runtime(id, node)
 	_live[id] = {"node": node, "spec": spec.duplicate()}
 	return node
 
 
-## Release carry ownership and retain one removal record for a destroyed object.
 ## True for runtime objects created by this spawner, whose spec pose is global.
 func owns(id: String) -> bool:
 	return _live.has(id)
@@ -235,6 +269,7 @@ func spawn_death_drop(scene: PackedScene, pos: Vector3) -> bool:
 	return true
 
 
+## Release carry ownership and retain one removal record for a destroyed object.
 func remove_world_object(node: Node, event: StringName = &"") -> void:
 	var world: Node = get_parent().world
 	var id: String = world.entities.id_for(node)
@@ -251,6 +286,11 @@ func _despawn(id: String) -> void:
 		get_parent().world.publish(id, {"removed": true})
 
 
+## Reserve even removed runtime ids when restarting the allocator.
+func reserve_id(id: String) -> void:
+	_serial = maxi(_serial, id.trim_prefix("runtime:").to_int())
+
+
 ## Apply authored removal/remainder or an authority-issued runtime lifecycle record.
 func apply(id: String, state: Dictionary) -> bool:
 	var world: Node = get_parent().world
@@ -262,6 +302,12 @@ func apply(id: String, state: Dictionary) -> bool:
 		return true
 	if not node and id.begins_with("runtime:"):
 		node = _instantiate(id, state)
+		if not node:
+			return false
+		if multiplayer.is_server():
+			node.tree_exiting.connect(_despawn.bind(id), CONNECT_ONE_SHOT)
+	if node and _live.has(id):
+		_live[id].spec.merge(state, true)
 	if node and state.has("quantity"):
 		var pickup := _pickup(node)
 		if pickup:

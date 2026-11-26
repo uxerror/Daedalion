@@ -14,6 +14,7 @@ const INVENTORY := preload("net_inventory.gd")
 const CONTAINERS := preload("net_containers.gd")
 const SPAWNER := preload("net_spawner.gd")
 const INTERACTIONS := preload("net_interactions.gd")
+const Persistence := preload("net_persistence.gd")
 const WORLD := preload("net_world_state.gd")
 const SESSION := preload("net_session.gd")
 const AVATAR := preload("net_avatar.gd")
@@ -22,6 +23,8 @@ const SNAPSHOT := preload("net_snapshot.gd")
 
 ## Optional game spawn transform selector, supplied by the facade.
 var spawn_policy: Callable
+## Owned only by a persistent server session.
+var persistence: Persistence
 ## Shared default for NPCs without an authored policy.
 var npc_target_policy := CogitoNpcTargetPolicy.new()
 ## Number of snapshot broadcasts per second.
@@ -54,6 +57,7 @@ var seats := preload("net_seats.gd").new()
 var death := preload("net_death.gd").new()
 var combat := COMBAT.new()
 var projectiles := PROJECTILES.new()
+var _secondary := false
 var _profiles := {}
 var _bindings := {}
 var _session: SESSION
@@ -71,8 +75,9 @@ var _elapsed := 0.0
 
 
 func _ready() -> void:
-	quests.name = "Quests"
-	add_child(quests)
+	if not _secondary:
+		quests.name = "Quests"
+		add_child(quests)
 	elements.name = "Elements"
 	add_child(elements)
 	npcs.name = "Npcs"
@@ -83,8 +88,9 @@ func _ready() -> void:
 	add_child(combat)
 	projectiles.name = "Projectiles"
 	add_child(projectiles)
-	inventory.name = "Inventory"
-	add_child(inventory)
+	if not _secondary:
+		inventory.name = "Inventory"
+		add_child(inventory)
 	containers.name = "Containers"
 	add_child(containers)
 	carry.name = "Carry"
@@ -100,6 +106,9 @@ func _ready() -> void:
 	add_child(interactions)
 	_session = get_parent()
 	process_physics_priority = 100
+	if _secondary:
+		set_physics_process(false)
+		return
 	_session.joined.connect(_joined)
 	_session.left.connect(_remove)
 	_session.ready_for_play.connect(_announce_level)
@@ -116,13 +125,22 @@ func bind_level(root: Node, start: Transform3D, key: String) -> void:
 		return
 	if _level == root:
 		return
-	assert(not is_instance_valid(_level))
+	if persistence and persistence.levels.has(key):
+		if persistence.levels[key].active_level() != root:
+			push_error("A live level already owns key " + key)
+		return
+	if is_instance_valid(_level):
+		if persistence:
+			_bind_secondary(root, start, key)
+		return
 	_level = root
 	_level_key = key
 	_start = start
 	set_process(not multiplayer.is_server())
 	_owns_root = CogitoLevel.mark_network_root(root)
 	root.set_meta(&"cogito_net_players", self)
+	if persistence:
+		persistence.rebuild(key, root)
 	spawner.bind(root)
 	world.bind(root, key)
 	for id in world.entities.objects:
@@ -142,6 +160,16 @@ func bind_level(root: Node, start: Transform3D, key: String) -> void:
 				bodies.track(CogitoPersistentId.of(target), target)
 	spawner.track_authored()
 	root.tree_exiting.connect(_level_exiting, CONNECT_ONE_SHOT)
+	if persistence:
+		persistence.restore_level(key, self)
+		if persistence.restore_error != OK:
+			multiplayer.multiplayer_peer.refuse_new_connections = true
+			_session.get_parent()._failed_world.call_deferred(key, persistence.restore_error)
+			return
+		if not _secondary:
+			multiplayer.multiplayer_peer.refuse_new_connections = false
+	if _secondary:
+		return
 	if multiplayer.is_server():
 		if not _session.local_id.is_empty():
 			quests.baseline(1)
@@ -151,10 +179,27 @@ func bind_level(root: Node, start: Transform3D, key: String) -> void:
 		_announce_level()
 
 
+# Additional occupied-level routing belongs to travel. An empty live instance still
+# needs its own entity, physics and spawner registries, and shares party-owned data.
+func _bind_secondary(root: Node, start: Transform3D, key: String) -> void:
+	var endpoint: Node = get_script().new()
+	endpoint.name = "Level_" + key.sha256_text()
+	endpoint._secondary = true
+	endpoint.persistence = persistence
+	endpoint.quests.free()
+	endpoint.quests = quests
+	endpoint.inventory.free()
+	endpoint.inventory = inventory
+	_session.add_child(endpoint)
+	endpoint.bind_level(root, start, key)
+
+
 func _exit_tree() -> void:
 	if is_instance_valid(_level):
 		_level.tree_exiting.disconnect(_level_exiting)
 		_level_exiting()
+	if persistence and not _secondary:
+		persistence.files.close()
 
 
 func _level_exiting() -> void:
@@ -171,6 +216,10 @@ func _level_exiting() -> void:
 	if _owns_root:
 		CogitoLevel.unmark_network_root(_level)
 		_owns_root = false
+	if persistence:
+		persistence.levels.erase(_level_key)
+	if _secondary:
+		queue_free()
 	_level.remove_meta(&"cogito_net_players")
 	_level = null
 	_ready_levels.clear()
@@ -317,6 +366,8 @@ func _create(id: String, life: int, start: Transform3D, initial_pose: Dictionary
 		local_changed.emit(local_actor)
 		world.acknowledge_local_avatar()
 	if multiplayer.is_server():
+		if persistence:
+			persistence.lives.attach(id, avatar.actor, self, persistence.placement)
 		death.attach(id, avatar.actor)
 		avatar.health_fraction = Attributes.health_fraction(avatar.actor)
 
@@ -351,6 +402,8 @@ func _spawn(key: String, id: String, life: int, frame: Dictionary) -> void:
 
 
 func _remove(id: String) -> void:
+	if persistence and _avatars.has(id):
+		persistence.lives.retained[id] = persistence.lives.capture(id, _avatars[id].actor, self)
 	var peer := int(_peer_by_id.get(id, 0))
 	carry.release(peer, false)
 	if multiplayer.is_server() and _avatars.has(id):
@@ -446,7 +499,14 @@ func _wield_state(id: String, life: int, path: String, on: bool, ads: bool) -> v
 		avatar.wield.apply_public(path, on, ads)
 
 
+## Capture all state on the server main thread at one physics frame.
+func save_world() -> Error:
+	return persistence.save(self, Engine.get_physics_frames()) if persistence else ERR_UNAUTHORIZED
+
+
 func _physics_process(delta: float) -> void:
+	if persistence and _session.local_id.is_empty():
+		persistence.poll(self, Engine.get_physics_frames())
 	if _avatars.is_empty():
 		return
 	carry.flush_rotation()

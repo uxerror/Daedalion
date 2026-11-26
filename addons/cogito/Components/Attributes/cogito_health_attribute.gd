@@ -70,7 +70,15 @@ func on_death(_attribute_name:String, _value_current:float, _value_max:float):
 	if npc and npc.network_state:
 		npc.network_state.die()
 		return
-	var world: Node = get_parent().get_meta(&"cogito_net_world", null)
+	var world: Node
+	if (
+		actor
+		and actor.network_movement_only
+		and actor.player_interaction_component.network_interactions
+	):
+		world = actor.player_interaction_component.network_interactions.world
+	elif get_parent().has_meta(&"cogito_net_world"):
+		world = get_parent().get_meta(&"cogito_net_world")
 	if world and not world.multiplayer.is_server():
 		return
 	death.emit()

@@ -71,6 +71,11 @@ func _owner(key: String, epoch: int, token: int, address: Dictionary) -> void:
 			pic.carrying.start_carrying(component)
 
 
+## Stack to resume when a saved carry grant expires on restart.
+func holstered_stack(peer: int) -> InventorySlotPD:
+	return _grants.get(peer, {}).get("stack")
+
+
 ## Remove local presentation without running the replica's physical leave/throw hooks.
 func clear_owner(pic: PlayerInteractionComponent) -> void:
 	_local_token = 0

@@ -12,6 +12,7 @@ var search_id := ""
 var npc: CogitoNPC
 var players: Node
 var policy: CogitoNpcTargetPolicy
+var _saved_candidates := {}
 var _point: CogitoPoint
 var _debug := OS.has_environment(DEBUG_ENV)
 
@@ -20,6 +21,27 @@ func _init(owner_npc: CogitoNPC, world_players: Node) -> void:
 	npc = owner_npc
 	players = world_players
 	policy = npc.target_policy if npc.target_policy else players.npc_target_policy
+
+
+## Keep suspicion timers by durable identity. Recompute visibility from the next live actor.
+func capture() -> Dictionary:
+	var rows := _saved_candidates.duplicate(true)
+	for id: String in candidates:
+		var row := {}
+		for field: String in ["sight", "hearing", "memory", "quiet", "last_known"]:
+			row[field] = candidates[id][field]
+		rows[id] = row
+	return {"rows": rows, "target": target_id, "search": search_id, "point": last_known}
+
+
+## Resume the search without invoking a detection, firing or alert callback.
+func restore(data: Dictionary) -> void:
+	last_known = data.point
+	target_id = data.target
+	search_id = data.search
+	_saved_candidates = data.rows.duplicate(true)
+	if not search_id.is_empty():
+		attention_point(last_known)
 
 
 ## Evaluate every candidate independently, before chase/attack callbacks run this physics tick.
@@ -43,6 +65,9 @@ func advance(delta: float) -> void:
 				"last_known": Vector3.ZERO,
 				"life": avatar.lifetime,
 			}
+		if _saved_candidates.has(id):
+			row.merge(_saved_candidates[id], true)
+			_saved_candidates.erase(id)
 		_sample(row, actor, delta)
 		remaining[id] = row
 	candidates = remaining

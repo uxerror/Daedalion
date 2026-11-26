@@ -57,6 +57,9 @@ func attach(actor: CogitoPlayer, id: String, peer: int, life: int) -> void:
 			model = _profiles[id]
 			actor.inventory_data = model.data
 			_apply_currency(actor, model.snapshot.money)
+			var wield: Variant = actor.get_meta(&"net_wield")
+			wield.stack = model.equipped_stack()
+			wield.resume_equipped()
 		else:
 			_profiles[id] = model
 			model.data.assigned_quickslots.resize(actor.get_meta(&"quickslot_count"))
@@ -91,6 +94,26 @@ func _auto_bind(stack: InventorySlotPD, inv: CogitoInventory) -> void:
 		if not inv.assigned_quickslots[i] and stack.inventory_item.slot_number in [-1, i + 1]:
 			inv.assigned_quickslots[i] = stack
 			return
+
+
+## Capture current server values even before the next replication scan.
+func capture(id: String, actor: CogitoPlayer) -> Dictionary:
+	var model := _profiles[id]
+	var fields := model.capture()
+	fields.money = _values(actor.player_currencies)
+	var equipped: InventorySlotPD = actor.get_meta(&"net_wield").stack
+	if not equipped:
+		equipped = get_parent().carry.holstered_stack(get_parent().peer_for_actor(actor))
+	fields.equipped = model.id_of(equipped)
+	return fields
+
+
+## Preload disconnected holdings too, so unique loot checks include absent owners.
+func restore(id: String, fields: Dictionary) -> void:
+	var model := STOCK.new()
+	model.data = CogitoInventory.new()
+	model.apply(fields, 0, true)
+	_profiles[id] = model
 
 
 ## Drop per-connection state, keeping the server model, quickslot aliases and wallet.

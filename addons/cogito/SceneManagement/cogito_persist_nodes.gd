@@ -69,16 +69,16 @@ func capture_nodes(state: CogitoSceneState, context: Node) -> void:
 
 
 ## Restores both persist groups in the same instance used for ID resolution.
-func apply_nodes(state: CogitoSceneState, context: Node) -> void:
+func apply_nodes(state: CogitoSceneState, context: Node, online := false) -> void:
 	# A saved pickup without its item cannot be interacted with or saved again.
 	state.saved_nodes = state.saved_nodes.filter(
 		func(entry: Dictionary) -> bool:
 			return not entry.has("slot_data") or entry.slot_data != null
 	)
 	if state.saved_nodes.all(func(node_data): return node_data.has("cogito_id")):
-		_load_persist_nodes_in_place(state, context)
+		_load_persist_nodes_in_place(state, context, online)
 	else:
-		_load_persist_nodes_legacy(state.saved_nodes, context)
+		_load_persist_nodes_legacy(state.saved_nodes, context, online)
 
 	for state_data in state.saved_states:
 		var node_to_set: Node = _find_saved_node(context, state_data, "cogito_id", "node_path")
@@ -90,13 +90,13 @@ func apply_nodes(state: CogitoSceneState, context: Node) -> void:
 			continue
 		_restore_transform(node_to_set, state_data)
 		_restore_properties(node_to_set, state_data, false)
-		if node_to_set.has_method("set_state"):
+		if _needs_state(node_to_set, online):
 			node_to_set.set_state()
 
 
 ## Updates matching nodes in place, respawns missing saved nodes and removes eligible live
 ## nodes omitted by the snapshot.
-func _load_persist_nodes_in_place(state: CogitoSceneState, context: Node) -> void:
+func _load_persist_nodes_in_place(state: CogitoSceneState, context: Node, online: bool) -> void:
 	var saved_nodes := state.saved_nodes
 	var saved_ids := {}
 	for node_data in saved_nodes:
@@ -121,11 +121,11 @@ func _load_persist_nodes_in_place(state: CogitoSceneState, context: Node) -> voi
 			node = _spawn_saved_node(node_data, context)
 			if not node:
 				continue
-		_apply_saved_node_data(node, node_data)
+		_apply_saved_node_data(node, node_data, online)
 
 
 ## Saves made before persistent IDs require deleting and recreating the entire group.
-func _load_persist_nodes_legacy(saved_nodes: Array, context: Node) -> void:
+func _load_persist_nodes_legacy(saved_nodes: Array, context: Node, online: bool) -> void:
 	var save_nodes := CogitoLevel.nodes_in_group(context, "Persist")
 	for node in save_nodes:
 		CogitoGlobals.debug_log(true, "CSM", "Deleting existing node: " + node.name)
@@ -134,7 +134,7 @@ func _load_persist_nodes_legacy(saved_nodes: Array, context: Node) -> void:
 	for node_data in saved_nodes:
 		var new_object := _spawn_saved_node(node_data, context)
 		if new_object:
-			_apply_saved_node_data(new_object, node_data)
+			_apply_saved_node_data(new_object, node_data, online)
 
 
 func _spawn_saved_node(node_data: Dictionary, context: Node) -> Node:
@@ -167,7 +167,14 @@ func _spawn_saved_node(node_data: Dictionary, context: Node) -> Node:
 	return new_object
 
 
-func _apply_saved_node_data(new_object: Node, node_data: Dictionary) -> void:
+func _needs_state(node: Node, online: bool) -> bool:
+	return (
+		node.has_method("set_state")
+		and (not online or node is CogitoNPC or not node.has_method("apply_net_state"))
+	)
+
+
+func _apply_saved_node_data(new_object: Node, node_data: Dictionary, online: bool) -> void:
 	_restore_transform(new_object, node_data)
 	if new_object is RigidBody3D:
 		if node_data.has_all(["linear_velocity_x", "linear_velocity_y", "linear_velocity_z"]):
@@ -192,8 +199,11 @@ func _apply_saved_node_data(new_object: Node, node_data: Dictionary) -> void:
 		)
 		new_object.slot_data.inventory_item.charge_current = node_data["item_charge"]
 
-	if new_object.has_method("set_state"):
-		new_object.set_state.call_deferred()
+	if _needs_state(new_object, online):
+		if online:
+			new_object.set_state()
+		else:
+			new_object.set_state.call_deferred()
 
 
 func _restore_transform(node: Node, data: Dictionary) -> void:

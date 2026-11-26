@@ -167,7 +167,7 @@ class Scenario:
                     return line
             self.next_line()
 
-    def start(self, dedicated, restart=False, friendly_fire=True):
+    def start(self, dedicated, restart=False, friendly_fire=True, world="default", host_identity=None):
         for attempt in range(3):
             if not restart:
                 self.port = 17777 if self.file_transport else available_port()
@@ -176,16 +176,16 @@ class Scenario:
                 self.bus.mkdir()
             if dedicated and self.file_transport:
                 self.server = self.fixture("dedicated", "authority", extra=(
-                    "--friendly-fire", str(friendly_fire).lower()))
+                    "--world", world, "--friendly-fire", str(friendly_fire).lower()))
             elif dedicated:
                 self.server = self.launch("dedicated", [
                     "--", "--server", "--bind", "127.0.0.1", "--port", str(self.port),
-                    "--level", "res://tests/net/process_arena.tscn",
+                    "--level", "res://tests/net/process_arena.tscn", "--world", world,
                     "--respawn-delay", "1.5", "--friendly-fire", str(friendly_fire).lower(),
                     "--max-players", "4", "--save-dir", str(self.directory / "world"),
                 ])
             else:
-                self.server = self.fixture("Host", "host")
+                self.server = self.fixture("Host", "host", host_identity, extra=("--world", world))
             try:
                 self.wait_line(self.server, lambda line: line == f"NET READY port={self.port}")
                 return
@@ -203,6 +203,7 @@ class Scenario:
                 or len({r["peer_id"] for r in roster}) != len(roster)
                 or data["local"] not in ids.values()):
             raise CheckFailed(f"{role.directory.name}: unexpected roster {data!r}")
+        role.peer_ids = {r["display_name"]: r["peer_id"] for r in roster}
         return data["local"], ids
 
     def expect_rejection(self, label, reason, copy_from=None, extra=()):
@@ -813,9 +814,71 @@ class Scenario:
         print("PASS listen host + 1 client: bidirectional carry, throw, seats, driving, snap, movement, interactions in both directions, turnwheel, lockpick, private cutscene, container trade, purchase, bidirectional shots, dart recovery, flashlight, host identity, freeze, thaw and departure")
 
 
+    def persistent_dedicated(self):
+        self.persistence(True)
+
+    def persistent_listen(self):
+        self.persistence(False)
+
+    def persistence(self, dedicated):
+        world = "restart"
+        self.start(dedicated, world=world)
+        original_server = self.server
+        first_name = "Ada" if dedicated else "Host"
+        first = self.fixture("Ada", "client") if dedicated else self.server
+        self.state(first, [first_name])
+        second = self.fixture("Ben", "client")
+        names = [first_name, "Ben"]
+        _, roster = self.state(second, names)
+        self.state(first, names)
+        for role in (first, second):
+            self.sample(role, lambda s: s["epoch"] > 0)
+        self.order(self.server, op="inventory_stage", place="start", first=first_name)
+        self.use(second, "LooseItem/PickupComponent")
+        self.order(self.server, op="stage", first=first_name)
+        self.use(first, "Door/Use")
+        self.stationary(self.server, names)
+        saved = self.server.samples[-1]
+        self.stop(second)
+        self.pose(self.server, [first_name])
+        if dedicated:
+            (self.directory / "world" / "worlds" / world / "save.request").touch()
+            self.wait_line(self.server, lambda line: line.startswith("NET SAVE OK generation=1"))
+            self.stop(first)
+        else:
+            self.order(self.server, op="save_world")
+            self.wait_line(self.server, lambda line: line == "NET MANUAL World saved")
+        self.server.kill()
+        while not self.server.exited:
+            self.next_line()
+        self.start(dedicated, restart=True, world=world,
+                   host_identity=None if dedicated else original_server)
+        owner = self.fixture("Ada", "client", first) if dedicated else self.server
+        _, single = self.state(owner, [first_name])
+        if single[first_name] != roster[first_name]:
+            raise CheckFailed("first restored identity changed")
+        self.sample(owner, lambda s: s["inventory_ready"] and s["epoch"] > 0)
+        later = self.fixture("Ben", "client", second)
+        if self.state(later, names)[1] != roster:
+            raise CheckFailed("second restored identity changed")
+        remote_names = names if dedicated else ["Ben"]
+        for name in remote_names:
+            if later.peer_ids[name] == second.peer_ids[name]:
+                raise CheckFailed(f"{name}: expected a fresh peer ID after restart")
+        for role, name in ((owner, first_name), (later, "Ben")):
+            result = self.sample(role, lambda s: s["inventory_ready"] and len(s["actors"]) == 2
+                                 and s["open"] and not s["loose"])
+            if (saved["inventories"][name] != result["inventories"][name]
+                    or math.dist(result["actors"][name], saved["actors"][name]) > 0.15):
+                raise CheckFailed(f"{name}: restart changed holdings or placement: "
+                                  f"{saved['actors'][name]} -> {result['actors'][name]}")
+        print("PASS world restart and offline profile", "dedicated" if dedicated else "listen")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    scenarios = ("dedicated", "listen", "friendly_fire_off", "npc_dedicated", "npc_listen")
+    scenarios = ("dedicated", "listen", "friendly_fire_off", "npc_dedicated", "npc_listen",
+                 "persistent_dedicated", "persistent_listen")
     parser.add_argument("--scenario", choices=scenarios)
     parser.add_argument("--file-transport", action="store_true", help="use a socket-free packet bus")
     parser.add_argument("--survival-only", action="store_true", help="run only MP5 scenarios")

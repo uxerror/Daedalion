@@ -16,6 +16,12 @@ func capture() -> Dictionary:
 	return data
 
 
+## Install an authority snapshot once, including private one-shot receipts.
+func restore(data: Dictionary) -> void:
+	apply(data, true)
+	triggers = data.triggers.duplicate(true)
+
+
 ## Full journal and numeric/boolean flag state at one revision.
 func snapshot() -> Dictionary:
 	return {"revision": revision, "quests": quests.duplicate(true), "flags": flags.duplicate(true)}

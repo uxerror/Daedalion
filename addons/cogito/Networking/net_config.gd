@@ -1,6 +1,7 @@
 extends RefCounted
 ## Session configuration shared by programmatic startup and the dedicated CLI.
 
+const WorldFiles := preload("../SceneManagement/cogito_world_files.gd")
 const PROTOCOL_VERSION := 12
 const DEMO_LEVEL := "res://addons/cogito/DemoScenes/COGITO_4_Laboratory.tscn"
 const ENET_CEILING := 4095
@@ -12,6 +13,10 @@ const CLI_FLAGS := [
 	"--port",
 	"--max-players",
 	"--save-dir",
+	"--world",
+	"--autosave-seconds",
+	"--import-slot",
+	"--import-player",
 	"--level",
 	"--friendly-fire",
 	"--respawn-delay",
@@ -46,6 +51,10 @@ static func server_config(input: Dictionary, listen: bool) -> Dictionary:
 		"content_version": content_version(),
 		"display_name": "Host",
 		"level": DEMO_LEVEL,
+		"world": "default",
+		"autosave_seconds": 60,
+		"import_slot": "",
+		"import_player": "",
 		"friendly_fire": true,
 		"respawn_delay": 10.0,
 	}
@@ -60,8 +69,9 @@ static func server_config(input: Dictionary, listen: bool) -> Dictionary:
 
 
 static func _validate(config: Dictionary, limit: int) -> Dictionary:
-	if not is_finite(config.respawn_delay) or config.respawn_delay < 0:
-		return {"reason": "Expected finite nonnegative respawn_delay"}
+	var persistence_error := _validate_persistence(config)
+	if not persistence_error.is_empty():
+		return {"reason": persistence_error}
 	if config.bind != "*" and not String(config.bind).is_valid_ip_address():
 		return {"reason": "Invalid bind address"}
 	if config.port < 1 or config.port > 65535:
@@ -72,6 +82,16 @@ static func _validate(config: Dictionary, limit: int) -> Dictionary:
 	if save_dir.strip_edges().is_empty() or String(config.content_version).is_empty():
 		return {"reason": "Missing save_dir or content_version"}
 	return config
+
+
+static func _validate_persistence(config: Dictionary) -> String:
+	if not is_finite(config.respawn_delay) or config.respawn_delay < 0:
+		return "Expected finite nonnegative respawn_delay"
+	if not WorldFiles.valid_name(config.world):
+		return "Invalid world directory name"
+	if config.autosave_seconds < 0:
+		return "Expected nonnegative autosave_seconds"
+	return ""
 
 
 ## Parses the arguments after --. CLI values override the [server] section in any order.
@@ -119,7 +139,7 @@ static func _cli_value(key: String, value: String) -> Variant:
 		"respawn_delay":
 			if value.is_valid_float():
 				return value.to_float()
-		"port", "max_players":
+		"port", "max_players", "autosave_seconds":
 			if value.is_valid_int():
 				return value.to_int()
 		_:

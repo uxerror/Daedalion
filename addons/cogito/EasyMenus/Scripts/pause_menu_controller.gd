@@ -121,6 +121,9 @@ func on_input(event):
 
 
 func update_load_related_gui():
+	if CogitoNet.is_online():
+		_hide_save_slots()
+		return
 	if CogitoSceneManager.is_loaded_from_start_new_game:
 		%Screenshot_Spot.texture = empty_slot_texture
 		%Label_SaveTime.text = ""
@@ -152,9 +155,9 @@ func update_load_related_gui():
 		_hide_save_slots()
 
 
-# Saves are local single-player slots; network saves are a later stage (MP9).
+# Only the listen host owns a manual world-save action.
 func _hide_save_slots() -> void:
-	save_button.hide()
+	save_button.visible = CogitoNet.mode() == CogitoNet.Mode.LISTEN_HOST
 	load_button.hide()
 	%QuickLoadButton.get_parent().get_parent().hide()
 	label_active_slot.hide()
@@ -218,12 +221,18 @@ func _on_resume_game_button_pressed():
 func _on_quit_button_pressed():
 	# Leaving an online session frees this menu with the level, so keep the tree first.
 	var tree := get_tree()
+	if _pauses_world:
+		CogitoSceneManager.delete_temp_saves()
 	CogitoNet.disconnect_session()
-	CogitoSceneManager.delete_temp_saves()
 	tree.quit()
 
 
 func _on_save_button_pressed() -> void:
+	if CogitoNet.is_online():
+		if CogitoNet.mode() == CogitoNet.Mode.LISTEN_HOST:
+			var err := CogitoNet.save_world()
+			save_button.text = tr("World saved") if err == OK else error_string(err)
+		return
 	CogitoSceneManager._screenshot_to_save = temp_screenshot
 	save_load_menu.initialize()
 	save_load_menu.show()

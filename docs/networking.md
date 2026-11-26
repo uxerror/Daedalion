@@ -1,6 +1,8 @@
 # Multiplayer sessions
 
-Daedalion 1.4 MP8 gives each admitted identity a server-owned Advanced player and private inventory. The server simulates world interactions, pickups, shared containers, vendor transactions and equipped items. It also simulates rigid bodies, grants exclusive carry and seat ownership and drives vehicles from their occupant’s movement commands. Hitscan, melee and ballistic impacts resolve in the shooter’s server world. The server owns survival meters, damage, death and individual respawns. It also owns NPC perception, combat, loot and draggable corpses. Offline death uses the existing save-slot reload screen.
+Daedalion 1.4 gives each admitted identity a server-owned Advanced player and private inventory. The server simulates world interactions, pickups, shared containers, vendor transactions and equipped items. It also simulates rigid bodies, grants exclusive carry and seat ownership and drives vehicles from their occupant’s movement commands. Hitscan, melee and ballistic impacts resolve in the shooter’s server world. The server owns survival meters, damage, death and individual respawns. It also owns NPC perception, combat, loot and draggable corpses. Offline death uses the existing save-slot reload screen.
+
+MP9a adds manual, transactional world saves for listen hosts and dedicated servers. Reopening a named world restores its last complete generation and each returning identity's private profile.
 
 ## Try the Laboratory
 
@@ -93,6 +95,10 @@ respawn_delay=10.0
 | `port` | UDP 7777, valid range 1–65535. | `--port` |
 | `max_players` | ENet supports up to 4095 remote connections. Omitting the limit requests that ceiling. A listen host counts its local player, allowing up to 4096 total. | `--max-players` |
 | `save_dir` | `user://net/server`. Give each server its own writable directory. | `--save-dir` |
+| `world` | `default`. One directory name below `<save_dir>/worlds`. | `--world` |
+| `autosave_seconds` | Nonnegative integer, default 60. Zero means off. Reserved for the MP9b timer. | `--autosave-seconds` |
+| `import_slot` | Empty. A named solo slot to copy into a new world before binding its first level. | `--import-slot` |
+| `import_player` | Empty. Dedicated import requires an explicit recipient player ID. | `--import-player` |
 | `content_version` | The `version` string from `addons/cogito/plugin.cfg`. Include the plugin config in an export or supply a game release or content hash. Set the same value in client join credentials. | Config file |
 | `level` | Path to the local PackedScene loaded by the dedicated bootstrap. Clients must load the matching level. | `--level` |
 | `friendly_fire` | Boolean, default `true`. Allow one player to damage another. | `--friendly-fire false` or `--friendly-fire true` |
@@ -102,6 +108,83 @@ respawn_delay=10.0
 The protocol version is 12. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
 
 The dedicated level starts empty and simulates admitted remote avatars. Their first-person cameras, HUDs and light-meter cameras are omitted. The default demo boot prevents the menu subtree from entering the tree. Dedicated startup skips solo save recovery and cleanup, the fade panel, game options, graphics and input-map setup by Cogito's menu autoload. The engine still loads project resources, Cogito settings and the existing autoload nodes, including InputHelper, DebugLine, InputRouter, audio and quest services. Full export stripping is scheduled for MP11.
+
+## Save and reopen a world
+
+Use the same `save_dir` and world name on every launch. A new world starts in
+`--level` (the Laboratory by default). An existing world selects its committed active scene.
+Clients select the matching scene with `--join ADDRESS --level res://path/to/scene.tscn`.
+A custom bootstrap uses `CogitoNet.starting_level(fallback)` and binds the root with the
+same durable level key on each load.
+
+```sh
+nice -n 19 godot --path . -- --host --world expedition
+nice -n 19 godot --headless --path . -- --server --world expedition --save-dir /srv/daedalion
+```
+
+Use **Save** in the listen host's pause menu, or call `CogitoNet.save_world() -> Error`
+on the authority. A client has no Save or Load control. On dedicated, create an empty
+request file in the running world's directory. For the second command above, run
+`touch /srv/daedalion/worlds/expedition/save.request`. The authority consumes the file
+within about one second and writes the result, e.g. `NET SAVE OK generation=2`, to stdout.
+The same path works with an empty roster. A nested save returns `ERR_BUSY`. A disk error
+leaves the last published generation readable. Saving again requires a new request.
+
+One local process holds a writer claim from startup through session close. Another
+process opening that directory receives `ERR_BUSY`. Startup removes claims of dead PIDs.
+An ambiguous claim or a reused live PID blocks the writer. Inspect it with the server
+stopped before removing it manually. Run worlds on a local filesystem in one PID namespace.
+Keep the separate server verifier registry and client credential store when moving a world.
+A lost client secret starts a new profile. The original player record stays in the world.
+
+All bound levels and connected actors are captured synchronously at one server physics
+tick. A player who left contributes their last private state. The transaction copies
+unloaded visited levels and previously committed offline profiles into the next
+generation. A level host retains a first visit in memory when it unloads that instance
+before its first commit. The manifest verifies each member before publication. See the
+[world layout and recovery rules](save-format.md#multiplayer-world-generations).
+
+On startup the authority verifies the generation, installs the shared and per-identity
+quest ledgers and private holdings, then binds the level. It rebuilds authored parents
+and runtime objects, applies removals, restores devices, physics, containers, NPCs and
+their corpses, then installs scene attributes and element properties before actor statuses.
+Linked displays and observer baselines use silent state application. A live client's
+inventory, quickslot references, equipped stack and magazine, currencies, attributes,
+actor statuses and personal progress are installed when its authenticated identity joins.
+Seat claims and carry grants expire. Snapped objects rebind to surviving bodies. NPC projectiles resume at their saved position and velocity. A player projectile expires with its shooter's disconnected life, following the live simulation rule. Recovered projectiles persist as pickups.
+
+A living returnee in the saved level uses its saved pose when its collision shape fits.
+Otherwise the existing respawn policy selects a marker or join transform. A dead returnee
+starts alive at respawn with fresh actor status and the holdings left by the original death
+policy. New identities receive the usual starters. Override
+`CogitoReconnectPolicy.select(actor, record, players)` via `CogitoNet.reconnect_policy`
+before opening the session. Set `CogitoNet.capture_shared_state` (returns a codec-compatible
+dictionary) and `CogitoNet.apply_shared_state` (accepts that dictionary) for game-owned
+shared data. Apply restores values directly and should avoid rewards and presentation events.
+
+### Import a solo slot
+
+```sh
+nice -n 19 godot --path . -- --host --world imported-lab --import-slot 11
+nice -n 19 godot --headless --path . -- --server --world imported-lab --import-slot 11 --import-player ISSUED_PLAYER_ID
+```
+
+The source is `user://saves/<slot>` in that process's data directory. Both v2 and
+supported Advanced legacy `.res` slots can be copied. The importer reads the original
+members, including visited scenes, and commits to an empty target. A malformed v2 file
+or a retired Simple-controller record fails the import. Remove the import flags on
+subsequent launches. The listen host receives the imported inventory and pose.
+On dedicated, use the server-issued ID of the intended owner. Choosing the recipient
+in advance prevents an unrelated first arrival from claiming the profile.
+Older legacy scenes omit stable object IDs. The importer matches an authored instance by
+parent and prefab, using the nearest original local position when several candidates fit.
+Games with their own old identifiers can set `CogitoNet.match_legacy_object(row, candidates)`
+before opening the server. Return the matching node, or null for a runtime spawn. Imported
+pickups, bags and ragdolls use the same network spawner as live ones.
+
+Solo quests, objective states and world properties seed shared progression. The API
+`CogitoNet.import_solo(slot, player_id) -> Error` is available on an open authority
+before the first level binds.
 
 ## Identity and recovery
 
@@ -667,8 +750,7 @@ Quest keys are resource paths. Objective keys are standalone resource paths or t
 integer objective ID and its occurrence within the quest for built-ins. Each row holds
 quest and objective states. Evaluation copies the quest and each objective and shares
 read-only conditions. Descriptions, localization and audio come from the authored asset.
-A respawn or connection takeover keeps the same ledgers. MP9 will handle publication to
-`world.v2.json` and `player_<id>.v2.json`.
+A respawn or connection takeover keeps the same ledgers. A world save publishes the shared ledger in the manifest and each personal ledger in its owner's profile.
 
 Shared flags start with the game's new-world settings. `CogitoWorldPropertySetter` writes
 absolute values to the world ledger. An updater applies its authored world flags in the
@@ -728,16 +810,22 @@ Baselines only install state. Award gameplay rewards from the server-only
 
 ## Current limitations
 
-- One active level is supported. Translation includes network latency. Prediction, rollback and coordinated travel remain future work.
+- Players share one active level. Additional bound instances have their own saved state. Routing players between occupied instances, prediction and rollback remain future work.
 - There is no lag compensation. The server tests targets where they are when the command is consumed. A moving target may have left the crosshair by then. Ballistic replicas can briefly overshoot until the authoritative impact arrives.
 - Recovered projectiles become independent rigid pickups. Attachment to moving hit targets and procedural debris need their own lifecycle. Online corpses use the single-torso approximation described above.
 - Living NPCs are bound from the shared level scene. A game that creates new living NPCs at runtime needs an archetype and spawn adapter. Authored mannequin corpses and loot already have runtime records.
 - Custom debris and fragment spawns still need a network archetype. Authored elemental burnout has a level-scoped removal record.
-- Quest ledgers, inventories, attribute profiles and respawn deadlines are retained for one server process. MP9 covers saving world objects and player profiles to disk. The offline save format is unchanged.
+- World saves are manual. MP9b covers periodic autosave, checkpoint on leave, racing reconnects, write retry, shutdown flush and operator profile rebinding. Gameplay since the last successful manual save is lost when the process exits.
 - A linked custom object needs its own state adapter to appear on observers. Use level-authored motion/visual tracks for replica animations. Method, nested-animation and audio tracks on door/switch replica players are removed at bind.
 - The sender repeats four frames. A burst that loses every copy of an edge can still lose the action. Artificial loss in the process test covers individual packet loss. LAN feel under jitter and mannequin animation need a visual playtest.
 
 ## Verification
+
+The `persistent_dedicated` and `persistent_listen` process scenarios save a modified room
+with an offline profile, terminate the authority, reopen the world and check both owners'
+inventories and poses after rejoining. Each remote connection gets a new peer ID.
+Use `python tools/check_multiplayer.py --scenario persistent_dedicated` or
+`--scenario persistent_listen` for ENet. Add `--file-transport` in a socket-free environment.
 
 ```sh
 GODOT_BIN=/usr/bin/godot NICE='nice -n 19' bash tools/check.sh multiplayer

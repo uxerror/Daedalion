@@ -92,8 +92,9 @@ var _fade := Fade.new(self)
 func _ready() -> void:
 	if CogitoNet.dedicated_boot:
 		return
-	storage.recover_all()  # Individual failures are logged and retried before use.
-	delete_temp_saves()
+	if not _network_cli():
+		storage.recover_all()  # Individual failures are logged and retried before use.
+		delete_temp_saves()
 	instantiate_fade_panel()
 
 
@@ -118,8 +119,14 @@ func _reset_playthrough_state() -> void:
 	is_starting_new_game = true
 
 
+func _network_cli() -> bool:
+	var args := OS.get_cmdline_user_args()
+	return "--host" in args or "--server" in args or "--join" in args
+
+
 func _exit_tree() -> void:
-	delete_temp_saves()
+	if not _network_cli():
+		delete_temp_saves()
 
 
 ## Returns the registered player, or null before registration and after the player is freed.

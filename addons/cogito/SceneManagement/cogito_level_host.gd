@@ -44,6 +44,10 @@ func load_level(path: String, key: StringName) -> Node:
 func unload_level(key: StringName) -> void:
 	var root := level(key)
 	if root:
+		if root.has_meta(&"cogito_net_players"):
+			var players: Node = root.get_meta(&"cogito_net_players")
+			if players.persistence:
+				players.persistence.before_unload(players)
 		_levels.erase(key)
 		root.get_parent().queue_free()
 

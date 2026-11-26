@@ -45,6 +45,10 @@ static func find(tree: SceneTree, id: String) -> Node:
 static func find_in_level(context: Node, id: String) -> Node:
 	if id.is_empty():
 		return null
+	if id.begins_with("runtime:"):
+		var level := CogitoLevel.root_of(context)
+		if level and level.has_meta(&"cogito_net_players"):
+			return level.get_meta(&"cogito_net_players").world.entities.live_object(id)
 	if id.begins_with("persist:") or id.begins_with("level:"):
 		for node in CogitoLevel.nodes_in_group(context, &"Persist"):
 			# Skip nodes that a load is about to replace.

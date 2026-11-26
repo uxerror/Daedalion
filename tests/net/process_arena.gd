@@ -507,6 +507,14 @@ func _execute(order: Dictionary) -> void:
 	match order.op:
 		"element_stage":
 			_element_stage(order)
+		"save_world":
+			var actor := CogitoNet.local_player() as CogitoPlayerAdvanced
+			var menu := actor.pause_menu.instantiate() as CogitoPauseMenu
+			actor.add_child(menu)
+			if menu.save_button.is_visible_in_tree() and not menu.load_button.is_visible_in_tree():
+				menu.save_button.pressed.emit()
+				print("NET MANUAL ", menu.save_button.text)
+			menu.close_pause_menu()
 		"npc_stage":
 			_stage_npc(order)
 		"drag_corpse":

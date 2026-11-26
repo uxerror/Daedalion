@@ -16,6 +16,8 @@ signal peer_rejected(peer_id: int, reason: String)
 
 enum Mode { OFFLINE, LISTEN_HOST, CLIENT, DEDICATED }
 
+const Persistence := preload("net_persistence.gd")
+const ReconnectPolicy := preload("net_reconnect_policy.gd")
 const NetConfig := preload("net_config.gd")
 const Identity := preload("net_identity.gd")
 const Transport := preload("enet_transport.gd")
@@ -38,6 +40,13 @@ var spawn_policy: Callable:
 			player_world.spawn_policy = value
 ## Set before opening a session. Defaults to the level-scoped CogitoRespawnPolicy.
 var respawn_policy: CogitoRespawnPolicy
+## Optional placement policy for the first admission of a saved life.
+var reconnect_policy: ReconnectPolicy
+## Optional legacy solo importer (saved_row, matching_authored_nodes) -> selected node or null.
+var match_legacy_object: Callable
+## Optional server callbacks () -> Dictionary and (Dictionary) -> void.
+var capture_shared_state: Callable
+var apply_shared_state: Callable
 ## Default target selection resource for server NPCs without a per-NPC override.
 var npc_target_policy: CogitoNpcTargetPolicy
 ## Optional owner-only Control implementing open_online(actor, seconds, request) and close_online().
@@ -104,20 +113,79 @@ func _serve(input: Dictionary, role: Mode) -> Error:
 	var profile := provider.load_client(scope, {}) if listen else {}
 	if listen and profile.is_empty():
 		return _report("Cannot read host identity", ERR_FILE_CANT_READ)
+	return _serve_world(config, role, provider, scope, profile)
+
+
+func _serve_world(
+	config: Dictionary, role: Mode, provider: Identity, scope: String, profile: Dictionary
+) -> Error:
+	var listen := role == Mode.LISTEN_HOST
+	var persistence := Persistence.new()
+	var err := persistence.files.open(config.save_dir, config.world)
+	if err != OK:
+		return _report("Cannot open world " + config.world, err)
+	if reconnect_policy:
+		persistence.placement = reconnect_policy
+	persistence.match_legacy_object = match_legacy_object
+	persistence.capture_shared = capture_shared_state
+	persistence.apply_shared = apply_shared_state
 	var adapter := _transport()
 	err = adapter.open_server(config, listen)
 	if err != OK:
+		persistence.files.close()
 		return _report("Cannot bind %s:%d" % [config.bind, config.port], err)
 	_attach(role, adapter.peer, provider, config, scope, profile)
+	player_world.persistence = persistence
+	persistence.install(player_world)
+	if not persistence.files.manifest.is_empty():
+		adapter.peer.refuse_new_connections = true
 	if listen:
 		err = _session.admit_host()
+	if err == OK and not config.import_slot.is_empty():
+		var owner_id: String = _session.local_id if listen else config.import_player
+		err = import_solo(config.import_slot, owner_id)
 	if err == OK:
 		var message := "Listening on %s:%d" % [config.bind, config.port]
 		CogitoGlobals.debug_log(true, "CogitoNet", message)
 		session_ready.emit()
 	else:
 		disconnect_session()
-		_report("Cannot admit local host", err)
+		_report("Cannot initialize host or import slot", err)
+	return err
+
+
+func _failed_world(key: String, err: Error) -> void:
+	disconnect_session()
+	_report("Cannot rebuild saved level " + key, err)
+
+
+## Publish the whole world from either server topology.
+func save_world() -> Error:
+	return player_world.save_world() if player_world else ERR_UNCONFIGURED
+
+
+## Scene for CLI bootstrap. A committed world selects its last active scene.
+func starting_level(fallback: String) -> String:
+	if player_world and player_world.persistence:
+		var files := player_world.persistence.files
+		if not files.manifest.is_empty():
+			return files.scenes[files.manifest.active].path
+	return fallback
+
+
+## Explicit copy into an empty, bound-to-no-level world. Never recovers or writes the input slot.
+func import_solo(slot: String, player_id: String) -> Error:
+	if not player_world or not player_world.persistence or player_world.active_level():
+		return ERR_UNCONFIGURED
+	var persistence := player_world.persistence
+	if persistence.busy:
+		return ERR_BUSY
+	persistence.busy = true
+	var err := preload("net_solo_import.gd").copy(slot, player_id, persistence.files)
+	if err == OK:
+		persistence.install(player_world)
+		multiplayer.multiplayer_peer.refuse_new_connections = true
+	persistence.busy = false
 	return err
 
 
@@ -240,6 +308,8 @@ func disconnect_session() -> void:
 	var peer := api.multiplayer_peer
 	var old_records := _session.records()
 	player_world.clear()
+	if player_world.persistence:
+		player_world.persistence.files.close()
 	player_world = null
 	_session.detach()
 	if _mode == Mode.CLIENT and peer != null and 1 in api.get_peers():

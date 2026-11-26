@@ -13,6 +13,33 @@ var _models := {}
 var _views := {}
 
 
+## Capture closed and never-opened containers, including spawned bags.
+func capture() -> Dictionary:
+	var result := {}
+	var entities: Variant = get_parent().world.entities
+	for id: String in entities.objects:
+		var box := entities.live_object(id) as CogitoContainer
+		if box and box.inventory_data:
+			var model: STOCK = _models.get(box, STOCK.new())
+			model.data = box.inventory_data
+			result[id] = model.capture()
+	return result
+
+
+## Restore quantities and aliases into the private server resource before any view opens.
+func restore(records: Dictionary) -> void:
+	for id: String in records:
+		var box := get_parent().world.entities.live_object(id) as CogitoContainer
+		if box:
+			var model := STOCK.new()
+			model.data = box.inventory_data
+			model.apply(records[id], 0, true)
+			box.is_filled_with_starter_items = true
+			_models[box] = model
+			model.data.inventory_updated.connect(_changed.bind(box))
+			box.tree_exiting.connect(_removed.bind(box), CONNECT_ONE_SHOT)
+
+
 ## Open after MP2 admission, reach, LOS and eligibility checks.
 func open(box: CogitoContainer, component: InteractionComponent, actor: CogitoPlayer) -> Dictionary:
 	var peer: int = get_parent().peer_for_actor(actor)

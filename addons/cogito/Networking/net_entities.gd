@@ -24,7 +24,7 @@ func bind(level: Node, key: String, generation: int) -> void:
 	epoch = generation
 	var candidates := {}
 	for node in root.find_children("*", "Node3D", true, false):
-		if CogitoLevel.root_of(node) != root:
+		if CogitoLevel.root_of(node) != root or CogitoPersistentId.is_disappearing(node):
 			continue
 		if _needs_parent_address(node):
 			candidates[node.get_parent()] = true

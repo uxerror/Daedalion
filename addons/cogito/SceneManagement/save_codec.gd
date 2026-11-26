@@ -1,6 +1,7 @@
 extends RefCounted
 ## One codec instance per file. Local IDs preserve sharing between slots, quickslots,
 ## inventories and equipped items. Only JSON primitives reach the disk.
+const WorldRecord := preload("cogito_world_record.gd")
 const FORMAT := "daedalion-save"
 const VERSION := 2
 const SUFFIX := ".v2.json"
@@ -64,6 +65,8 @@ func read(path: String, kind: String) -> Resource:
 	var state: Variant = _decode(doc.root, kind)
 	if not reason.is_empty():
 		return null
+	if kind in ["world", "world_scene", "profile"] and state is WorldRecord:
+		return state
 	if kind == "scene" and state is CogitoSceneState:
 		if state.known_persist_ids != null and not state.known_persist_ids is Dictionary:
 			return null

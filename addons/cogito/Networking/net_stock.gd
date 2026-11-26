@@ -26,10 +26,66 @@ static func load_definition(path: String) -> InventoryItemPD:
 	var split := path.find("::")
 	if split < 0:
 		return load(path) as InventoryItemPD if ResourceLoader.exists(path) else null
-	var template := pickup_template(load(path.left(split)) as PackedScene)
+	var scene := path.left(split)
+	if not ResourceLoader.exists(scene, "PackedScene"):
+		return null
+	var template := pickup_template(load(scene) as PackedScene)
 	if template and template.inventory_item and template.inventory_item.resource_path == path:
 		return template.inventory_item
 	return null
+
+
+## Refuse a disk projection that would lose a stack, corrupt grid cells or break a quickslot.
+static func valid_projection(fields: Dictionary) -> bool:
+	if (
+		not fields.get("rows") is Dictionary
+		or not fields.get("binds") is PackedInt64Array
+		or not fields.get("size") is Vector2i
+		or not fields.get("length") is int
+		or fields.length < 0
+		or not fields.get("grid") is bool
+	):
+		return false
+	var occupied := {}
+	for id: Variant in fields.rows:
+		if not id is int or id <= 0 or not fields.rows[id] is Array:
+			return false
+		if not _valid_row(fields.rows[id], fields, occupied):
+			return false
+	for id in fields.binds:
+		if id != 0 and not fields.rows.has(id):
+			return false
+	return fields.get("equipped", 0) == 0 or fields.rows.has(fields.equipped)
+
+
+static func _valid_row(row: Array, fields: Dictionary, occupied: Dictionary) -> bool:
+	if (
+		row.size() < 4
+		or not row[0] is String
+		or row[0].is_empty()
+		or not row[1] is int
+		or row[1] < 0
+		or not row[2] is int
+		or row[2] < 1
+		or not row[3] is bool
+	):
+		return false
+	var item := load_definition(row[0])
+	if not item or (item is WieldableItemPD and row.size() != 6):
+		return false
+	var size := item.item_size if fields.grid else Vector2i.ONE
+	if bool(row[3]) != item.rotated:
+		size = Vector2i(size.y, size.x)
+	var width: int = fields.size.x
+	if width <= 0 or (fields.grid and row[1] % width + size.x > width):
+		return false
+	for y in size.y:
+		for x in size.x:
+			var cell: int = row[1] + x + y * width
+			if occupied.has(cell) or cell >= fields.length:
+				return false
+			occupied[cell] = true
+	return true
 
 
 ## Read the authored pickup slot without instantiating gameplay or physics.
@@ -88,7 +144,8 @@ func equipped_stack() -> InventorySlotPD:
 	return data.inventory_slots[row[1]] if not row.is_empty() else null
 
 
-func _capture() -> Dictionary:
+## Freeze current rows and aliases without consuming a pending replication delta.
+func capture() -> Dictionary:
 	var rows := {}
 	var live := {}
 	for i in data.inventory_slots.size():
@@ -121,7 +178,7 @@ func _capture() -> Dictionary:
 
 ## Diff the latest committed model, including changes from MP2 key and lockpick consumers.
 func refresh(extra: Dictionary = {}) -> Dictionary:
-	var current := _capture()
+	var current := capture()
 	current.merge(extra)
 	var changes := {}
 	for key: String in current:
@@ -179,6 +236,7 @@ func apply(fields: Dictionary, version: int, full: bool) -> void:
 			stack.inventory_item.set_meta(&"cogito_item_definition", original)
 		stacks[id] = stack
 		_ids[stack] = id
+		_serial = maxi(_serial, id)
 		stack.origin_index = row[1]
 		stack.quantity = row[2]
 		if stack.inventory_item.rotated != row[3]:

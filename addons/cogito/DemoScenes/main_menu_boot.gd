@@ -29,9 +29,12 @@ func _start_network_demo(args: PackedStringArray) -> void:
 	if config.has("reason"):
 		_failed(config.reason)
 		return
-	var load_level := get_tree().change_scene_to_file.bind(
-		config.get("level", NET_CONFIG.DEMO_LEVEL)
-	)
+	var level_index := args.find("--level")
+	var path: String = config.get("level", NET_CONFIG.DEMO_LEVEL)
+	if level_index >= 0 and level_index + 1 < args.size():
+		path = args[level_index + 1]
+	var load_level := func() -> void:
+		get_tree().change_scene_to_file(CogitoNet.starting_level(path))
 	CogitoNet.session_ready.connect(load_level, CONNECT_DEFERRED | CONNECT_ONE_SHOT)
 	if "--host" in args:
 		CogitoNet.host(config)

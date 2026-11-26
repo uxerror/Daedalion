@@ -44,6 +44,18 @@ func apply(state: CogitoSceneState, level_root: Node = null) -> void:
 	CogitoGlobals.debug_log(true, "CSM", "CSM: Loading scene state finished.")
 
 
+## Rebuild saved parents before the network registry indexes the new level.
+func restore_world_nodes(state: CogitoSceneState, root: Node) -> void:
+	_nodes.apply_nodes(state, root, true)
+	_load_destroyed_nodes(state.saved_destroyed_nodes, root)
+
+
+## The authority calls this after registering runtime entities and before admitting avatars.
+func restore_world_components(state: CogitoSceneState, root: Node) -> void:
+	state.restore_attributes(root)
+	_apply_element_states(state.saved_element_states, weakref(root))
+
+
 ## Captures one live level and writes its existing save format.
 func save_scene_state(level_name: String, slot: String, level_root: Node = null) -> Error:
 	if _manager.is_currently_loading:

@@ -6,6 +6,25 @@ var _seen := {}
 var _untrack := {}
 
 
+## Perception memory is server-only and independent of the interest stream.
+func capture() -> Dictionary:
+	var records := {}
+	for npc in tracked:
+		if npc.perception and not npc.network_state.dead:
+			var id: String = get_parent().world.entities.id_for(npc)
+			if not id.is_empty():
+				records[id] = npc.perception.capture()
+	return records
+
+
+## Restore memory after all actors and their interaction targets have been indexed.
+func restore(records: Dictionary) -> void:
+	for id: String in records:
+		var npc := get_parent().world.entities.live_object(id) as CogitoNPC
+		if npc and npc.perception:
+			npc.perception.restore(records[id])
+
+
 ## Bind authored actors once. Runtime corpses use MP4's body registry directly.
 func track(npc: CogitoNPC) -> void:
 	tracked.append(npc)

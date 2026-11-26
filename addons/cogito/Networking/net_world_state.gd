@@ -23,6 +23,44 @@ var _client_binding := 0
 var _awaiting_avatar := false
 
 
+## Capture each adapter in its own coordinate space, including unobserved tombstones.
+func capture() -> Dictionary:
+	var records := _states.duplicate(true)
+	for id: String in records:
+		var node := entities.live_object(id)
+		if not node:
+			continue
+		if node.has_method("net_state"):
+			records[id] = node.net_state()
+		if node is CogitoSittable:
+			records[id].occupant = ""
+		if node is CogitoNPC:
+			records[id].swing = -1
+		if id.begins_with("runtime:") and get_parent().spawner.owns(id):
+			records[id].pose = node.global_transform
+	return records
+
+
+## Install durable records before the first subscription. Runtime ids remain reserved.
+func restore(records: Dictionary) -> Error:
+	for id: String in records:
+		if id.begins_with("runtime:"):
+			get_parent().spawner.reserve_id(id)
+		var row: Dictionary = records[id]
+		apply_state(id, 1, row, true)
+		if id.begins_with("runtime:") and not row.get("removed", false):
+			if not entities.live_object(id):
+				return ERR_CANT_CREATE
+	for id: String in records:
+		var node := entities.live_object(id)
+		if node is CogitoNPC and node.network_state.dead:
+			node.network_state.disable_simulation()
+		if node is CogitoSnapSlot:
+			node.restore_network_binding(entities.live_object(node.snapped_id))
+			_states[id] = node.net_state()
+	return OK
+
+
 ## Bind once per live instance. The client learns the authority epoch from its baseline.
 func bind(root: Node, key: String) -> void:
 	_generation += 1

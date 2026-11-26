@@ -124,6 +124,47 @@ func _visual(row: Dictionary, template: Node3D) -> Node3D:
 	return visual
 
 
+## Capture ballistic simulation without a view node. Record whether a recoverable pickup exists.
+func capture() -> Array[Dictionary]:
+	var records: Array[Dictionary] = []
+	for flight: Dictionary in _flights.values():
+		var fields := flight.duplicate()
+		fields.row = flight.row.duplicate()
+		fields.erase("visual")
+		fields.pickup = flight.has("pickup")
+		records.append(fields)
+	return records
+
+
+## An old player life expires on disconnect. NPCs can resume a flight in their restored world.
+func restore(records: Array) -> Error:
+	for fields: Dictionary in records:
+		var row: Dictionary = fields.row
+		_serial = maxi(_serial, row.id)
+		if not row.has("npc"):
+			continue
+		var npc := get_parent().world.entities.live_object(row.npc) as CogitoNPC
+		if not npc:
+			continue
+		if not npc.weapon or not npc.weapon.projectile_prefab:
+			return ERR_CANT_CREATE
+		var scene := npc.weapon.projectile_prefab
+		var flight := fields.duplicate(true)
+		flight.erase("pickup")
+		if fields.pickup:
+			var template := STOCK.pickup_template(scene)
+			if not template:
+				return ERR_CANT_CREATE
+			flight.pickup = STOCK.copy_stack(template, 1)
+		flight.visual = null
+		if get_parent().get_parent().local_id != "":
+			var model := scene.instantiate() as Node3D
+			flight.visual = _visual(row, model)
+			model.free()
+		_flights[row.id] = flight
+	return OK
+
+
 ## Baseline includes current flight position and velocity. Completed launches have no record.
 func baseline(peer: int) -> void:
 	for flight: Dictionary in _flights.values():

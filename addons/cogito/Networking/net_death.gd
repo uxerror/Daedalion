@@ -224,11 +224,7 @@ func try_respawn(id: String, life: int) -> String:
 	if remaining(id) > 0:
 		return "Respawn delay"
 	var level: Node = CogitoLevel.root_of(actor)
-	var points: Array[CogitoRespawnPoint] = []
-	for point: CogitoRespawnPoint in level.find_children("*", "CogitoRespawnPoint", true, false):
-		if point.enabled and CogitoLevel.root_of(point) == level:
-			points.append(point)
-	var start := policy.select(id, level, points)
+	var start := respawn_transform(id, level)
 	_deadlines.erase(id)
 	for attr: CogitoAttribute in actor.player_attributes.values():
 		attr.network_frozen = false
@@ -261,6 +257,15 @@ func try_respawn(id: String, life: int) -> String:
 	players.renew_life(id)
 	present(actor, false, 0)
 	return ""
+
+
+## Use the same enabled level markers for respawn and blocked reconnect placement.
+func respawn_transform(id: String, level: Node) -> Transform3D:
+	var points: Array[CogitoRespawnPoint] = []
+	for point: CogitoRespawnPoint in level.find_children("*", "CogitoRespawnPoint", true, false):
+		if point.enabled and CogitoLevel.root_of(point) == level:
+			points.append(point)
+	return policy.select(id, level, points)
 
 
 ## Called on the server tick so an automatic game policy shares all normal validation.

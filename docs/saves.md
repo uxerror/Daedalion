@@ -29,3 +29,10 @@ Authored IDs default to `level:` followed by the path from the level root. On lo
 When moving or renaming a crate, add String metadata `cogito_persistent_id` to the node and give it its original ID, for example `level:Storage/Crate`. Keep IDs unique. Otherwise the moved crate can appear alongside a respawned copy of the saved one. Keep component paths within the object stable and retain the level root name, which keys the level file. Older snapshots without the authored ID list use older removal rules.
 
 New saves use data-only v2 JSON. A compatible legacy binary state is read when its v2 file is absent and converted on the next successful save. Saves from the retired player controller appear as broken slots. See [file format and compatibility rules](save-format.md) and [migration from 1.2](migration-1.2-to-1.3.md).
+
+## Multiplayer saves
+
+The listen host's **Save** button and the dedicated server's `save.request` publish one
+world generation, including offline players. Start the same named world to resume it.
+An explicit solo import copies a slot to a new world and designates one profile as its
+owner. See [multiplayer world saves and import](networking.md#save-and-reopen-a-world).
