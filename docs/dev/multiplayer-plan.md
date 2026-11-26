@@ -19,6 +19,11 @@
 | Element presentation (2026-11-26) | Everyone in interest sees world element states (fire, frost, wet, charge, burnt/destroyed) and other actors' status VFX. The status HUD and screen vignette are owner-only. Interest re-entry and late join restore state silently: no replayed ignition, extinguish or damage sounds. |
 | Levels | **Players travel independently.** The server keeps several levels live at the same time (one live instance per level, shared by every player in it). This replaces "one active level, party travels together" below. |
 | Transport | ENet (UDP) only, direct address / LAN. NAT traversal, relay, browser transports and matchmaking are out of scope for 1.4. |
+| Persistence stages (2026-11-26) | MP9 ships in two parts. **MP9a:** flat world/profile save layout, codec kinds, capture/apply of the world and every profile at one server tick, manual save by the listen host (pause menu) and by the operator, dedicated restart from the last complete generation, explicit solo-slot import. **MP9b:** autosave, checkpoint on leave, leave/save/reconnect races, write-failure recovery, flush on orderly shutdown, operator profile rebinding. |
+| Autosave (2026-11-26) | Both the listen host and the dedicated server autosave dirty state. Interval is the server config key `autosave_seconds` (default 60; 0 disables it), CLI `--autosave-seconds`. The listen host can also save manually. |
+| Reconnect placement (2026-11-26) | A returning player (reconnect or server restart) appears at the last saved pose if it is collision-free, otherwise at a respawn point chosen by the respawn policy. A player who left while dead returns alive at a respawn point; the death is not replayed and inventory follows the death policy (kept by default). Both are replaceable through a reconnect placement policy hook. |
+| Lost credentials (2026-11-26) | A client that lost its key enrolls as a new player. A game account system can map it back through the identity-provider hook. The template also ships an operator CLI command that rebinds an orphaned profile to another player ID (MP9b). |
+| Solo import (2026-11-26) | Importing a solo slot into a new world is a CLI/API operation in MP9a (the solo player's data becomes the designated host profile; the source slot is never modified). Menu UI for it belongs to MP11. |
 
 ### Consequences of independent travel
 
