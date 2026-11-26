@@ -2,12 +2,14 @@ class_name OptionsTabMenu
 extends Control
 signal options_updated
 
-## Re-apply the saved window mode and resolution whenever options load. An in-game menu
-## turns this off: opening it must not move or resize the window; only reverting a display
-## change made in this menu re-applies the saved values.
+## Apply the saved window mode and resolution when this menu first loads options. An
+## in-game menu turns this off: opening it must not move or resize the window. Later loads
+## re-apply the saved values only to revert a display change made in this menu, never a
+## window the player resized by hand.
 @export var apply_display_on_load := true
 
-var _window_on_open: Array
+var _display_loaded := false
+var _display_changed := false
 
 # Grabbing TabContainer node for gamepad navigation
 @onready var tab_container: CogitoTabMenu = $VBoxContainer/TabContainer
@@ -60,7 +62,6 @@ const window_operations_delay = 0.25
 
 
 func _ready() -> void:
-	_window_on_open = [CogitoGameConfig.is_fullscreen(), CogitoGameConfig.get_window().size]
 	reset()
 	
 	CogitoGameConfig.options_saved.connect(_on_options_saved)
@@ -78,6 +79,8 @@ func _ready() -> void:
 	init_fullscreen_mode()
 	init_windowed_resolution()
 	windowed_resolution_option_button.item_selected.connect(CogitoGameConfig._on_resolution_selected)
+	windowed_resolution_option_button.item_selected.connect(_mark_display_changed.unbind(1))
+	fullscreen_mode_check_button.pressed.connect(_mark_display_changed)
 	CogitoGameConfig.windowed_resolution_has_changed.connect(_on_windowed_resolution_has_changed)
 	fullscreen_mode_check_button.toggled.connect(_on_fullscreen_mode_toggled)
 	anti_aliasing_2d_option_button.item_selected.connect(_on_anti_aliasing_2d_option_button_item_selected)
@@ -178,12 +181,8 @@ func _on_fullscreen_mode_toggled(button_pressed: bool) -> void:
 			gui_scale_slider.value = scale_max_value
 		apply_gui_scale_value()
 		
-		var window = get_window()
 		await get_tree().create_timer(window_operations_delay).timeout
-		window.size = CogitoGameConfig.windowed_resolution
-		window.content_scale_size = Vector2i.ZERO
-		window.scaling_3d_scale = 1.0
-		CogitoGameConfig.center_window()
+		CogitoGameConfig.apply_windowed_size(CogitoGameConfig.windowed_resolution)
 		
 	refresh_resolution_controls()
 
@@ -274,14 +273,24 @@ func _on_options_loaded(skip_applying:bool):
 		#windowed_resolution_option_button.item_selected.emit(CogitoGameConfig.current_resolution_index)
 		fullscreen_mode_check_button.toggled.emit(CogitoGameConfig.fullscreen_mode)
 		#CogitoGameConfig.refresh_render()
+	if !skip_applying:
+		_display_applied()
 
 	refresh_resolution_controls()
 
 
 func _should_apply_display() -> bool:
-	if apply_display_on_load:
-		return true
-	return _window_on_open != [CogitoGameConfig.is_fullscreen(), CogitoGameConfig.get_window().size]
+	return _display_changed or (apply_display_on_load and not _display_loaded)
+
+
+## The player changed the window mode or resolution in this menu.
+func _mark_display_changed() -> void:
+	_display_changed = true
+
+
+func _display_applied() -> void:
+	_display_loaded = true
+	_display_changed = false
 
 
 func refresh_resolution_controls():
@@ -390,6 +399,8 @@ func _on_options_saved() -> void:
 	if has_windowed_resolution_changed:
 		CogitoGameConfig.center_window()
 	
+	# Saved: the window now matches the config, nothing to revert on close.
+	_display_changed = false
 	reset()
 	options_updated.emit()
 

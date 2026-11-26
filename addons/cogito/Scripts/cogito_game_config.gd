@@ -74,6 +74,8 @@ var RESOLUTION_DICTIONARY: Dictionary = {
 
 const serialized_default_inputs: String = '{"action_primary":{"joypad":["5|0.345098"],"keyboard":[],"mouse":[1]},"action_secondary":{"joypad":["4|0.223529"],"keyboard":[],"mouse":[2]},"back":{"joypad":["1|0.207062"],"keyboard":["S"],"mouse":[]},"crouch":{"joypad":[1],"keyboard":["C"],"mouse":[]},"forward":{"joypad":["1|-0.225074"],"keyboard":["W"],"mouse":[]},"free_look":{"joypad":[],"keyboard":["CapsLock"],"mouse":[]},"interact":{"joypad":[2],"keyboard":["F"],"mouse":[]},"interact2":{"joypad":[3],"keyboard":["E"],"mouse":[]},"inventory":{"joypad":[4],"keyboard":["Tab"],"mouse":[]},"inventory_drop_item":{"joypad":[3],"keyboard":["G"],"mouse":[]},"inventory_move_item":{"joypad":[0],"keyboard":[],"mouse":[1]},"inventory_use_item":{"joypad":[1],"keyboard":[],"mouse":[2]},"jump":{"joypad":[0],"keyboard":["Space"],"mouse":[]},"left":{"joypad":["0|-0.172882"],"keyboard":["A"],"mouse":[]},"menu":{"joypad":[6],"keyboard":["Escape"],"mouse":[]},"quickslot_1":{"joypad":[13],"keyboard":["1"],"mouse":[]},"quickslot_2":{"joypad":[11],"keyboard":["2"],"mouse":[]},"quickslot_3":{"joypad":[14],"keyboard":["3"],"mouse":[]},"quickslot_4":{"joypad":[12],"keyboard":["4"],"mouse":[]},"quickslot_wheel":{"joypad":[9],"keyboard":["X"],"mouse":[]},"change_ammo_type":{"joypad":[15],"keyboard":["T"],"mouse":[]},"reload":{"joypad":[2],"keyboard":["R"],"mouse":[]},"right":{"joypad":["0|0.136204"],"keyboard":["D"],"mouse":[]},"sprint":{"joypad":[7],"keyboard":["Shift"],"mouse":[]},"ui_accept":{"joypad":[0],"keyboard":["Enter","Kp Enter","Space"],"mouse":[]},"ui_cancel":{"joypad":[1],"keyboard":["Escape"],"mouse":[]},"ui_copy":{"joypad":[],"keyboard":["C|ctrl","Insert|ctrl"],"mouse":[]},"ui_cut":{"joypad":[],"keyboard":["X|ctrl","Delete|shift"],"mouse":[]},"ui_down":{"joypad":[12,"1|1.000000"],"keyboard":["Down"],"mouse":[]},"ui_end":{"joypad":[],"keyboard":["End"],"mouse":[]},"ui_filedialog_refresh":{"joypad":[],"keyboard":["F5"],"mouse":[]},"ui_filedialog_show_hidden":{"joypad":[],"keyboard":["H"],"mouse":[]},"ui_filedialog_up_one_level":{"joypad":[],"keyboard":["Backspace"],"mouse":[]},"ui_focus_next":{"joypad":[],"keyboard":["Tab"],"mouse":[]},"ui_focus_prev":{"joypad":[],"keyboard":["Tab|shift"],"mouse":[]},"ui_graph_delete":{"joypad":[],"keyboard":["Delete"],"mouse":[]},"ui_graph_duplicate":{"joypad":[],"keyboard":["D|ctrl"],"mouse":[]},"ui_home":{"joypad":[],"keyboard":["Home"],"mouse":[]},"ui_left":{"joypad":[13,"0|-1.000000"],"keyboard":["Left"],"mouse":[]},"ui_menu":{"joypad":[],"keyboard":["Menu"],"mouse":[]},"ui_next_tab":{"joypad":[10],"keyboard":["E"],"mouse":[]},"ui_page_down":{"joypad":[],"keyboard":["PageDown"],"mouse":[]},"ui_page_up":{"joypad":[],"keyboard":["PageUp"],"mouse":[]},"ui_paste":{"joypad":[],"keyboard":["V|ctrl","Insert|shift"],"mouse":[]},"ui_prev_tab":{"joypad":[9],"keyboard":["Q"],"mouse":[]},"ui_redo":{"joypad":[],"keyboard":["Z|shift,ctrl","Y|ctrl"],"mouse":[]},"ui_right":{"joypad":[14,"0|1.000000"],"keyboard":["Right"],"mouse":[]},"ui_select":{"joypad":[3],"keyboard":["Space"],"mouse":[]},"ui_swap_input_direction":{"joypad":[],"keyboard":["QuoteLeft|ctrl"],"mouse":[]},"ui_text_add_selection_for_next_occurrence":{"joypad":[],"keyboard":["D|ctrl"],"mouse":[]},"ui_text_backspace":{"joypad":[],"keyboard":["Backspace","Backspace|shift"],"mouse":[]},"ui_text_backspace_all_to_left":{"joypad":[],"keyboard":[],"mouse":[]},"ui_text_backspace_all_to_left.macos":{"joypad":[],"keyboard":["Backspace|ctrl"],"mouse":[]},"ui_text_backspace_word":{"joypad":[],"keyboard":["Backspace|ctrl"],"mouse":[]},"ui_text_backspace_word.macos":{"joypad":[],"keyboard":["Backspace|alt"],"mouse":[]},"ui_text_caret_add_above":{"joypad":[],"keyboard":["Up|shift,ctrl"],"mouse":[]},"ui_text_caret_add_above.macos":{"joypad":[],"keyboard":["O|shift,ctrl"],"mouse":[]},"ui_text_caret_add_below":{"joypad":[],"keyboard":["Down|shift,ctrl"],"mouse":[]},"ui_text_caret_add_below.macos":{"joypad":[],"keyboard":["L|shift,ctrl"],"mouse":[]},"ui_text_caret_document_end":{"joypad":[],"keyboard":["End|ctrl"],"mouse":[]},"ui_text_caret_document_end.macos":{"joypad":[],"keyboard":["Down|ctrl","End|ctrl"],"mouse":[]},"ui_text_caret_document_start":{"joypad":[],"keyboard":["Home|ctrl"],"mouse":[]},"ui_text_caret_document_start.macos":{"joypad":[],"keyboard":["Up|ctrl","Home|ctrl"],"mouse":[]},"ui_text_caret_down":{"joypad":[],"keyboard":["Down"],"mouse":[]},"ui_text_caret_left":{"joypad":[],"keyboard":["Left"],"mouse":[]},"ui_text_caret_line_end":{"joypad":[],"keyboard":["End"],"mouse":[]},"ui_text_caret_line_end.macos":{"joypad":[],"keyboard":["E|ctrl","Right|ctrl","End"],"mouse":[]},"ui_text_caret_line_start":{"joypad":[],"keyboard":["Home"],"mouse":[]},"ui_text_caret_line_start.macos":{"joypad":[],"keyboard":["A|ctrl","Left|ctrl","Home"],"mouse":[]},"ui_text_caret_page_down":{"joypad":[],"keyboard":["PageDown"],"mouse":[]},"ui_text_caret_page_up":{"joypad":[],"keyboard":["PageUp"],"mouse":[]},"ui_text_caret_right":{"joypad":[],"keyboard":["Right"],"mouse":[]},"ui_text_caret_up":{"joypad":[],"keyboard":["Up"],"mouse":[]},"ui_text_caret_word_left":{"joypad":[],"keyboard":["Left|ctrl"],"mouse":[]},"ui_text_caret_word_left.macos":{"joypad":[],"keyboard":["Left|alt"],"mouse":[]},"ui_text_caret_word_right":{"joypad":[],"keyboard":["Right|ctrl"],"mouse":[]},"ui_text_caret_word_right.macos":{"joypad":[],"keyboard":["Right|alt"],"mouse":[]},"ui_text_clear_carets_and_selection":{"joypad":[],"keyboard":["Escape"],"mouse":[]},"ui_text_completion_accept":{"joypad":[],"keyboard":["Enter","Kp Enter"],"mouse":[]},"ui_text_completion_query":{"joypad":[],"keyboard":["Space|ctrl"],"mouse":[]},"ui_text_completion_replace":{"joypad":[],"keyboard":["Tab"],"mouse":[]},"ui_text_dedent":{"joypad":[],"keyboard":["Tab|shift"],"mouse":[]},"ui_text_delete":{"joypad":[],"keyboard":["Delete"],"mouse":[]},"ui_text_delete_all_to_right":{"joypad":[],"keyboard":[],"mouse":[]},"ui_text_delete_all_to_right.macos":{"joypad":[],"keyboard":["Delete|ctrl"],"mouse":[]},"ui_text_delete_word":{"joypad":[],"keyboard":["Delete|ctrl"],"mouse":[]},"ui_text_delete_word.macos":{"joypad":[],"keyboard":["Delete|alt"],"mouse":[]},"ui_text_indent":{"joypad":[],"keyboard":["Tab"],"mouse":[]},"ui_text_newline":{"joypad":[],"keyboard":["Enter","Kp Enter"],"mouse":[]},"ui_text_newline_above":{"joypad":[],"keyboard":["Enter|shift,ctrl","Kp Enter|shift,ctrl"],"mouse":[]},"ui_text_newline_blank":{"joypad":[],"keyboard":["Enter|ctrl","Kp Enter|ctrl"],"mouse":[]},"ui_text_scroll_down":{"joypad":[],"keyboard":["Down|ctrl"],"mouse":[]},"ui_text_scroll_down.macos":{"joypad":[],"keyboard":["Down|alt,ctrl"],"mouse":[]},"ui_text_scroll_up":{"joypad":[],"keyboard":["Up|ctrl"],"mouse":[]},"ui_text_scroll_up.macos":{"joypad":[],"keyboard":["Up|alt,ctrl"],"mouse":[]},"ui_text_select_all":{"joypad":[],"keyboard":["A|ctrl"],"mouse":[]},"ui_text_select_word_under_caret":{"joypad":[],"keyboard":["G|alt"],"mouse":[]},"ui_text_select_word_under_caret.macos":{"joypad":[],"keyboard":["G|ctrl,meta"],"mouse":[]},"ui_text_skip_selection_for_next_occurrence":{"joypad":[],"keyboard":["D|alt,ctrl"],"mouse":[]},"ui_text_submit":{"joypad":[],"keyboard":["Enter","Kp Enter"],"mouse":[]},"ui_text_toggle_insert_mode":{"joypad":[],"keyboard":["Insert"],"mouse":[]},"ui_undo":{"joypad":[],"keyboard":["Z|ctrl"],"mouse":[]},"ui_up":{"joypad":[11,"1|-1.000000"],"keyboard":["Up"],"mouse":[]}}'
 
+var _display_initialized := false
+
 
 func _ready() -> void:
 	if CogitoNet.dedicated_boot:
@@ -122,12 +124,8 @@ func toggle_fullscreen(is_fullscreen: bool) -> void:
 		apply_content_scale_factor(gui_scale)
 		fullscreen_mode = false
 
-		var window = get_window()
 		await get_tree().create_timer(window_operations_delay).timeout
-		window.size = windowed_resolution
-		window.content_scale_size = Vector2i.ZERO
-		window.scaling_3d_scale = 1.0
-		center_window()
+		apply_windowed_size(windowed_resolution)
 
 
 func apply_content_scale_factor(value: float) -> void:
@@ -152,7 +150,9 @@ func refresh_render():
 	if fullscreen_mode:
 		window.scaling_3d_scale = fullscreen_resolution_scale_val
 	else:
-		window.size = windowed_resolution
+		window.size = fit_windowed(
+			windowed_resolution, _usable_rect(), _decorations(), RESOLUTION_DICTIONARY.values()
+		)
 		window.content_scale_size = Vector2i.ZERO
 		window.scaling_3d_scale = 1.0
 
@@ -175,10 +175,7 @@ func _on_resolution_selected(index: int) -> void:
 	apply_content_scale_factor(gui_scale)
 
 	if prev_windowed_resolution != windowed_resolution:
-		var window = get_window()
-		window.size = windowed_resolution
-		window.content_scale_size = Vector2i.ZERO
-		center_window()
+		apply_windowed_size(windowed_resolution)
 
 		options_have_changed.emit()
 		windowed_resolution_has_changed.emit()
@@ -337,18 +334,71 @@ func load_options(skip_applying: bool = false):
 	options_loaded.emit(skip_applying)
 
 	# Only apply window mode + resolution + refresh when a config actually exists,
-	# and when we're not skipping applying.
-	if !skip_applying and have_cfg:
+	# and when we're not skipping applying. Only the first load at startup touches the
+	# window: menus reload options on every open and close, and re-applying then snapped a
+	# hand-resized window back to the saved size. An options menu reverts its own changes.
+	if !skip_applying and have_cfg and not _display_initialized:
+		_display_initialized = true
 		refresh_render()
 
 
 # Centers the window in the middle of the user's current screen
 func center_window() -> void:
-	var window = get_window()
-	var center_of_screen = DisplayServer.screen_get_position() + DisplayServer.screen_get_size() / 2
-	var window_size = window.get_size_with_decorations()
 	await get_tree().create_timer(window_operations_delay).timeout
-	window.position = center_of_screen - window_size / 2
+	var window := get_window()
+	window.position = centered_position(window.size, _usable_rect(), _decorations())
+
+
+## Resize the windowed game to [param size], shrunk to fit the current screen, and centre it.
+func apply_windowed_size(size: Vector2i) -> void:
+	var window := get_window()
+	window.size = fit_windowed(size, _usable_rect(), _decorations(), RESOLUTION_DICTIONARY.values())
+	window.content_scale_size = Vector2i.ZERO
+	window.scaling_3d_scale = 1.0
+	center_window()
+
+
+## [param size] if its decorated window fits inside [param usable] with room to spare,
+## otherwise the largest of [param presets] that does. A screen-sized window plus its
+## frame fills the whole work area: the title bar presses against the panel and every
+## resize edge sits on the screen boundary.
+static func fit_windowed(
+	size: Vector2i, usable: Rect2i, decorations: Vector2i, presets: Array = []
+) -> Vector2i:
+	if usable.size.x <= 0 or usable.size.y <= 0 or _fits(size, usable, decorations):
+		return size
+	var best := Vector2i.ZERO
+	for preset in presets:
+		var candidate := Vector2i(preset)
+		if _fits(candidate, usable, decorations) and candidate.x * candidate.y > best.x * best.y:
+			best = candidate
+	if best != Vector2i.ZERO:
+		return best
+	return size.min((usable.size - decorations).max(Vector2i.ONE))
+
+
+static func _fits(size: Vector2i, usable: Rect2i, decorations: Vector2i) -> bool:
+	var outer := size + decorations
+	return outer.x < usable.size.x and outer.y < usable.size.y
+
+
+## Client-area position that centres the decorated window inside [param usable].
+static func centered_position(size: Vector2i, usable: Rect2i, decorations: Vector2i) -> Vector2i:
+	var outer := size + decorations
+	var spare := usable.size - outer
+	var offset := Vector2i(spare.x >> 1, spare.y >> 1).max(Vector2i.ZERO)
+	# The title bar sits above the client area; the side borders are equal.
+	var side := decorations.x >> 1
+	return usable.position + offset + Vector2i(side, decorations.y - side)
+
+
+func _usable_rect() -> Rect2i:
+	return DisplayServer.screen_get_usable_rect(get_window().current_screen)
+
+
+func _decorations() -> Vector2i:
+	var window := get_window()
+	return (window.get_size_with_decorations() - window.size).max(Vector2i.ZERO)
 
 
 func set_vsync(is_enabled: bool):
