@@ -236,6 +236,11 @@ func try_respawn(id: String, life: int) -> String:
 		if attr.has_method("reset_after_respawn"):
 			attr.reset_after_respawn()
 	policy.restore_attributes(actor)
+	# A new life starts without the burning, poison or frost the player died with.
+	if actor.cogito_properties:
+		actor.cogito_properties.reset_element_state()
+	if actor.actor_elements:
+		actor.actor_elements.reset_element_state()
 	actor.is_dead = false
 	actor.position = start.origin
 	actor.basis = Basis.IDENTITY

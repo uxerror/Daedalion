@@ -194,6 +194,11 @@ func apply_element_save_data(data: Dictionary) -> void:
 	_update_movement()
 
 
+## Clears stun, cooldown and freeze immunity silently. Reset the CogitoProperties first.
+func reset_element_state() -> void:
+	apply_element_save_data({"v": CogitoProperties.ELEMENT_SAVE_VERSION})
+
+
 func _on_element_applied(element: CogitoProperties.Element, _amount: float, _source: Node) -> void:
 	if element == CogitoProperties.Element.SHOCK:
 		_on_shocked()

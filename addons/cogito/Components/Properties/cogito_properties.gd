@@ -219,6 +219,7 @@ var _frozen_wet_sustained : bool = false
 var _rigid_freeze_before : bool = false
 var _state_tick : float = 0.0
 var _replica_clock_offset := 0.0
+var _authored_elemental_properties := 0
 
 ## Interval of heat radiation ticks, in seconds.
 const HEAT_TICK := 0.25
@@ -250,6 +251,7 @@ func _ready():
 		if len(players): audio_stream_player_3d = players[0]
 		
 	fuel_remaining = fuel
+	_authored_elemental_properties = elemental_properties
 	network_replica = is_client_copy(self)
 	reaction_timer.timeout.connect(check_for_systemic_reactions)
 	damage_timer.timeout.connect(apply_burn_damage)
@@ -1211,6 +1213,12 @@ func get_element_save_data() -> Dictionary:
 		"heat_tick": _heat_tick,
 		"burn_damage_left": burn_damage_left,
 	}
+
+
+## Silently returns to the authored, element-free state: no reactions, damage or state
+## signals, only element_state_restored. Used when a networked player respawns.
+func reset_element_state() -> void:
+	apply_element_save_data({"v": ELEMENT_SAVE_VERSION, "elemental_properties": _authored_elemental_properties})
 
 
 ## Restores element states saved with get_element_save_data(). States, levels and timers continue where they were.

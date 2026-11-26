@@ -42,9 +42,9 @@ func test_laboratory_stand_switches_show_elements_on_client(_timeout := 60000) -
 	var s_fire := s_level.get_node(STANDS + "StandFire/Campfire") as CogitoElementArea
 	var c_freezer := c_level.get_node(STANDS + "StandCold/Freezer") as CogitoElementArea
 	assert_bool(c_fire.enabled).is_equal(s_fire.enabled)
-	var before := c_fire.enabled
+	var was_enabled := c_fire.enabled
 	await _press(client, c_level, "StandFire/Console/CampfireSwitch")
-	assert_bool(s_fire.enabled).is_not_equal(before)
+	assert_bool(s_fire.enabled).is_not_equal(was_enabled)
 	assert_bool(c_fire.enabled).is_equal(s_fire.enabled)
 	for node in c_fire.visuals:
 		assert_bool(node.visible).is_equal(c_fire.enabled)

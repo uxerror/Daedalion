@@ -344,3 +344,31 @@ func test_actor_destroy_burnout_uses_damage_veto_and_preserves_respawn_binding()
 
 func _is_fire_effect(effect: Node) -> bool:
 	return effect.get_meta(CogitoProperties.VFX_KIND_META) == &"fire"
+
+
+# GUI report: a respawned player kept every element status it died with.
+func test_respawn_clears_element_status_on_server_and_owner() -> void:
+	_server.player_world.get_parent().config.respawn_delay = 0.0
+	var props := _actor.cogito_properties
+	props.apply_element(ELEMENT.POISON, 5)
+	props.apply_element(ELEMENT.COLD, 5)
+	await _ticks(8)
+	var mirror := _owner.local_player().cogito_properties
+	assert_bool(props.is_poisoned and props.is_chilled).is_true()
+	assert_bool(mirror.is_poisoned and mirror.is_chilled).is_true()
+	var life: int = _server.player_world.avatar_for(_owner.local_player_id()).lifetime
+	_actor.decrease_attribute("health", 1000)
+	_pump()
+	assert_bool(_actor.is_dead).is_true()
+	assert_str(_server.player_world.death.try_respawn(_owner.local_player_id(), life)).is_empty()
+	await _ticks(8)
+	for copy: CogitoProperties in [props, mirror]:
+		var affected := copy.is_poisoned or copy.is_chilled or copy.is_frozen or copy.is_on_fire
+		assert_bool(affected).is_false()
+		assert_bool(copy.element_levels.is_empty()).is_true()
+		assert_array(copy.spawned_effects.filter(is_instance_valid)).is_empty()
+	assert_bool(_actor.actor_elements.is_movement_locked()).is_false()
+	assert_float(_actor.actor_elements.speed_multiplier).is_equal(1.0)
+	var health: float = _actor.player_attributes.health.value_current
+	await _ticks(90)
+	assert_float(_actor.player_attributes.health.value_current).is_equal(health)
