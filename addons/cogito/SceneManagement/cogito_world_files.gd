@@ -85,10 +85,17 @@ func _lock() -> Error:
 		if entry == name or not entry.begins_with(LOCK) or not entry.ends_with(".lock"):
 			continue
 		var owner := entry.trim_prefix(LOCK).get_slice("-", 0)
-		if not owner.is_valid_int() or int(owner) == pid or OS.is_process_running(int(owner)):
+		if not owner.is_valid_int() or int(owner) == pid or _process_alive(int(owner)):
 			return ERR_BUSY
 		dir.remove(entry)
 	return OK
+
+
+# Godot logs an engine ERROR for a dead PID that is not its child. Ask procfs first on Linux.
+static func _process_alive(pid: int) -> bool:
+	if OS.get_name() == "Linux" and DirAccess.dir_exists_absolute("/proc/self"):
+		return DirAccess.dir_exists_absolute("/proc/%d" % pid)
+	return OS.is_process_running(pid)
 
 
 ## Release only this instance's claim. Never flush gameplay on close.
