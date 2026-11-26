@@ -167,10 +167,13 @@ func get_element_speed_multiplier() -> float:
 
 
 ## Called by CogitoProperties.deal_elemental_damage(): the damage already has resistances applied.
-func receive_elemental_damage(amount: float, element: CogitoProperties.Element, source: Node = null, _hit_direction := Vector3.ZERO, _hit_position := Vector3.ZERO) -> bool:
+func receive_elemental_damage(
+	amount: float, element: CogitoProperties.Element, source: Node = null,
+	_hit_direction := Vector3.ZERO, _hit_position := Vector3.ZERO, environment := false
+) -> bool:
 	if is_dead:
 		return false
-	var applied := decrease_attribute("health", amount, source)
+	var applied := decrease_attribute("health", amount, source, environment)
 	if network_movement_only and not applied:
 		return false
 	elemental_damage_received.emit(amount, element, source)
@@ -208,14 +211,16 @@ func increase_attribute(attribute_name: String, value: float, value_type: Consum
 
 
 ## Subtract on authority. Pass the instigating node for attacks and physical impacts.
-func decrease_attribute(attribute_name: String, value: float, source: Node = null) -> bool:
+func decrease_attribute(
+	attribute_name: String, value: float, source: Node = null, environment := false
+) -> bool:
 	var attribute = player_attributes.get(attribute_name)
 	if not attribute:
 		CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Decrease attribute: " + attribute_name + " - Attribute not found")
 		return false
 	if network_movement_only:
 		var api := player_interaction_component.network_interactions
-		if not api or not api.get_parent().death.allows_damage(self, source):
+		if not api or not api.get_parent().death.allows_damage(self, source, environment):
 			return false
 	attribute.subtract(value)
 	if network_movement_only and source and attribute_name == "health" and not is_dead:

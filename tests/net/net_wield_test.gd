@@ -277,7 +277,9 @@ func test_poison_dart_applies_element_only_to_authoritative_target(_timeout := 1
 	await _ticks(9)
 	assert_float(target.get_node("Health").value_current).is_equal(100.0)
 	assert_bool(target.cogito_properties.is_poisoned).is_true()
-	assert_bool(replica.cogito_properties.is_poisoned).is_false()
+	await _ticks(8)
+	assert_bool(replica.cogito_properties.is_poisoned).is_true()
+	assert_bool(replica.cogito_properties.is_processing()).is_false()
 	assert_float(replica.get_node("Health").value_current).is_equal(100.0)
 
 

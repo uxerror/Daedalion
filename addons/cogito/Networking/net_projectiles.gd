@@ -10,6 +10,10 @@ const STOCK := preload("net_stock.gd")
 const PROFILE := preload("net_wield_profile.gd")
 const COMBAT := preload("net_combat_events.gd")
 
+## Optional authority policy for weapon exposure: (target, instigator, damage_allowed) -> bool.
+## The default suppresses both direct damage and status on a protected player target.
+var element_contact_policy: Callable
+
 var _serial := 0
 var _flights := {}
 
@@ -188,14 +192,18 @@ func _step(id: int, flight: Dictionary, start: Vector3, delta: float) -> void:
 	if allowed and (row.has("npc") or flight.material < 0 or soft_contact):
 		combat.hit(hit.collider, flight.damage, actor, dir, point)
 	# These are the contact reactions from the shipped burning and wet dart scenes.
-	if allowed and props:
+	var expose := allowed
+	if element_contact_policy.is_valid():
+		expose = element_contact_policy.call(hit.collider, actor, allowed)
+	if expose and props:
 		var flammable := CogitoProperties.ElementalProperties.FLAMMABLE
 		if flight.burning and props.elemental_properties & flammable:
 			props.set_on_fire()
 		if flight.wet:
 			props.make_wet()
-	if allowed and flight.element != CogitoProperties.Element.PHYSICAL:
+	if expose and flight.element != CogitoProperties.Element.PHYSICAL:
 		CogitoProperties.apply_element_to(hit.collider, flight.element, flight.buildup, actor)
+	if allowed and flight.element != CogitoProperties.Element.PHYSICAL:
 		CogitoProperties.deal_elemental_damage(
 			hit.collider, flight.element_damage, flight.element, actor, dir, point
 		)

@@ -30,6 +30,7 @@ func bind(level: Node, key: String, generation: int) -> void:
 			candidates[node.get_parent()] = true
 		if (
 			node is RigidBody3D
+			or node is CogitoElementArea
 			or node.has_method("net_state")
 			or node.is_in_group("Persist")
 			or node.is_in_group("save_object_state")
@@ -47,7 +48,10 @@ func bind(level: Node, key: String, generation: int) -> void:
 	for id in objects.keys():
 		var node := objects[id]
 		if not (
-			node is RigidBody3D or node.has_method("net_state") or _has_addressable_child(node)
+			node is RigidBody3D
+			or node is CogitoElementArea
+			or node.has_method("net_state")
+			or _has_addressable_child(node)
 		):
 			objects.erase(id)
 			continue
@@ -73,11 +77,13 @@ func bind(level: Node, key: String, generation: int) -> void:
 				components[str(node.get_path_to(child))] = child
 				_owners[child as InteractionComponent] = node
 		_components[id] = components
+		node.tree_exiting.connect(_forget_object.bind(id, node), CONNECT_ONE_SHOT)
 
 
 func _needs_parent_address(node: Node) -> bool:
 	return (
-		node is ReadableComponent
+		node is CogitoProperties
+		or node is ReadableComponent
 		or node is SpinnerInteraction
 		or node is LockpickInteraction
 		or node is PickupComponent
@@ -102,7 +108,16 @@ func register_runtime(id: String, node: Node) -> void:
 		components[str(node.get_path_to(child))] = child
 		_owners[child] = node
 	_components[id] = components
+	node.tree_exiting.connect(_forget_object.bind(id, node), CONNECT_ONE_SHOT)
 	registered.emit(id, node)
+
+
+func _forget_object(id: String, node: Node) -> void:
+	for component: InteractionComponent in _components.get(id, {}).values():
+		_owners.erase(component)
+	_components.erase(id)
+	_ids.erase(node)
+	objects.erase(id)
 
 
 ## Reject a removed, queued or reparented object even if the content was present at bind.
@@ -127,6 +142,11 @@ func address(component: InteractionComponent) -> Dictionary:
 	if not is_instance_valid(node) or not is_instance_valid(component) or id_for(node).is_empty():
 		return {}
 	return {"entity_id": _ids[node], "component_key": str(node.get_path_to(component))}
+
+
+## Whether an entity offers any MP2 actions to revision-checked requests.
+func has_actions(id: String) -> bool:
+	return not _components.get(id, {}).is_empty()
 
 
 ## Only bound keys accepted at bind time can select a component.

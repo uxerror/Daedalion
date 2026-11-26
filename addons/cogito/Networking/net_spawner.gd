@@ -184,14 +184,23 @@ func _instantiate(id: String, spec: Dictionary) -> Node3D:
 	if node is CogitoProjectile:
 		# Some authored ammo drops reuse the projectile prefab as their pickup model.
 		node.set_meta(&"cogito_item_drop", true)
-		if not multiplayer.is_server():
-			for props in node.find_children("*", "CogitoProperties", true, false):
-				props.free()
 	node.transform = world.entities.root.global_transform.affine_inverse() * spec.pose
 	world.entities.root.add_child(node)
 	world.entities.register_runtime(id, node)
 	_live[id] = {"node": node, "spec": spec.duplicate()}
 	return node
+
+
+## Release carry ownership and retain one removal record for a destroyed object.
+func remove_world_object(node: Node) -> void:
+	var world: Node = get_parent().world
+	var id: String = world.entities.id_for(node)
+	if not multiplayer.is_server() or id.is_empty() or world.is_removed(id):
+		return
+	if node.has_meta(&"net_carrier"):
+		get_parent().carry.release(node.get_meta(&"net_carrier"))
+	_live.erase(id)
+	world.publish(id, {"removed": true})
 
 
 func _despawn(id: String) -> void:

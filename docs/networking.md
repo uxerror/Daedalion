@@ -1,6 +1,6 @@
 # Multiplayer sessions
 
-Daedalion 1.4 MP6 gives each admitted identity a server-owned Advanced player and private inventory. The server simulates world interactions, pickups, shared containers, vendor transactions and equipped items. It also simulates rigid bodies, grants exclusive carry and seat ownership and drives vehicles from their occupant’s movement commands. Hitscan, melee and ballistic impacts resolve in the shooter’s server world. The server owns survival meters, damage, death and individual respawns. It also owns NPC perception, combat, loot and draggable corpses. Offline death uses the existing save-slot reload screen.
+Daedalion 1.4 MP7 gives each admitted identity a server-owned Advanced player and private inventory. The server simulates world interactions, pickups, shared containers, vendor transactions and equipped items. It also simulates rigid bodies, grants exclusive carry and seat ownership and drives vehicles from their occupant’s movement commands. Hitscan, melee and ballistic impacts resolve in the shooter’s server world. The server owns survival meters, damage, death and individual respawns. It also owns NPC perception, combat, loot and draggable corpses. Offline death uses the existing save-slot reload screen.
 
 ## Try the Laboratory
 
@@ -99,7 +99,7 @@ respawn_delay=10.0
 | `respawn_delay` | Finite, nonnegative seconds, default `10.0`. Zero enables immediate requests. | `--respawn-delay 1.5` |
 | `display_name` | `Host` for the listen player. Clients supply their own name in join credentials, default `Player`. | Config file |
 
-The protocol version is 10. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
+The protocol version is 11. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
 
 The dedicated level starts empty and simulates admitted remote avatars. Their first-person cameras, HUDs and light-meter cameras are omitted. The default demo boot prevents the menu subtree from entering the tree. Dedicated startup skips solo save recovery and cleanup, the fade panel, game options, graphics and input-map setup by Cogito's menu autoload. The engine still loads project resources, Cogito settings and the existing autoload nodes, including InputHelper, DebugLine, InputRouter, audio and quest services. Full export stripping is scheduled for MP11.
 
@@ -590,13 +590,64 @@ For the template mannequin, the server instantiates one draggable rigid torso wi
 
 For a custom behaviour, add the server-side state processor and a chart transition from each state that can enter it. Extend `CogitoNPC.net_state()` and `apply_net_state(fields, silent)`, preserving the base fields and calling the base apply method. Store durable animation parameters in those fields, including any phase needed for joining midway. Replica apply must only install presentation values. Send transient cosmetics with `player_world.combat.npc_event(npc, event, point)` on the server and handle custom events on `npc_presented`. Keep damage, item spawns and navigation in server callbacks. NPC state and event payloads must be understood by both content builds.
 
+## Elements
+
+The listen host or dedicated server owns contact reactions, area overlaps, fire spread, heat,
+wetness and conduction, cold, poison, resistance, fuel and destruction. Simulation continues
+in an empty room. The server drives NPC panic, stun and automatic struggle through the MP6
+chart. Player movement edges reach the server through MP1 even while frozen so that a fresh
+press can struggle against the ice. The owner can still look around. Authoritative speed and
+action restrictions also gate the owner's interaction and wield feedback.
+
+Protocol 11 adds `Session/Players/Elements`. The server samples continuous values at 10 Hz. A flag transition wakes its component for
+the next physics tick. It batches changed rows for each ready observer within the MP4 radius of 96 m. A batch carries the level key,
+epoch and server simulation time. Each row carries an entity/component identity, revision,
+interest-entry flag and packed integers. Avatar rows share reliable channel 0 with spawns.
+Props and areas share reliable channel 2 with removal and RESET. Settled values cost no
+repeated rows. Continuous element samples leave interaction revisions alone. Toggling an area with a direct
+interaction component also advances its MP2 request revision.
+
+| Component | Public state |
+| --- | --- |
+| Properties | Material flags and burning, wet, charged, chilled, frozen, poisoned and charred bits. Five buildup levels in steps of 1/32 unit. Remaining fuel in tenths of a second. Absolute fuel and buildup expiry times in server deciseconds, with −1 for no deadline. Element props with a health meter also replicate its value to 0.01 for the stand readout. |
+| Area or fluid | Enabled and charged flags, dousing/reignition buildup in 1/32 units and the charge-hold deadline. The enabled flag drives the scene's authored visuals. |
+| Actor | Stun, speed multiplier in thousandths, action permission and stun, cooldown and refreeze-immunity deadlines. The owning Advanced avatar binds the HUD and vignette. Other players and NPCs show their configured world-space effects. |
+
+On first observation or return to interest the replica installs the current state and
+persistent effects silently. Live fire transitions can play the authored sounds; live stun
+can flash the owner's vignette. Replicas never start a heat sensor, gameplay timer or panic
+transition. Destruction uses the MP3 removal record. The Laboratory RESET button installs
+fresh authored stand objects under the same registered IDs, including consumed grass.
+DROP BALL releases the authoritative rigid body and MP4 delivers its movement.
+
+Area damage and subsequent burn, cold and poison ticks enter MP5 with an empty attacker ID.
+The damage hook still receives the source node. Friendly fire does not protect a player
+from a hazard. A direct weapon hit uses the shooter's identity. By default, a rejected hit
+also suppresses the dart's exposure. A game can assign a Callable to
+`player_world.projectiles.element_contact_policy`. It receives `target, instigator, damage_allowed`
+and returns the desired exposure decision. For example, it may allow a protected
+player to be soaked by a wet dart. Subsequent status damage is environmental regardless of
+who originally applied the buildup. `CogitoNet.damage_policy` can veto those ticks as well. If a game authors `BurnOutResult.DESTROY` on an online actor,
+burnout deals its remaining health as environmental fire damage and uses MP5 or MP6 death.
+This preserves the player respawn binding and the NPC corpse lifecycle. Both stock actors
+use `BurnOutResult.NOTHING`.
+
+For a custom prop, put the normal `CogitoProperties` scene under its stable, level-authored
+object and expose it through the object's `cogito_properties` member. For a custom area,
+extend `CogitoElementArea`, configure its mask, exposure and `visuals`, and connect a switch
+to `set_enabled`. The registry discovers these components at level bind and for MP3 runtime
+objects. Give matching components the same names on every peer. Use
+`CogitoProperties.replica_updated` for custom visual readouts. Use presentation-only packed scenes for status VFX. Keep gameplay on the existing
+authority signals. Custom property fields or novel area reactions need corresponding
+capture and silent apply support in `net_element_state.gd`.
+
 ## Current limitations
 
 - One active level is supported. Translation includes network latency. Prediction, rollback and coordinated travel remain future work.
 - There is no lag compensation. The server tests targets where they are when the command is consumed. A moving target may have left the crosshair by then. Ballistic replicas can briefly overshoot until the authoritative impact arrives.
 - Recovered projectiles become independent rigid pickups. Attachment to moving hit targets and procedural debris need their own lifecycle. Online corpses use the single-torso approximation described above.
 - Living NPCs are bound from the shared level scene. A game that creates new living NPCs at runtime needs an archetype and spawn adapter. Authored mannequin corpses and loot already have runtime records.
-- Custom breakage without an MP2 state adapter remains server-local. Element spread and persistent elemental visuals need MP7. Quest inventory flags retain their offline evaluation until MP8 defines a network quest subject.
+- Custom debris and fragment spawns still need a network archetype. Authored elemental burnout has a level-scoped removal record. Quest inventory flags retain their offline evaluation until MP8 defines a network quest subject.
 - Inventories, attribute profiles and respawn deadlines are retained for one server process. MP9 covers saving world objects and player profiles to disk. The offline save format is unchanged.
 - A linked custom object needs its own state adapter to appear on observers. Use level-authored motion/visual tracks for replica animations. Method, nested-animation and audio tracks on door/switch replica players are removed at bind.
 - The sender repeats four frames. A burst that loses every copy of an edge can still lose the action. Artificial loss in the process test covers individual packet loss. LAN feel under jitter and mannequin animation need a visual playtest.
@@ -612,3 +663,10 @@ The loopback ENet harness runs a dedicated server with two clients, then a liste
 The additional `npc_dedicated` and `npc_listen` scenarios stage the arena guard, patrol and occluder. They check listener-specific detection, target loss and reacquisition, fire count against MP5 health, a single death and loot drop, corpse agreement within 4 cm, and a server-authorized drag. Dedicated also checks a silent late join. The harness prints received file-transport payload bytes per second, including other game traffic. The playing clients measure from the split through corpse settlement. The late client measures from its restored baseline through the first observed drag. For a visual Laboratory check, split up near its two authored NPCs, break sight, compare indicators and music, then kill the armed guard and drag the corpse from each peer.
 
 The regular gdUnit run includes the socket-free codec, jitter, wrap, interpolation, level interest, role, actor-lifecycle, entity identity, validation, concurrent commits, private interfaces, plate and baseline tests in `tests/net/`.
+
+The friendly-fire-off process scenario also operates the Laboratory fire stand, measures
+received game payload per client, burns grass away, damages a player and checks a late join.
+The listen scenario operates the freezer, holds movement through the lock, then walks after
+thaw. The arena instances the same stand scenes as the Laboratory. For the manual check,
+toggle each stand from the other window, leave a burning stand beyond 96 m, return after
+burnout and press RESET. On the cold stand, drop the ball before resetting it.

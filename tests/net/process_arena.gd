@@ -22,6 +22,7 @@ var _impacts := 0
 var _respawn_error := ""
 var _npc_shots := 0
 var _npc_deaths := 0
+var _burn_removals := 0
 
 
 class LossChannel:
@@ -99,6 +100,7 @@ func _ready() -> void:
 			if not CogitoNet.is_server():
 				_npc_deaths += int(event == &"death")
 	)
+	$FireStand/Grass1.tree_exiting.connect(func(): _burn_removals += 1, CONNECT_ONE_SHOT)
 	_control = OS.get_environment("COGITO_TEST_CONTROL")
 	CogitoNet.player_world.bind_level(self, Transform3D(Basis.IDENTITY, Vector3.UP), "arena")
 	CogitoNet.player_world.death.respawn_rejected.connect(func(why: String): _respawn_error = why)
@@ -177,6 +179,11 @@ func _physics_process(_delta: float) -> void:
 	data.merge(_inventory_sample())
 	data.merge(_combat_sample())
 	data.merge(_npc_sample())
+	var grass: Node = get_node_or_null("FireStand/Grass1")
+	data.grass_burning = grass != null and grass.cogito_properties.is_on_fire
+	data.grass_removed = grass == null
+	data.burn_removals = _burn_removals
+	data.flames = $FireStand/Campfire.enabled and $FireStand/Campfire/Flames.visible
 	data.merge(_survival_sample())
 	var box: RigidBody3D = $CarryBox
 	var crate_pos := box.global_position
@@ -199,7 +206,11 @@ func _survival_sample() -> Dictionary:
 		var avatar := CogitoNet.player_world.avatar_for(record.player_id)
 		if not avatar:
 			continue
-		var row := {"dead": avatar.actor.is_dead, "fraction": avatar.health_fraction}
+		var row := {
+			"dead": avatar.actor.is_dead,
+			"fraction": avatar.health_fraction,
+			"locked": avatar.actor.is_movement_locked_by_elements()
+		}
 		if CogitoNet.is_server() or avatar.actor == local:
 			row.health = avatar.actor.player_attributes.health.value_current
 		rows[record.display_name] = row
@@ -212,6 +223,26 @@ func _survival_sample() -> Dictionary:
 		"paused": get_tree().paused,
 		"menu": local != null and local.find_child("PauseMenu", false, false) != null,
 	}
+
+
+func _element_stage(order: Dictionary) -> void:
+	var cold: bool = order.place == "cold"
+	var stand: Node3D = $ColdStand if cold else $FireStand
+	for record in CogitoNet.players():
+		var actor := CogitoNet.player_world.avatar_for(record.player_id).actor
+		var offset := Vector3(-0.6, 0.91, 2.5)
+		if record.display_name != order.first:
+			offset = Vector3(-0.9, 0.91, -1.55) if cold else Vector3(-1.6, 0.91, 0.3)
+			actor.player_attributes.health.value_current = 100.0
+			if cold:
+				actor.cogito_properties.make_wet()
+				actor.cogito_properties.freeze_time = 2.4
+		actor.position = stand.position + offset
+		actor.velocity = Vector3.ZERO
+		CogitoNet.player_world.mark_teleport(record.player_id)
+	if not cold:
+		$FireStand/Campfire.damage_per_second = 4.0
+		$FireStand/Grass1/CogitoProperties.fuel_remaining = 1.5
 
 
 func _survival_stage(order: Dictionary) -> void:
@@ -466,6 +497,8 @@ func _presented(_id: String, _revision: int, _event: StringName) -> void:
 
 func _execute(order: Dictionary) -> void:
 	match order.op:
+		"element_stage":
+			_element_stage(order)
 		"npc_stage":
 			_stage_npc(order)
 		"drag_corpse":

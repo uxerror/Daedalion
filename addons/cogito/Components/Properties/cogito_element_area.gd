@@ -48,7 +48,10 @@ const TICK := 0.25
 @export_group("Debuging")
 @export var is_logging : bool = false
 
+var network_replica := false
 var is_electric : bool = false
+var _installing_replica := false
+var _authored_monitoring := true
 var _levels : Dictionary = {} # Element -> reaction buildup
 var _shock_time_left : float = 0.0
 ## Properties electrified by this area. They don't count as sources, so the area can't keep itself charged.
@@ -58,16 +61,46 @@ var _timer : Timer
 
 func _ready() -> void:
 	add_to_group(CogitoProperties.ELEMENT_STATE_GROUP)
+	_authored_monitoring = monitoring
+	network_replica = CogitoProperties.is_client_copy(self)
+	if network_replica:
+		set_deferred("monitoring", false)
 	_timer = Timer.new()
 	_timer.wait_time = TICK
-	_timer.autostart = true
+	_timer.autostart = not network_replica
 	_timer.timeout.connect(_tick)
 	add_child(_timer)
 	_update_visuals()
 
 
+## Install public area fields without emitting switch, conduction or reaction signals.
+func apply_element_replica(active: bool, charged: bool, remaining: float) -> void:
+	if not network_replica:
+		set_deferred("monitoring", false)
+	network_replica = true
+	if _timer:
+		_timer.stop()
+	_installing_replica = true
+	enabled = active
+	_installing_replica = false
+	is_electric = charged
+	_shock_time_left = remaining
+	_update_visuals()
+
+
+## Resume authority ticks if the scene survives session teardown.
+func unbind_element_replica() -> void:
+	network_replica = false
+	set_deferred("monitoring", _authored_monitoring)
+	if _timer and is_inside_tree():
+		_timer.start()
+
+
 func set_enabled(value: bool) -> void:
-	if enabled == value:
+	if _installing_replica:
+		enabled = value
+		return
+	if network_replica or enabled == value:
 		return
 	enabled = value
 	if is_inside_tree():
@@ -83,7 +116,7 @@ func interact(_player_interaction_component = null) -> void:
 
 ## Exposes the area to an element, see CogitoProperties.apply_element(). Returns the amount used.
 func apply_element(applied: CogitoProperties.Element, amount: float, _source: Node = null) -> float:
-	if amount <= 0.0:
+	if network_replica or amount <= 0.0:
 		return 0.0
 	var is_fire_area := element == CogitoProperties.Element.FIRE
 	match applied:
@@ -131,7 +164,7 @@ func get_element_save_data() -> Dictionary:
 
 ## Restores a state saved with get_element_save_data(). Doesn't emit reaction_triggered.
 func apply_element_save_data(data: Dictionary) -> void:
-	if data.is_empty():
+	if network_replica or data.is_empty():
 		return
 	set_enabled(bool(data.get("enabled", enabled)))
 	_levels.clear()
@@ -150,6 +183,8 @@ func apply_element_save_data(data: Dictionary) -> void:
 
 
 func _tick() -> void:
+	if network_replica:
+		return
 	var delta := _timer.wait_time
 	for key in _levels.keys():
 		_levels[key] -= reaction_decay_per_second * delta
@@ -169,7 +204,9 @@ func _tick() -> void:
 			if amount > 0.0:
 				CogitoProperties.apply_element_to(target, element, amount, self)
 			if damage > 0.0:
-				CogitoProperties.deal_elemental_damage(target, damage, element, self)
+				CogitoProperties.deal_elemental_damage(
+					target, damage, element, self, Vector3.ZERO, Vector3.ZERO, true
+				)
 	
 	if conducts_shock:
 		_tick_shock(targets, delta)
@@ -208,7 +245,10 @@ func _tick_shock(targets: Array, delta: float) -> void:
 			if !was_electric and props.is_electric:
 				_charged_by_me[props] = true
 		if shock_damage_per_second > 0.0:
-			CogitoProperties.deal_elemental_damage(body, shock_damage_per_second * delta, CogitoProperties.Element.SHOCK, self)
+			CogitoProperties.deal_elemental_damage(
+				body, shock_damage_per_second * delta, CogitoProperties.Element.SHOCK,
+				self, Vector3.ZERO, Vector3.ZERO, true
+			)
 
 
 func _set_electric(value: bool) -> void:

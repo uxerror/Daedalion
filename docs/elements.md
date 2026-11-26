@@ -31,3 +31,11 @@ For a continuous source, attach `CogitoElementArea` to an area with a collision 
 `CogitoElementStatusHud` shows buildup and active states with icons and a screen vignette. [Saves](saves.md) restore prop states and fuel, area state and actor timers. Visuals can refresh via `element_state_restored` without applying the original hit again.
 
 Run the [Laboratory](../addons/cogito/DemoScenes/COGITO_4_Laboratory.tscn) to try the fire, water/shock, cold and poison stands. Their [packed scenes](../addons/cogito/DemoScenes/DemoPrefabs/ElementStands) show the collision masks, sources and target properties together.
+
+## Multiplayer
+
+The server runs reactions and damage even outside observer range. Players in interest see the
+current area and prop visuals and other actors' status effects. Only the owning player sees
+their status HUD and vignette. The Laboratory switches, DROP BALL and RESET use the same
+authority path as other interactions. See the [networking guide](networking.md#elements)
+for damage attribution, update rates and custom components.

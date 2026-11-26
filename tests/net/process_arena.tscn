@@ -52,6 +52,9 @@
 [ext_resource type="Script" path="res://addons/cogito/CogitoNPC/cogito_patrol_path.gd" id="patrol"]
 [ext_resource type="Script" path="res://addons/cogito/CogitoNPC/cogito_patrol_point.gd" id="point"]
 
+[ext_resource type="PackedScene" path="res://addons/cogito/DemoScenes/DemoPrefabs/ElementStands/stand_fire.tscn" id="fire_stand"]
+[ext_resource type="PackedScene" path="res://addons/cogito/DemoScenes/DemoPrefabs/ElementStands/stand_cold.tscn" id="cold_stand"]
+
 [sub_resource type="NavigationMesh" id="patrol_mesh"]
 vertices = PackedVector3Array(18, 0, 17, 38, 0, 17, 38, 0, 38, 18, 0, 38)
 polygons = [PackedInt32Array(0, 1, 2, 3)]
@@ -89,6 +92,12 @@ size = Vector3(0.2, 0.3, 0.1)
 
 [node name="Arena" instance=ExtResource("1")]
 script = ExtResource("2")
+
+[node name="FireStand" parent="." instance=ExtResource("fire_stand")]
+position = Vector3(-18, 0, -25)
+
+[node name="ColdStand" parent="." instance=ExtResource("cold_stand")]
+position = Vector3(-26, 0, -25)
 
 [node name="PatrolRegion" type="NavigationRegion3D" parent="."]
 navigation_mesh = SubResource("patrol_mesh")

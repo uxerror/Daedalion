@@ -646,6 +646,45 @@ class Scenario:
             self.npc_bandwidth(late, baseline, dragged)
         print("PASS authoritative NPC", "listen" if listen else "dedicated")
 
+    def elements(self, a, b, first, cold=False):
+        viewers = [b] if cold else [a, b]
+        starts = [self.pose(v, [first, "Ben" if not cold else "Ada"]) for v in viewers]
+        self.order(self.server, op="element_stage", place="cold" if cold else "fire", first=first)
+        if cold:
+            switch = "ColdStand/Console/FreezerSwitch/BasicInteraction"
+            self.use(a, switch)
+            self.sample(b, lambda s: s["vitals"]["Ada"]["locked"])
+            frozen = self.sample(self.server, lambda s: s["vitals"]["Ada"]["locked"])
+            self.order(b, op="walk")
+            self.sample(b, lambda s: s["walk"] == 0 and s["vitals"]["Ada"]["locked"])
+            held = self.pose(self.server, [first, "Ada"])
+            if math.dist(held["actors"]["Ada"], frozen["actors"]["Ada"]) > 0.12:
+                raise CheckFailed("frozen client moved while holding forward")
+            self.use(a, switch)
+            self.sample(b, lambda s: not s["vitals"]["Ada"]["locked"])
+            self.order(b, op="walk")
+            self.sample(b, lambda s: math.dist(s["actors"]["Ada"], held["actors"]["Ada"]) > 0.4)
+        else:
+            self.use(a, "FireStand/Console/CampfireSwitch/BasicInteraction")
+            for viewer in viewers:
+                self.sample(viewer, lambda s: s["flames"] and s["grass_burning"])
+            self.sample(b, lambda s: s["vitals"]["Ben"]["health"] < 100)
+            for viewer in [self.server, *viewers]:
+                self.sample(viewer, lambda s: s["grass_removed"] and s["burn_removals"] == 1)
+            late = self.fixture("Cy", "client")
+            self.state(late, [first, "Ben", "Cy"])
+            baseline = self.sample(late, lambda s: s["epoch"] and s["flames"] and s["grass_removed"])
+            sample = self.sample(late, lambda s: s["tick"] >= baseline["tick"] + 60)
+            if "rx" in baseline:
+                rate = (sample["rx"] - baseline["rx"]) * 60 / (sample["tick"] - baseline["tick"])
+                print(f"MP7 late Cy: {baseline['rx']} bytes through baseline, then {rate:.0f} B/s")
+            self.stop(late)
+        for viewer, start in zip(viewers, starts):
+            end = viewer.samples[-1]
+            if "rx" in end:
+                rate = (end["rx"] - start["rx"]) * 60 / (end["tick"] - start["tick"])
+                print(f"MP7 {viewer.directory.name} received {rate:.0f} B/s (all game traffic)")
+
     def friendly_fire_off(self):
         self.start(dedicated=True, friendly_fire=False)
         a = self.fixture("Ada", "client")
@@ -655,7 +694,8 @@ class Scenario:
         self.pose(a, ["Ada", "Ben"])
         self.pose(b, ["Ada", "Ben"])
         self.duel(a, b, "Ada", "Ben", friendly_fire=False)
-        print("PASS dedicated friendly_fire=false: accepted rifle fire leaves victim health unchanged")
+        self.elements(a, b, "Ada")
+        print("PASS dedicated friendly_fire=false: protected rifle target, fire damage, burnout, late join")
 
     def dedicated(self):
         self.start(dedicated=True)
@@ -759,11 +799,12 @@ class Scenario:
         self.hazards(self.server, client, "Host", "Ada")
         self.duel(self.server, client, "Host", "Ada")
         self.duel(client, self.server, "Ada", "Host")
+        self.elements(self.server, client, "Host", cold=True)
         self.stop(client)
         self.state(self.server, ["Host"])
         self.pose(self.server, ["Host"])
         self.stop(self.server)
-        print("PASS listen host + 1 client: bidirectional carry, throw, seats, driving, snap, movement, interactions in both directions, turnwheel, lockpick, private cutscene, container trade, purchase, bidirectional shots, dart recovery, flashlight, host identity, departure")
+        print("PASS listen host + 1 client: bidirectional carry, throw, seats, driving, snap, movement, interactions in both directions, turnwheel, lockpick, private cutscene, container trade, purchase, bidirectional shots, dart recovery, flashlight, host identity, freeze, thaw and departure")
 
 
 def main():

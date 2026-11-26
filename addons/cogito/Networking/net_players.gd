@@ -42,6 +42,8 @@ var spawner := SPAWNER.new()
 var bodies := preload("net_bodies.gd").new()
 ## Listener-specific NPC perception and presentation.
 var npcs := preload("net_npc_listeners.gd").new()
+## Public elemental state for world objects and avatars in observer interest.
+var elements := preload("net_elements.gd").new()
 ## Owner-scoped carry input and release.
 var carry := preload("net_carry.gd").new()
 ## Authoritative seat and driver claims.
@@ -67,6 +69,8 @@ var _elapsed := 0.0
 
 
 func _ready() -> void:
+	elements.name = "Elements"
+	add_child(elements)
 	npcs.name = "Npcs"
 	add_child(npcs)
 	death.name = "Death"
@@ -119,6 +123,7 @@ func bind_level(root: Node, start: Transform3D, key: String) -> void:
 	world.bind(root, key)
 	for id in world.entities.objects:
 		var node := world.entities.objects[id]
+		elements.track(id, node)
 		if node is CogitoNPC:
 			npcs.track(node)
 			bodies.track(id, node)
@@ -154,6 +159,7 @@ func _level_exiting() -> void:
 	interactions.clear()
 	npcs.clear()
 	bodies.clear()
+	elements.clear()
 	world.clear()
 	_bindings.clear()
 	if _owns_root:
@@ -191,6 +197,7 @@ func _release_subscription(peer: int) -> void:
 	world.forget(peer)
 	npcs.forget(peer)
 	bodies.forget(peer)
+	elements.forget(peer)
 
 
 @rpc("any_peer", "call_remote", "reliable", 0)
@@ -286,6 +293,7 @@ func _create(id: String, life: int, start: Transform3D, initial_pose: Dictionary
 	if not _prefab:
 		_prefab = load(AVATAR.PREFAB)
 	avatar.spawn(_prefab, _level, id, start, local, multiplayer.is_server())
+	elements.track("avatar:" + id, avatar.actor)
 	avatar.actor.player_interaction_component.network_interactions = interactions
 	avatar.wield.actor = avatar.actor
 	avatar.wield.players = self
@@ -342,6 +350,7 @@ func _remove(id: String) -> void:
 		seats.release(_avatars[id].actor)
 	npcs.forget(peer)
 	bodies.forget(peer)
+	elements.forget(peer)
 	world.forget(peer)
 	interactions.forget(peer)
 	_bindings.erase(peer)
@@ -463,7 +472,9 @@ func _physics_process(delta: float) -> void:
 	var positions := {}
 	for id in _avatars:
 		positions[_peer_by_id[id]] = _avatars[id].actor.global_position
-	bodies.advance(delta, positions, observers())
+	var peers := observers()
+	bodies.advance(delta, positions, peers)
+	elements.advance(delta, positions, peers)
 	_tick += 1
 	_elapsed += delta
 	var interval := 1.0 / clampi(snapshot_hz, 1, Engine.physics_ticks_per_second)

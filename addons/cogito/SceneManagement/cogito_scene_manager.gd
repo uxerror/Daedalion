@@ -291,6 +291,11 @@ func find_element_state_node(key: Dictionary, level_root: Node = null) -> Node:
 ## Records a destroyed level node so loading frees it again. The Persist snapshot
 ## already accounts for missing nodes with a save() method.
 func register_destroyed_node(node: Node) -> void:
+	if is_instance_valid(node) and node.has_meta(&"cogito_net_world"):
+		var world: Node = node.get_meta(&"cogito_net_world")
+		if world.multiplayer.is_server():
+			world.get_parent().spawner.remove_world_object(node)
+		return
 	_scene_persistence.register_destroyed_node(node)
 
 

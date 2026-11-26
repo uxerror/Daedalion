@@ -3,6 +3,8 @@ extends Node3D
 ## This class handles systeminc properties. Needs to be attached to a CogitoObject to work properly. For proper processing, said Object needs to have a signal hooked up to call check_for_systemic_interactions(collider).
 class_name CogitoProperties
 
+## Presentation-only notification after a network sample, including silent interest entry.
+signal replica_updated()
 signal has_ignited()
 signal has_been_extinguished()
 signal deal_burn_damage(burn_damage_amount:float)
@@ -61,9 +63,6 @@ enum BurnOutResult {
 enum MaterialProperties{
 	SOFT = 1,
 }
-
-@onready var damage_timer: Timer = $DamageTimer
-@onready var reaction_timer: Timer = $ReactionTimer
 
 ## Bitflag for elemental properties. Gets handled when a collision calls "check_for_systemic_interactions(collider)".
 @export_flags("CONDUCTIVE", "FLAMABLE", "WET") var elemental_properties: int = 0
@@ -181,6 +180,11 @@ enum MaterialProperties{
 ## If turned on, this object will print log messages (only if the global is_logging is turned on as well!)
 @export var is_logging : bool = true
 
+## True for a presentation copy bound to a remote authority.
+var network_replica := false
+## Received server deadlines in deciseconds: fuel, then FIRE through POISON (-1 = indefinite).
+var replica_deadlines := PackedInt32Array()
+
 var reaction_collider : Node3D = null
 var spawned_effects : Array[Node] # Used to store and clear out spawned effects
 var is_on_fire : bool = false
@@ -214,6 +218,7 @@ var _cold_vs_fire : float = 0.0
 var _frozen_wet_sustained : bool = false
 var _rigid_freeze_before : bool = false
 var _state_tick : float = 0.0
+var _replica_clock_offset := 0.0
 
 ## Interval of heat radiation ticks, in seconds.
 const HEAT_TICK := 0.25
@@ -234,6 +239,10 @@ const ELEMENT_STATE_GROUP := &"cogito_element_state"
 const ELEMENT_SAVE_VERSION := 1
 
 
+@onready var damage_timer: Timer = $DamageTimer
+@onready var reaction_timer: Timer = $ReactionTimer
+
+
 func _ready():
 	add_to_group(ELEMENT_STATE_GROUP)
 	if !audio_stream_player_3d:
@@ -241,12 +250,16 @@ func _ready():
 		if len(players): audio_stream_player_3d = players[0]
 		
 	fuel_remaining = fuel
+	network_replica = is_client_copy(self)
 	reaction_timer.timeout.connect(check_for_systemic_reactions)
 	damage_timer.timeout.connect(apply_burn_damage)
 	
 	if not get_parent().is_node_ready():
 		await get_parent().ready
 	
+	if network_replica:
+		set_process(false)
+		return
 	if ignite_on_ready:
 		set_on_fire.call_deferred()
 		
@@ -259,6 +272,45 @@ func _ready():
 	_update_processing()
 
 
+## Determine the role from the node's MultiplayerAPI, including isolated level branches.
+static func is_client_copy(node: Node) -> bool:
+	return (
+		node.is_inside_tree() and node.multiplayer != null
+		and node.multiplayer.has_multiplayer_peer() and not node.multiplayer.is_server()
+	)
+
+
+## Stop previously running offline timers when binding a loaded level to a client.
+func bind_element_replica() -> void:
+	network_replica = true
+	damage_timer.stop()
+	reaction_timer.stop()
+	_stop_heat()
+	set_process(false)
+
+
+## Install quantized levels and notify presentation after flags and actor restrictions are set.
+func apply_element_replica(
+	levels: Dictionary, remaining_fuel: float, deadlines: PackedInt32Array, sample_time: float
+) -> void:
+	element_levels = levels
+	fuel_remaining = remaining_fuel
+	replica_deadlines = deadlines
+	_replica_clock_offset = sample_time - Time.get_ticks_msec() * 0.001
+	replica_updated.emit()
+
+
+## Resume the ordinary component when its level survives disconnection.
+func unbind_element_replica() -> void:
+	network_replica = false
+	replica_deadlines.clear()
+	if is_on_fire:
+		_start_heat()
+		if burn_damage_amount > 0:
+			start_burn_damage_timer()
+	_update_processing()
+
+
 ## Returns the CogitoProperties of a node, or null if it has none (or no such member at all).
 static func get_properties_of(node: Object) -> CogitoProperties:
 	if node == null or not is_instance_valid(node):
@@ -268,6 +320,8 @@ static func get_properties_of(node: Object) -> CogitoProperties:
 
 
 func start_reaction_threshold_timer(passed_collider: Node3D):
+	if network_replica:
+		return
 	# Quick check to see if the collider has any CogitoProperties.
 	if !get_properties_of(passed_collider):
 		CogitoGlobals.debug_log(is_logging, "cogito_properties.gd", "Collider " + passed_collider.name + " has no properties.")
@@ -285,6 +339,8 @@ func start_reaction_threshold_timer(passed_collider: Node3D):
 
 
 func check_for_reaction_timer_interrupt(passed_collider: Node3D):
+	if network_replica:
+		return
 
 	# Quick check to see if the collider has any CogitoProperties.
 	if !get_properties_of(passed_collider):
@@ -305,6 +361,8 @@ func check_for_reaction_timer_interrupt(passed_collider: Node3D):
 
 
 func check_for_systemic_reactions():
+	if network_replica:
+		return
 	if !is_instance_valid(reaction_collider):
 		CogitoGlobals.debug_log(is_logging, "cogito_properties.gd","Reaction collider was null.")
 		return
@@ -341,14 +399,20 @@ func check_for_systemic_reactions():
 
 
 func make_conductive():
+	if network_replica:
+		return
 	elemental_properties |= ElementalProperties.CONDUCTIVE
 
 
 func make_flammable():
+	if network_replica:
+		return
 	elemental_properties |= ElementalProperties.FLAMMABLE
 
 
 func make_wet():
+	if network_replica:
+		return
 	if is_frozen:
 		_log("is frozen and can't get wet.")
 		return
@@ -366,6 +430,8 @@ func make_wet():
 
 
 func make_dry():
+	if network_replica:
+		return
 	if !(elemental_properties & ElementalProperties.WET):
 		return
 	elemental_properties &= ~ElementalProperties.WET
@@ -377,6 +443,8 @@ func make_dry():
 
 
 func set_on_fire():
+	if network_replica:
+		return
 	if is_frozen:
 		_log("is frozen and can't burn.")
 		return
@@ -406,26 +474,34 @@ func set_on_fire():
 
 
 func start_burn_damage_timer():
+	if network_replica:
+		return
 	if damage_timer.is_stopped():
 		damage_timer.wait_time = burn_damage_interval
 		damage_timer.start()
 
 
 func apply_burn_damage():
+	if network_replica:
+		return
 	var amount := burn_damage_amount * get_damage_multiplier(Element.FIRE)
-	deal_burn_damage.emit(amount)
-	# Calling damage received on Cogito Object or Enemy parent node, with the same arguments as other damage
-	# (amount, source, hit direction, hit position). The parent itself is the source.
 	var parent := get_parent()
-	if parent.has_signal("damage_received"):
-		var hit_position : Vector3 = parent.global_position if parent is Node3D else Vector3.ZERO
-		parent.damage_received.emit(amount, parent, Vector3.ZERO, hit_position)
-	
+	if parent is CogitoPlayer and parent.network_movement_only:
+		if parent.receive_elemental_damage(amount, Element.FIRE, parent, Vector3.ZERO, Vector3.ZERO, true):
+			deal_burn_damage.emit(amount)
+	else:
+		deal_burn_damage.emit(amount)
+		if parent.has_signal("damage_received"):
+			var hit_position: Vector3 = parent.global_position if parent is Node3D else Vector3.ZERO
+			parent.damage_received.emit(amount, parent, Vector3.ZERO, hit_position)
+
 	if is_on_fire:
 		start_burn_damage_timer()
 
 
 func extinguish(play_sound: bool = true):
+	if network_replica:
+		return
 	if !is_on_fire:
 		return
 	is_on_fire = false
@@ -457,6 +533,8 @@ func clear_spawned_effects(kind: StringName = &""):
 
 
 func make_electric():
+	if network_replica:
+		return
 	if can_conduct():
 		if is_electric:
 			return # Already electric.
@@ -474,6 +552,8 @@ func make_electric():
 
 
 func loose_electricity():
+	if network_replica:
+		return
 	if !is_electric:
 		return
 	is_electric = false
@@ -492,12 +572,22 @@ func spawn_elemental_vfx(vfx_packed_scene:PackedScene, kind: StringName = &""):
 		if is_instance_valid(oldest):
 			oldest.queue_free()
 	var spawned_object = vfx_packed_scene.instantiate()
+	if network_replica and get_parent() is CogitoNPC:
+		# MP6 disables the gameplay subtree. Its cosmetic particles still need frame time.
+		spawned_object.process_mode = Node.PROCESS_MODE_ALWAYS
 	spawned_object.set_meta(VFX_KIND_META, kind)
 	spawned_effects.append(spawned_object)
 	await get_tree().process_frame
 	if !is_instance_valid(spawned_object) or spawned_object.is_queued_for_deletion():
 		return # Cleared while waiting a frame.
 	get_parent().add_child(spawned_object)
+
+
+func _exit_tree() -> void:
+	# A reset or despawn can remove the component during the deferred VFX frame.
+	for effect in spawned_effects:
+		if is_instance_valid(effect) and not effect.get_parent():
+			effect.queue_free()
 
 
 func add_systemic_body(body: Node3D):
@@ -563,7 +653,7 @@ func get_damage_multiplier(element: Element) -> float:
 ## (wetness dries, applied charge runs out); a fire keeps burning until extinguished.
 ## Returns the amount that was actually applied after resistances and reactions.
 func apply_element(element: Element, amount: float, source: Node = null) -> float:
-	if amount <= 0.0 or element == Element.PHYSICAL:
+	if network_replica or amount <= 0.0 or element == Element.PHYSICAL:
 		return 0.0
 	amount *= get_resistance_multiplier(element)
 	if amount <= 0.0:
@@ -592,19 +682,26 @@ func apply_element(element: Element, amount: float, source: Node = null) -> floa
 ## Works with anything that has a damage_received signal (CogitoObject, CogitoNPC, ...) or a
 ## receive_elemental_damage(amount, element, source, hit_direction, hit_position) method (e.g. CogitoPlayer),
 ## which gets the damage type too. Returns the damage that was dealt.
-static func deal_elemental_damage(target: Node, amount: float, element: Element, source: Node = null, hit_direction := Vector3.ZERO, hit_position := Vector3.ZERO) -> float:
-	if !is_instance_valid(target):
+static func deal_elemental_damage(
+	target: Node, amount: float, element: Element, source: Node = null,
+	hit_direction := Vector3.ZERO, hit_position := Vector3.ZERO, environment := false
+) -> float:
+	if !is_instance_valid(target) or is_client_copy(target):
 		return 0.0
 	var typed := target.has_method("receive_elemental_damage")
 	if !typed and !target.has_signal("damage_received"):
 		return 0.0
 	var props := get_properties_of(target)
 	if props:
+		if props.network_replica:
+			return 0.0
 		amount *= props.get_damage_multiplier(element)
 	if amount <= 0.0:
 		return 0.0
 	if target is CogitoPlayer and target.network_movement_only:
-		if not target.receive_elemental_damage(amount, element, source, hit_direction, hit_position):
+		if not target.receive_elemental_damage(
+			amount, element, source, hit_direction, hit_position, environment
+		):
 			return 0.0
 	elif typed:
 		target.receive_elemental_damage(amount, element, source, hit_direction, hit_position)
@@ -618,7 +715,7 @@ static func deal_elemental_damage(target: Node, amount: float, element: Element,
 ## Applies an element to any node: its CogitoProperties, or its own apply_element() (e.g. CogitoElementArea).
 ## Returns the amount that was actually applied.
 static func apply_element_to(target: Node, element: Element, amount: float, source: Node = null) -> float:
-	if !is_instance_valid(target):
+	if !is_instance_valid(target) or is_client_copy(target):
 		return 0.0
 	var props := get_properties_of(target)
 	if props:
@@ -630,6 +727,8 @@ static func apply_element_to(target: Node, element: Element, amount: float, sour
 
 ## Called when the fuel runs out. Puts the fire out and applies burn_out_result.
 func burn_out():
+	if network_replica:
+		return
 	if !is_on_fire:
 		return
 	_log("burned out.")
@@ -644,6 +743,18 @@ func burn_out():
 				spawn_elemental_vfx(spawn_on_charred, VFX_CHARRED)
 	burned_out.emit()
 	if burn_out_result == BurnOutResult.DESTROY:
+		var target := get_parent()
+		if target is CogitoPlayer and target.network_movement_only:
+			# The avatar binding survives death so the owner can respawn through MP5.
+			var health: CogitoAttribute = target.player_attributes.get("health")
+			if health:
+				target.receive_elemental_damage(
+					health.value_current, Element.FIRE, target, Vector3.ZERO, Vector3.ZERO, true
+				)
+			return
+		if target is CogitoNPC and target.network_state:
+			target.damage_received.emit(target.health.value_current, target, Vector3.ZERO, global_position)
+			return
 		# Lets a save remember that the object is gone, also when it isn't a Persist node.
 		CogitoSceneManager.register_destroyed_node(get_parent())
 		get_parent().queue_free()
@@ -808,6 +919,8 @@ func _warm_up() -> void:
 
 ## Freezes a wet object and keeps it frozen until thaw() or fire. Does nothing if the object isn't wet.
 func freeze() -> void:
+	if network_replica:
+		return
 	_freeze(false)
 
 
@@ -849,6 +962,8 @@ func _freeze(timed: bool) -> void:
 
 ## Melts a frozen object. It becomes wet again, as it was before it froze.
 func thaw() -> void:
+	if network_replica:
+		return
 	if !is_frozen:
 		return
 	is_frozen = false
@@ -871,7 +986,7 @@ func thaw() -> void:
 ## When the level runs out the state ends as if it had worn off: a frozen object thaws (and is wet again),
 ## a chill warms up, poison ends. Returns the new level.
 func reduce_element(element: Element, amount: float) -> float:
-	if amount <= 0.0:
+	if network_replica or amount <= 0.0:
 		return get_element_level(element)
 	var level := _set_level(element, get_element_level(element) - amount)
 	if level <= 0.0:
@@ -885,6 +1000,8 @@ func reduce_element(element: Element, amount: float) -> float:
 
 ## Removes all poison buildup and the poisoned state.
 func cure_poison() -> void:
+	if network_replica:
+		return
 	element_levels.erase(Element.POISON)
 	_timed_states.erase(Element.POISON)
 	_end_poison()
@@ -945,6 +1062,34 @@ func _is_decaying(element: Element) -> bool:
 	return true
 
 
+## Seconds until this buildup expires at the current decay rate without further exposure.
+func element_time_remaining(element: Element) -> float:
+	if network_replica:
+		if element == Element.PHYSICAL or element >= replica_deadlines.size():
+			return -1.0
+		if replica_deadlines[element] < 0:
+			return -1.0
+		var now := _replica_clock_offset + Time.get_ticks_msec() * 0.001
+		return maxf(0.0, replica_deadlines[element] / 10.0 - now)
+	if not _is_decaying(element):
+		return -1.0
+	var rate := _decay_rate(element)
+	return get_element_level(element) / rate if rate > 0.0 else -1.0
+
+
+func _decay_rate(element: Element) -> float:
+	var duration: float
+	if element == Element.WATER:
+		duration = dry_time
+	elif element == Element.COLD and (is_frozen or is_chilled):
+		duration = freeze_time if is_frozen else chill_time
+	elif element == Element.POISON and is_poisoned:
+		duration = poison_time
+	else:
+		return buildup_decay_per_second
+	return buildup_threshold / duration if duration > 0.0 else 0.0
+
+
 ## True while fire, cold or poison damage ticks are due.
 func _has_state_ticks() -> bool:
 	return (is_poisoned and poison_damage_per_second > 0.0) or ((is_chilled or is_frozen) and cold_damage_per_second > 0.0) \
@@ -952,6 +1097,9 @@ func _has_state_ticks() -> bool:
 
 
 func _update_processing() -> void:
+	if network_replica:
+		set_process(false)
+		return
 	if is_on_fire and (fuel >= 0.0 or _heat_sensor):
 		set_process(true)
 		return
@@ -966,21 +1114,12 @@ func _update_processing() -> void:
 
 
 func _process(delta: float) -> void:
+	if network_replica:
+		return
 	for element in element_levels.keys():
 		if !_is_decaying(element):
 			continue
-		var rate := buildup_decay_per_second
-		if element == Element.WATER:
-			if dry_time <= 0.0:
-				continue
-			rate = buildup_threshold / dry_time
-		elif element == Element.COLD:
-			if is_frozen:
-				rate = buildup_threshold / freeze_time
-			elif is_chilled:
-				rate = buildup_threshold / chill_time
-		elif element == Element.POISON and is_poisoned:
-			rate = buildup_threshold / poison_time
+		var rate := _decay_rate(element)
 		if _set_level(element, get_element_level(element) - rate * delta) <= 0.0:
 			_on_level_depleted(element)
 	if _cold_vs_fire > 0.0:
@@ -991,11 +1130,11 @@ func _process(delta: float) -> void:
 		while _state_tick >= interval:
 			_state_tick -= interval
 			if is_poisoned and poison_damage_per_second > 0.0:
-				deal_elemental_damage(get_parent(), poison_damage_per_second * interval, Element.POISON, get_parent())
+				_deal_state_damage(poison_damage_per_second * interval, Element.POISON)
 			if (is_chilled or is_frozen) and cold_damage_per_second > 0.0:
-				deal_elemental_damage(get_parent(), cold_damage_per_second * interval, Element.COLD, get_parent())
+				_deal_state_damage(cold_damage_per_second * interval, Element.COLD)
 			if is_on_fire and fire_damage_per_second > 0.0:
-				deal_elemental_damage(get_parent(), fire_damage_per_second * interval, Element.FIRE, get_parent())
+				_deal_state_damage(fire_damage_per_second * interval, Element.FIRE)
 	else:
 		_state_tick = 0.0
 	if is_on_fire:
@@ -1009,6 +1148,12 @@ func _process(delta: float) -> void:
 			if fuel_remaining <= 0.0:
 				burn_out()
 	_update_processing()
+
+
+func _deal_state_damage(amount: float, element: Element) -> void:
+	deal_elemental_damage(
+		get_parent(), amount, element, get_parent(), Vector3.ZERO, Vector3.ZERO, true
+	)
 
 
 func _on_level_depleted(element: Element) -> void:
@@ -1071,6 +1216,8 @@ func get_element_save_data() -> Dictionary:
 ## Restores element states saved with get_element_save_data(). States, levels and timers continue where they were.
 ## Nothing reacts to the restore: no reactions, damage, burn out or state signals, only element_state_restored.
 func apply_element_save_data(data: Dictionary) -> void:
+	if network_replica:
+		return
 	if data.is_empty():
 		return
 	var body := get_parent() as RigidBody3D

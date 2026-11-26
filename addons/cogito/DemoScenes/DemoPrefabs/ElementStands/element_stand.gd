@@ -3,6 +3,8 @@ extends Node3D
 ## reset_stand() puts the reset_nodes back the way they are in the stand scene (burned grass, charred crates,
 ## hurt dummies, dropped balls), release() lets go of frozen rigid bodies, cure_all() cures poison.
 
+signal net_changed(event: StringName)
+
 ## Nodes restored by reset_stand(). They are taken from a fresh instance of this stand's scene,
 ## so they come back with the settings they have in the scene file.
 @export var reset_nodes : Array[NodePath] = []
@@ -12,8 +14,32 @@ extends Node3D
 @export var cure_targets : Array[NodePath] = []
 
 
+var _generation := 0
+
+
+## The generation orders RESET against burnouts on the world lifecycle channel.
+func net_state() -> Dictionary:
+	return {"generation": _generation}
+
+
+## A fresh level already has the authored objects. Live resets also replace missing ones.
+func apply_net_state(fields: Dictionary, silent: bool) -> void:
+	if not silent and int(fields.generation) != _generation:
+		_replace_nodes()
+	_generation = fields.generation
+
+
 ## Restores reset_nodes from the stand's scene file. Destroyed nodes are created again.
 func reset_stand() -> void:
+	if CogitoProperties.is_client_copy(self):
+		return
+	_replace_nodes()
+	if has_meta(&"cogito_net_world"):
+		_generation += 1
+		net_changed.emit(&"")
+
+
+func _replace_nodes() -> void:
 	if scene_file_path.is_empty():
 		push_warning(name + ": reset_stand() only works on an instanced stand scene.")
 		return
@@ -29,6 +55,8 @@ func reset_stand() -> void:
 		var index := -1
 		var old := get_node_or_null(path)
 		if old:
+			if old.has_meta(&"net_carrier"):
+				get_meta(&"cogito_net_world").get_parent().carry.release(old.get_meta(&"net_carrier"))
 			index = old.get_index()
 			old.name = String(old.name) + "_old" # Frees the name for the new node.
 			parent.remove_child(old)
@@ -42,6 +70,8 @@ func reset_stand() -> void:
 		parent.add_child(fresh_node)
 		for node: Node in owners:
 			node.owner = owners[node]
+		if has_meta(&"cogito_net_world"):
+			get_meta(&"cogito_net_world").restore_element_object(fresh_node)
 		if index >= 0:
 			parent.move_child(fresh_node, mini(index, parent.get_child_count() - 1))
 	fresh.free()
@@ -49,6 +79,8 @@ func reset_stand() -> void:
 
 ## Releases the release_bodies (RigidBody3D freeze = false).
 func release() -> void:
+	if CogitoProperties.is_client_copy(self):
+		return
 	for path in release_bodies:
 		var body := get_node_or_null(path) as RigidBody3D
 		if body:

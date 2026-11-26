@@ -25,10 +25,10 @@ func can_damage(attacker_player_id: String, victim_player_id: String, source: No
 
 
 ## Resolve provenance on the server, including child hitboxes and carried or thrown bodies.
-func allows_damage(victim: CogitoPlayer, source: Node) -> bool:
+func allows_damage(victim: CogitoPlayer, source: Node, environment := false) -> bool:
 	if not multiplayer.is_server() or victim.is_dead:
 		return false
-	var origin := source
+	var origin := source if not environment else null
 	var attacker := ""
 	while origin:
 		if origin.has_meta(&"net_damage_owner"):

@@ -33,6 +33,7 @@ func bind(root: Node, key: String) -> void:
 		var node := entities.objects[id]
 		node.set_meta(&"cogito_net_world", self)
 		revisions[id] = 0
+		_watch_area(id, node)
 		if node.has_method("net_state"):
 			_states[id] = node.net_state()
 			if multiplayer.is_server():
@@ -56,8 +57,29 @@ func bind(root: Node, key: String) -> void:
 func _runtime_registered(id: String, node: Node) -> void:
 	node.set_meta(&"cogito_net_world", self)
 	revisions.get_or_add(id, 0)
+	_watch_area(id, node)
+	get_parent().elements.track(id, node)
 	if node is RigidBody3D:
 		get_parent().bodies.track(id, node)
+
+
+func _watch_area(id: String, node: Node) -> void:
+	if node is CogitoElementArea and multiplayer.is_server() and entities.has_actions(id):
+		node.enabled_changed.connect(_area_enabled.bind(id))
+
+
+func _area_enabled(_enabled: bool, id: String) -> void:
+	# An interactable area's MP2 guard changes immediately. MP7 supplies its visible state.
+	publish(id, {})
+
+
+## Replace an authored stand object under its original id after RESET.
+func restore_element_object(node: Node) -> void:
+	var id := CogitoPersistentId.of(node)
+	_states[id] = {}
+	holders.erase(id)
+	revisions[id] = revisions.get(id, 0) + 1
+	entities.register_runtime(id, node)
 
 
 ## Tombstone kept for late joiners and contested pickup replies.
@@ -79,6 +101,8 @@ func clear() -> void:
 		var node: Variant = entities.objects[id]
 		if not is_instance_valid(node):
 			continue
+		if node is CogitoElementArea and node.enabled_changed.is_connected(_area_enabled.bind(id)):
+			node.enabled_changed.disconnect(_area_enabled.bind(id))
 		if node.has_method("net_unbind"):
 			node.net_unbind()
 		node.remove_meta(&"cogito_net_world")
@@ -100,6 +124,8 @@ func activate_link(target: Node, actor: PlayerInteractionComponent) -> void:
 	if target is CogitoDoor:
 		if not target.is_locked:
 			target.interact(actor)
+	elif target is CogitoElementArea:
+		target.interact(actor)
 	elif target is CogitoButton or target is CogitoSwitch:
 		if is_instance_valid(actor):
 			target.interact(actor)

@@ -14,6 +14,9 @@ signal stun_ended()
 ## Emitted when struggle() lowered the freeze. remaining is the COLD level left (0 = broke free).
 signal struggled(remaining: float)
 
+## Owner HUD feedback for a live replicated stun transition.
+signal replica_stun_flash()
+
 ## The actor's CogitoProperties. Leave empty to use a sibling or child CogitoProperties.
 @export var properties : CogitoProperties
 
@@ -50,6 +53,9 @@ var is_stunned : bool = false
 var stun_time_left : float = 0.0
 ## Seconds left in which a new SHOCK doesn't stun. Read only.
 var stun_cooldown_left : float = 0.0
+
+## Server action restriction for a replica, including game-specific actor overrides.
+var replica_can_act := true
 
 var _struggle_tick : float = 0.0
 var _immunity_left : float = 0.0
@@ -109,6 +115,8 @@ func can_jump() -> bool:
 ## False while stunned, and while frozen if frozen_blocks_actions is on.
 ## Actors check this before interacting, using wieldables or items.
 func can_act() -> bool:
+	if properties and properties.network_replica:
+		return replica_can_act
 	if is_stunned:
 		return false
 	return !(frozen_blocks_actions and is_frozen())
@@ -122,7 +130,7 @@ func is_movement_locked() -> bool:
 ## Struggles against a freeze: removes struggle_per_press of COLD. The actor thaws when it runs out.
 ## Returns true if the actor was frozen.
 func struggle() -> bool:
-	if !is_frozen():
+	if !is_frozen() or properties.network_replica:
 		return false
 	var remaining := properties.reduce_element(CogitoProperties.Element.COLD, struggle_per_press * properties.buildup_threshold)
 	struggled.emit(remaining)
@@ -132,6 +140,8 @@ func struggle() -> bool:
 ## Stuns the actor for seconds, unless it is still immune from the last stun.
 ## Returns true if the actor got stunned.
 func stun(seconds: float = shock_stun_time) -> bool:
+	if properties and properties.network_replica:
+		return false
 	if seconds <= 0.0 or is_stunned or stun_cooldown_left > 0.0:
 		return false
 	is_stunned = true
@@ -140,6 +150,21 @@ func stun(seconds: float = shock_stun_time) -> bool:
 	_update_processing()
 	stunned.emit()
 	return true
+
+
+## Install restrictions from authority without invoking struggle, movement or stun gameplay.
+func apply_element_replica(
+	stun_active: bool, speed: float, remaining: float, cooldown: float, actions: bool, silent: bool
+) -> void:
+	var flash := not silent and not is_stunned and stun_active
+	is_stunned = stun_active
+	speed_multiplier = speed
+	stun_time_left = remaining
+	stun_cooldown_left = cooldown
+	replica_can_act = actions
+	var player := get_parent() as CogitoPlayer
+	if flash and player and player.is_local_presentation:
+		replica_stun_flash.emit()
 
 
 ## Returns the stun and freeze timers as a dictionary of plain values, see CogitoProperties.get_element_save_data().
@@ -157,7 +182,7 @@ func get_element_save_data() -> Dictionary:
 ## Restores timers saved with get_element_save_data(). Apply the CogitoProperties data first.
 ## Doesn't emit stunned or stun_ended.
 func apply_element_save_data(data: Dictionary) -> void:
-	if data.is_empty():
+	if data.is_empty() or (properties and properties.network_replica):
 		return
 	is_stunned = bool(data.get("stunned", false))
 	stun_time_left = float(data.get("stun_time_left", 0.0))
@@ -208,10 +233,15 @@ func _update_movement() -> void:
 
 
 func _update_processing() -> void:
+	if properties and properties.network_replica:
+		set_process(false)
+		return
 	set_process(is_stunned or stun_cooldown_left > 0.0 or _immunity_left > 0.0 or (auto_struggle and is_frozen()))
 
 
 func _process(delta: float) -> void:
+	if properties and properties.network_replica:
+		return
 	if _immunity_left > 0.0:
 		_immunity_left -= delta
 		if _immunity_left <= 0.0:

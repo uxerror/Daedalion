@@ -28,8 +28,20 @@ func _ready() -> void:
 				surface_height += (collision.transform * collision_top).y
 				break
 
+	if network_replica:
+		set_physics_process(false)
 	body_entered.connect(body_enter)
 	body_exited.connect(body_exit)
+
+
+func apply_element_replica(active: bool, charged: bool, remaining: float) -> void:
+	super(active, charged, remaining)
+	set_physics_process(false)
+
+
+func unbind_element_replica() -> void:
+	super()
+	set_physics_process(true)
 
 
 func _physics_process(delta: float) -> void:
@@ -37,12 +49,12 @@ func _physics_process(delta: float) -> void:
 
 
 func body_enter(body: Node3D) -> void:
-	if body.has_method("fluid_area_enter"):
+	if not network_replica and body.has_method("fluid_area_enter"):
 		body.fluid_area_enter(self)
 
 
 func body_exit(body: Node3D) -> void:
-	if body.has_method("fluid_area_exit"):
+	if not network_replica and body.has_method("fluid_area_exit"):
 		body.fluid_area_exit(self)
 
 

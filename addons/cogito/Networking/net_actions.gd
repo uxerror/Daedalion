@@ -8,7 +8,7 @@ const DUAL := preload("../Components/Interactions/DualInteraction.gd")
 const HazardZone := preload("../Scripts/hazard_zone.gd")
 const AttributeZone := preload("../Scripts/cogito_attribute_zone.gd")
 const REACH_MARGIN := 0.25
-const UNSUPPORTED := "Unavailable online (MP7 elements)"
+const UNSUPPORTED := "Interaction has no online adapter"
 
 
 ## Protocol diagnostics stay in results. Expected races and short taps need no HUD message.
@@ -22,8 +22,6 @@ static func hud_reason(reason: String) -> String:
 			return "Unavailable"
 	if reason in ["No avatar in level", "Disabled action", "Ambiguous action", "Hold required"]:
 		reason = "Unavailable"
-	if reason.begins_with("Unavailable online"):
-		return "Unavailable online"
 	if reason == "Posture blocks interaction":
 		return "Can't interact in this position"
 	return reason
@@ -36,7 +34,7 @@ static func supported(node: Node, component: InteractionComponent) -> bool:
 	if (
 		component is PickupComponent
 		or (
-			(node is HazardZone or node is AttributeZone)
+			(node is HazardZone or node is AttributeZone or node is CogitoElementArea)
 			and component.get_script() == BASIC
 			and component.get_parent() == node
 		)

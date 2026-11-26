@@ -98,12 +98,14 @@ func bind(new_properties: CogitoProperties, new_actor_elements: CogitoActorEleme
 				properties.has_been_poisoned, properties.has_been_cured, properties.burned_out]:
 			_connect(sig, refresh)
 		_connect(properties.element_state_restored, refresh)
+		_connect(properties.replica_updated, refresh)
 		_connect(properties.element_applied, _on_element_applied)
 		_connect(properties.reaction_triggered, _on_reaction)
 		if !actor_elements:
 			_connect(properties.has_become_electric, flash_shock)
 	if actor_elements:
 		_connect(actor_elements.stunned, flash_shock)
+		_connect(actor_elements.replica_stun_flash, flash_shock)
 		_connect(actor_elements.struggled, _on_struggled)
 	refresh()
 
