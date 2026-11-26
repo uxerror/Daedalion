@@ -711,12 +711,20 @@ class Scenario:
         self.state(first, roster)
         self.state(second, roster)
         self.expect_rejection("old", "Content version mismatch", extra=("--content", "wrong"))
-        self.expect_rejection("duplicate", "Identity already connected", copy_from=first)
+        # A second login with Ada's key takes over the live session (crashed-client rejoin).
+        first.expected_failure = "Signed in from another session"
+        taken = self.fixture("Ada", "client", copy_from=first)
+        self.wait_line(first, lambda line: line.startswith("NET FAILED "))
+        if self.state(taken, roster) != (ada, roster):
+            raise CheckFailed("session takeover changed identity")
+        self.state(second, ["Ben"])
+        self.state(second, roster)
         self.stop(first)
+        self.stop(taken)
         self.state(second, ["Ben"])
         self.pose(self.server, ["Ben"])
         self.pose(second, ["Ben"])
-        again = self.fixture("Ada", "client", copy_from=first)
+        again = self.fixture("Ada", "client", copy_from=taken)
         if self.state(again, roster) != (ada, roster) or self.state(second, roster) != (ben, roster):
             raise CheckFailed("client restart changed identities")
         self.sample(again, lambda s: s["inventory_ready"] and s["inventories"].get("Ada") == holdings)
@@ -731,7 +739,7 @@ class Scenario:
         if self.state(restored, ["Ada"]) != (ada, {"Ada": ada}):
             raise CheckFailed("server restart changed identity")
         self.stop(restored)
-        print("PASS dedicated + 2 clients: carry race, throw, seats, driving, snap, movement, collision, interaction retry, keypad, turnwheel, lockpick, private cutscene, pickup race, drops, container, purchase, rifle, dart recovery, flashlight, late join, inventory reconnect, restart")
+        print("PASS dedicated + 2 clients: carry race, throw, seats, driving, snap, movement, collision, interaction retry, keypad, turnwheel, lockpick, private cutscene, pickup race, drops, container, purchase, rifle, dart recovery, flashlight, late join, session takeover, inventory reconnect, restart")
 
     def listen(self):
         self.start(dedicated=False)

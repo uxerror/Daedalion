@@ -59,14 +59,23 @@ func test_dedicated_rejection_duplicate_and_reconnect() -> void:
 	_pump()
 	var id := client.local_player_id()
 	assert_str(id).is_not_empty()
-	assert_int(returning.join("memory", 1203)).is_equal(OK)
-	_pump()
 	assert_int(returning.join("memory", 1204, {"content_version": "old"})).is_equal(OK)
 	_pump()
-	var expected := ["Identity already connected", "Content version mismatch"]
-	assert_array(failures).contains_exactly(expected)
+	assert_array(failures).contains_exactly(["Content version mismatch"])
 	assert_array(rejections).contains_exactly(failures)
-	client.disconnect_session()
+	# A crashed client's session lingers until the transport times out. A new login that
+	# proves the same key replaces it instead of being refused for ~30 s.
+	var kicked: Array[String] = []
+	client.session_failed.connect(func(reason: String) -> void: kicked.append(reason))
+	assert_int(returning.join("memory", 1203)).is_equal(OK)
+	_pump()
+	assert_str(returning.local_player_id()).is_equal(id)
+	assert_int(server.player_for_id(id).get("peer_id", 0)).is_equal(3)
+	assert_int(server.players().size()).is_equal(1)
+	assert_bool(client.is_online()).is_false()
+	assert_array(kicked).contains_exactly(["Signed in from another session"])
+	assert_bool(2 in server.multiplayer.get_peers()).is_false()
+	returning.disconnect_session()
 	_pump()
 	server.disconnect_session()
 	assert_int(server.start_server({"save_dir": "user://net/branch-dedicated"})).is_equal(OK)

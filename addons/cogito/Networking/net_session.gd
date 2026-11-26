@@ -127,15 +127,18 @@ func _answer(reply: Dictionary, display_name: String) -> void:
 	var pending: Dictionary = _pending.get(sender, {})
 	if not _api.is_server() or not pending.has("nonce") or pending.has("rejected"):
 		return
-	if _by_id.has(pending.claim):
-		_reject(sender, "Identity already connected")
+	var id := identity.authenticate(pending.claim, pending.nonce, reply)
+	if id.is_empty():
+		_reject(sender, "Identity verification failed")
 		return
+	if _by_id.has(id):
+		# The host's own identity never moves to a remote peer.
+		if _by_id[id].peer_id == 1:
+			_reject(sender, "Identity already connected")
+			return
+		_replace(_by_id[id].peer_id)
 	if _by_peer.size() >= config.max_players:
 		_reject(sender, "Server full")
-		return
-	var id := identity.authenticate(pending.claim, pending.nonce, reply)
-	if id.is_empty() or _by_id.has(id):
-		_reject(sender, "Identity verification failed")
 		return
 	_pending.erase(sender)
 	var record := {"player_id": id, "peer_id": sender, "display_name": display_name.left(64)}
@@ -183,6 +186,16 @@ func _peer_disconnected(peer_id: int) -> void:
 		if other != 1 and other != peer_id and _is_connected(other):
 			_player_removed.rpc_id(other, id)
 	_player_removed(id)
+
+
+## A login that proved the same key replaces the older session. After a client crash the
+## transport keeps the old peer until its timeout, which would otherwise lock the player out.
+## The old peer leaves the roster at once; like a rejection, its transport closes after the
+## reason has had time to arrive (an immediate ENet disconnect drops the queued RPC).
+func _replace(stale: int) -> void:
+	_peer_disconnected(stale)
+	_reject(stale, "Signed in from another session")
+	_watchdog.start()
 
 
 # ENet's default packet throttle randomly discards unreliable sends while RTT

@@ -374,3 +374,36 @@ func test_offline_inventory_uses_original_resource_and_owner_synchronously() -> 
 	assert_int(coins.quantity).is_equal(1)
 	assert_object(inv.assigned_quickslots[0]).is_same(coins)
 	assert_int(CogitoNet.get_child_count()).is_zero()
+
+
+# A crashed client still holds its session. The same key logging in again takes over:
+# the server keeps one avatar, the old peer is dropped and the inventory survives.
+func test_takeover_of_a_stale_session_keeps_inventory(_timeout := 15000) -> void:
+	var server := _branch(1)
+	server.start_server({"save_dir": "user://net/takeover"})
+	_arena(server)
+	var observer := _observer(3)
+	var starters := CogitoGlobals.cogito_settings.new_game_starter_items.duplicate()
+	CogitoGlobals.cogito_settings.new_game_starter_items.assign([_stack("HealthPotion", 3)])
+	var stale := _observer(2)
+	CogitoGlobals.cogito_settings.new_game_starter_items.assign(starters)
+	var id := stale.local_player_id()
+	server.player_world.avatar_for(id).actor.player_currencies.credits.value_current = 23
+	var leaves: Array[String] = []
+	observer.player_left.connect(func(left: String) -> void: leaves.append(left))
+	var returning := _branch(4)
+	returning.join("memory", 1802)
+	_arena(returning)
+	_pump()
+	await _ticks(3)
+	assert_str(returning.local_player_id()).is_equal(id)
+	assert_bool(stale.is_online()).is_false()
+	assert_int(server.players().size()).is_equal(2)
+	assert_int(server.player_for_id(id).peer_id).is_equal(4)
+	var restored := returning.player_world.inventory.local
+	assert_int(restored.data.inventory_slots[0].quantity).is_equal(3)
+	var actor := server.player_world.avatar_for(id).actor
+	assert_float(actor.player_currencies.credits.value_current).is_equal(23.0)
+	assert_float(returning.local_player().player_currencies.credits.value_current).is_equal(23.0)
+	assert_object(observer.player_world.avatar_for(id)).is_not_null()
+	assert_array(leaves).contains_exactly([id])
