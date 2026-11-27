@@ -313,7 +313,11 @@ func _instantiate(id: String, spec: Dictionary) -> Node3D:
 			scene = load(item.drop_scene)
 	if not scene:
 		return null
-	var instance := Corpse.create(scene) if spec.has("corpse") else scene.instantiate()
+	var instance: Node
+	if spec.has("corpse"):
+		instance = Corpse.create(scene, not CogitoNet.is_dedicated())
+	else:
+		instance = scene.instantiate()
 	if not instance is Node3D:
 		instance.free()
 		return null
