@@ -4,6 +4,7 @@ extends VBoxContainer
 signal closed
 
 const MenuApi := preload("../../Networking/net_menu_api.gd")
+const MONTHS := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 ## Override before entering the tree to use an isolated menu profile.
 var api: MenuApi
@@ -22,12 +23,11 @@ func _ready() -> void:
 	%Tabs.set_tab_title(1, tr("Join"))
 	%Tabs.tab_changed.connect(_focus_tab)
 	for world in api.worlds():
-		var saved := Time.get_datetime_string_from_unix_time(world.saved, true)
-		var pattern := tr("%s · %s UTC · generation %d · %d players")
-		var title := pattern % [world.name, saved, world.generation, world.players]
-		%Worlds.add_item(title)
-		%Worlds.set_item_tooltip(%Worlds.item_count - 1, title)
-		%Worlds.set_item_metadata(%Worlds.item_count - 1, world.name)
+		var title := tr("%s — %s") % [world.name, _format_save_time(world.saved)]
+		var details := tr("Generation %d · %d players") % [world.generation, world.players]
+		var index: int = %Worlds.add_item(title)
+		%Worlds.set_item_tooltip(index, "%s\n%s" % [title, details])
+		%Worlds.set_item_metadata(index, world.name)
 	_size_list(%Worlds)
 	%ContinueWorld.disabled = %Worlds.item_count == 0
 	if not %ContinueWorld.disabled:
@@ -35,6 +35,13 @@ func _ready() -> void:
 	for slot: String in api.solo_slots():
 		%SoloSlot.add_item(slot)
 	%Import.disabled = %SoloSlot.item_count == 0
+	if %Import.disabled:
+		%SoloSlot.add_item(tr("No solo saves"))
+		%SoloSlot.select(0)
+		%SoloSlot.set_item_disabled(0, true)
+		%SoloSlot.disabled = true
+		%SoloSlot.clip_text = false
+		%SoloSlot.fit_to_longest_item = true
 	%ContinueWorld.pressed.connect(host_world.bind("continue"))
 	%NewWorld.pressed.connect(host_world.bind("new"))
 	%Import.pressed.connect(host_world.bind("import"))
@@ -47,6 +54,13 @@ func _ready() -> void:
 	_refresh_recent()
 	_show_status("")
 	_focus_tab(0)
+
+
+func _format_save_time(timestamp: int) -> String:
+	var time_offset: int = Time.get_time_zone_from_system().bias * 60
+	var date := Time.get_datetime_dict_from_unix_time(timestamp + time_offset)
+	var month := tr(MONTHS[date.month - 1])
+	return tr("%02d %s %02d:%02d") % [date.day, month, date.hour, date.minute]
 
 
 func _focus_tab(index: int) -> void:
@@ -74,7 +88,7 @@ func host_world(action: String) -> void:
 	}
 	if action == "continue" and %Worlds.is_anything_selected():
 		config.world = %Worlds.get_item_metadata(%Worlds.get_selected_items()[0])
-	if action == "import" and %SoloSlot.selected >= 0:
+	if action == "import" and not %Import.disabled and %SoloSlot.selected >= 0:
 		config.import_slot = %SoloSlot.get_item_text(%SoloSlot.selected)
 	api.host(config, "continue" if action == "continue" else "new")
 

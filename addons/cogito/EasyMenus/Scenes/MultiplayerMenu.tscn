@@ -127,14 +127,17 @@ value = 8.0
 [node name="Rules" type="HBoxContainer" parent="Tabs/Host/Padding/Fields"]
 custom_minimum_size = Vector2(0, 40)
 
+[node name="Label" type="Label" parent="Tabs/Host/Padding/Fields/Rules"]
+text = "Friendly fire"
+
 [node name="FriendlyFire" type="CheckBox" parent="Tabs/Host/Padding/Fields/Rules"]
 unique_name_in_owner = true
-size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 18
-text = "Friendly fire"
+custom_minimum_size = Vector2(45, 0)
+size_flags_horizontal = 10
 button_pressed = true
+accessibility_name = "Friendly fire"
 
-[node name="NewWorld" type="Button" parent="Tabs/Host/Padding/Fields/Rules"]
+[node name="NewWorld" type="Button" parent="Tabs/Host/Padding/Fields"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(142, 36)
 size_flags_horizontal = 8

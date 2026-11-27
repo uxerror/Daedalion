@@ -179,9 +179,7 @@ func _hide_save_slots(listen_host: bool) -> void:
 func show_players(local_id: String, listen_host: bool) -> RosterPanel:
 	_hide_save_slots(listen_host)
 	var buttons := resume_game_button.get_parent() as VBoxContainer
-	buttons.custom_minimum_size.x = 300
 	buttons.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	buttons.add_theme_constant_override("separation", 6)
 	buttons.get_node("Separator_PanelContainer2").visible = listen_host
 	var panel: RosterPanel = preload("../Scenes/MultiplayerRoster.tscn").instantiate()
 	panel.local_id = local_id

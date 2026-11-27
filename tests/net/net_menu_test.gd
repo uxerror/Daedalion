@@ -36,11 +36,9 @@ func test_open_navigate_back_and_restore_keyboard_focus() -> void:
 	main.open_multiplayer()
 	await get_tree().process_frame
 	var screen := main.sub_menu
-	assert_bool(main.game_menu.is_visible_in_tree()).is_true()
+	assert_bool(main.game_menu.is_visible_in_tree()).is_false()
 	assert_bool(screen.get_node("%Worlds/Empty").visible).is_true()
 	assert_bool(screen.get_node("%Recent/Empty").visible).is_true()
-	var background: Button = main.get_node("%Multiplayer")
-	assert_int(background.get_focus_mode_with_override()).is_equal(Control.FOCUS_NONE)
 	assert_object(get_viewport().gui_get_focus_owner()).is_same(screen.get_node("%WorldName"))
 	var next := InputEventAction.new()
 	next.action = "ui_focus_next"

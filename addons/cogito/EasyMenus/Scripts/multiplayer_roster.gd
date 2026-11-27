@@ -49,8 +49,12 @@ func set_players(snapshot: Array[Dictionary]) -> void:
 			%Rows.add_child(row)
 			_rows[id] = row
 		var line := _rows[id]
-		line.get_node("%PlayerName").text = player.display_name
-		line.get_node("%PlayerName").tooltip_text = player.display_name
+		var name_label: Label = line.get_node("%PlayerName")
+		if name_label.text != player.display_name:
+			name_label.text = player.display_name
+			name_label.tooltip_text = player.display_name
+			if id == local_id:
+				_fit_local_name(name_label)
 		var level := tr(player.level) if not player.level.is_empty() else tr("Loading…")
 		line.get_node("%Level").text = level
 		line.get_node("%Level").tooltip_text = level
@@ -65,6 +69,13 @@ func set_players(snapshot: Array[Dictionary]) -> void:
 	var height: float = %Rows.get_child(0).get_combined_minimum_size().y if count else 0.0
 	var gap: int = %Rows.get_theme_constant("separation")
 	%Scroll.custom_minimum_size.y = count * height + maxi(count - 1, 0) * gap
+
+
+func _fit_local_name(name_label: Label) -> void:
+	var font := name_label.get_theme_font("font")
+	var font_size := name_label.get_theme_font_size("font_size")
+	var width := font.get_string_size(name_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	name_label.custom_maximum_size.x = ceilf(width)
 
 
 func _ask(id: String) -> void:

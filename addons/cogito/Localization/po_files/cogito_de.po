@@ -1268,8 +1268,50 @@ msgstr "Zurück"
 msgid "Cancel"
 msgstr "Abbrechen"
 
-msgid "%s · %s UTC · generation %d · %d players"
-msgstr "%s · %s UTC · Generation %d · %d Spieler"
+msgid "%s — %s"
+msgstr "%s — %s"
+
+msgid "%02d %s %02d:%02d"
+msgstr "%02d. %s %02d:%02d"
+
+msgid "Generation %d · %d players"
+msgstr "Generation %d · %d Spieler"
+
+msgid "Jan"
+msgstr "Jan."
+
+msgid "Feb"
+msgstr "Feb."
+
+msgid "Mar"
+msgstr "März"
+
+msgid "Apr"
+msgstr "Apr."
+
+msgid "May"
+msgstr "Mai"
+
+msgid "Jun"
+msgstr "Juni"
+
+msgid "Jul"
+msgstr "Juli"
+
+msgid "Aug"
+msgstr "Aug."
+
+msgid "Sep"
+msgstr "Sept."
+
+msgid "Oct"
+msgstr "Okt."
+
+msgid "Nov"
+msgstr "Nov."
+
+msgid "Dec"
+msgstr "Dez."
 
 msgid "Kick"
 msgstr "Entfernen"
@@ -1405,6 +1447,9 @@ msgstr "Einzelspielstand importieren"
 
 msgid "No saved worlds"
 msgstr "Keine gespeicherten Welten"
+
+msgid "No solo saves"
+msgstr "Keine Einzelspielstände"
 
 msgid "No recent servers"
 msgstr "Keine kürzlich besuchten Server"
