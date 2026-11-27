@@ -17,7 +17,7 @@ script = ExtResource("1")
 [node name="Tabs" type="TabContainer" parent="."]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(500, 160)
-custom_maximum_size = Vector2(-1, 500)
+custom_maximum_size = Vector2(-1, 550)
 size_flags_vertical = 3
 theme_override_fonts/font = ExtResource("4")
 
