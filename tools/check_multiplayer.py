@@ -151,7 +151,7 @@ class Scenario:
                 raise CheckFailed(f"{role.directory.name} exited ({rc})")
             return
         role.tail.append(line)
-        if "SCRIPT ERROR" in line or "Parse Error" in line:
+        if "SCRIPT ERROR" in line or "Parse Error" in line or '"!is_inside_tree()"' in line:
             detail = [line]
             for _ in range(10):
                 try:
@@ -882,7 +882,14 @@ class Scenario:
             first.kill()
             second.kill()
         else:
-            self.stop(second)
+            # Leave through the pause menu's Quit button like a player, not the stop file.
+            second.stopping = True
+            second.order += 1
+            order = second.directory / f"order-{second.order}"
+            order.with_suffix(".tmp").write_text(json.dumps({"op": "quit_client"}))
+            order.with_suffix(".tmp").replace(order)
+            while not second.exited:
+                self.next_line()
             self.pose(self.server, [first_name])
             self.server.stopping = True
             self.order(self.server, op="quit_host", value=51)

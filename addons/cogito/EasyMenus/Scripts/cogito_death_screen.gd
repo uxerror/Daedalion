@@ -138,6 +138,11 @@ func _exit_tree() -> void:
 
 
 func _on_quit_button_pressed() -> void:
+	# Leave after the button's input event, as the session frees this screen.
+	_quit.call_deferred()
+
+
+func _quit() -> void:
 	var tree := get_tree()
 	CogitoNet.disconnect_session()
 	tree.quit()

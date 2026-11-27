@@ -244,7 +244,12 @@ func _on_resume_game_button_pressed():
 
 
 func _on_quit_button_pressed():
-	# Leaving an online session frees this menu with the level, so keep the tree first.
+	# Leaving an online session frees this menu with the level. Doing that inside the
+	# button's input event leaves the viewport dispatching into a removed tree.
+	_quit.call_deferred()
+
+
+func _quit() -> void:
 	var tree := get_tree()
 	if _pauses_world:
 		CogitoSceneManager.delete_temp_saves()

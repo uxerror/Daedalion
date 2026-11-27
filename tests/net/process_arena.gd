@@ -524,13 +524,15 @@ func _execute(order: Dictionary) -> void:
 				var writer := CogitoNet.player_world.persistence
 				writer.files.storage.fail_before = _pause_staging
 				writer.request_save()
-		"save_world", "quit_host":
+		"save_world", "quit_host", "quit_client":
 			var actor := CogitoNet.local_player() as CogitoPlayerAdvanced
 			var menu := actor.pause_menu.instantiate() as CogitoPauseMenu
 			actor.add_child(menu)
-			if order.op == "quit_host":
+			if order.op == "quit_client":
+				_click_quit.call_deferred(menu)
+			elif order.op == "quit_host":
 				actor.player_currencies.credits.value_current = order.value
-				menu._on_quit_button_pressed.call_deferred()
+				_click_quit.call_deferred(menu)
 			elif (
 				menu.save_button.is_visible_in_tree() and not menu.load_button.is_visible_in_tree()
 			):
@@ -696,3 +698,21 @@ func _pause_staging(operation: String) -> bool:
 func _manual_finished(_err: Error, _generation_id: int, menu: CogitoPauseMenu) -> void:
 	print("NET MANUAL ", menu.save_button.text)
 	menu.close_pause_menu()
+
+
+# Press Quit through the window like a player does, so leaving runs from a real button
+# event that the level host's SubViewportContainer forwards into the room viewport.
+func _click_quit(menu: CogitoPauseMenu) -> void:
+	# The headless window is 64x64; give the menu its authored layout.
+	get_tree().root.size = Vector2i(1920, 1080)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var button := menu.find_child("QuitButton", true, false) as Button
+	var centre := button.get_global_rect().get_center()
+	for pressed in [true, false]:
+		var click := InputEventMouseButton.new()
+		click.button_index = MOUSE_BUTTON_LEFT
+		click.pressed = pressed
+		click.position = centre
+		click.global_position = centre
+		get_tree().root.push_input(click)
