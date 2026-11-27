@@ -14,7 +14,7 @@ Use `no_pause_menu_states` to restrict the pause menu in specific states. Enteri
 
 `CogitoMovementStep` computes ground acceleration and speed, air control and gravity, jumps and
 landing thresholds, crouch clearance and head height, static stair candidates, slides and movement
-stamina costs. Advanced calls these phases from its existing chart callbacks. It accelerates using
+stamina costs. Offline and with the network switch off, Advanced calls these phases from its chart callbacks. It accelerates using
 the stored direction, saves the requested velocity, queries stairs, then carries the adjusted
 momentum into the next tick. The controller owns the sweeps, shape changes and `move_and_slide()`.
 The chart, Timers and stamina attribute still advance on their respective clocks and commit effects.
@@ -29,6 +29,15 @@ Games overriding Advanced can keep their existing callbacks, exports and stair q
 that calls `super` runs the shared rules there. A custom movement mode can supply its own profile,
 contact observations and mode memory. Ladder, water, ledge, roll and platform handling continue
 through their existing Advanced callbacks.
+
+The online opt-in hook is `authority_movement_profile()`. Advanced matches its shipped
+scene and script. A different prefab or controller uses its own chart by default. A game
+using the same on-foot rules, chart events and standing/crouching shapes can opt in from
+its Advanced subclass by returning `capture_movement_profile()` from this hook. Return
+`null` for custom movement that the shared step does not implement. Set your movement
+exports before spawn. On-foot integrators can use `movement_grounded()` and
+`movement_floor_normal()` for the committed contacts. The environment switch and
+authority lifecycle are described in [Networking](networking.md#fixed-tick-authority-movement-pr1b).
 
 ## Per-actor input and presentation
 

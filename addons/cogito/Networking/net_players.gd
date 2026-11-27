@@ -537,6 +537,8 @@ func peer_for_actor(actor: CogitoPlayer) -> int:
 func mark_teleport(id: String) -> void:
 	if multiplayer.is_server() and _avatars.has(id):
 		var avatar := _avatars[id]
+		if avatar.actor.authority_movement:
+			avatar.actor.authority_movement.invalidate()
 		avatar.revision += 1
 		if avatar.source:
 			avatar.source.clear()

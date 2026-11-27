@@ -111,10 +111,12 @@ nice -n 19 godot --headless --path . --fixed-fps 60 res://tests/player/golden_ru
 The last command rewrites the reference CSVs after two byte-identical laps. The gdUnit
 test launches two fresh engine processes. Each compares two laps and the committed
 references and reports a digest of all routes. A mismatch prints the first differing row.
-The ten routes cover walk/sprint/stop and jump/landing, crouch hold/release under a roof
+The eighteen routes cover walk/sprint/stop and jump/landing, crouch hold/release under a roof
 and toggle in the open, stair ascent/descent, slide-jump, ladder ascent/descent/jump-off,
 surfacing/diving and climbing onto the pool bank, a dry ledge climb, hard landing through
 roll completion, a moving platform ride and seat entry/exit through the chart delay.
+They also exercise exhaustion, a drop, air steering, contact with a wall during sprint,
+jump from crouch and the timing of slide expiry and takeoff.
 
 Rows are sampled after physics, at the next `process_frame` signal, before the idle
 callbacks for that frame. Each row stores position, velocity, main velocity, local head and eye positions
@@ -123,5 +125,47 @@ and stamina as integers scaled by 100,000. Comparison is exact after rounding to
 enabled shapes (standing bit 0, crouching bit 1), contact/stage flags and cumulative
 effect counts compare exactly. The footstep detector counts footstep and landing
 playback calls, the audio autoload supplies jump one-shot starts, and the slide counter
-records the loop starting. All ten routes use the same comparison, including roll and
+records the loop starting. All eighteen routes use the same comparison, including roll and
 seat tweens. [Reference traces](../tests/player/golden/)
+
+
+## Prediction PR1b authority gates
+
+Run `net_authority_trace_test.gd` and `net_authority_movement_test.gd` under gdUnit.
+The trace test runs the actual listen authority in two fresh, fixed-60-Hz processes.
+SHA-256 digests pin all 1,442 legacy rows, including mode, shape, eye height, speed
+and stamina. Each row counts real Advanced moves and kernel commits. A second test
+compares 90 consecutive displacements on dedicated and listen authorities with a
+1 mm maximum difference and checks the replicated stamina HUD. Handoff tests count
+commits across ladder, water, seat, respawn, impulse, platform, ledge and roll boundaries.
+
+The first forward sample moves 13.89 mm on the test floor. Jump displacement and
+crouch eye motion also start on the sample tick. The table gives maximum allowed
+3D position differences in metres. The second bound compares each sample to the
+three legacy samples centred on that tick. This accounts for a tread or landing
+crossed one tick earlier. The toggle-roof trace ends while walking, which limits
+the reference window at its endpoint.
+
+| Route | Same tick | Within one tick |
+|---|---:|---:|
+| Walk, sprint, stop, jump and land | .090 | .055 |
+| Hold crouch and roof | .090 | .020 |
+| Toggle crouch and roof | .090 | .085 |
+| Stairs up and down | .240 | .015 |
+| Slide and slide-jump | .160 | .035 |
+| Exhaustion and regeneration | .120 | .001 |
+| Slope | .070 | .003 |
+| Diagonal wall slide | .070 | .003 |
+
+The stair bound includes the 20 cm difference between adjacent treads. Mode,
+posture, active hull and slide-jump latch must occur within two ticks of the
+reference. In that window speed must agree within 0.14 m/s and head height within
+5 mm. Slide-jump has bounds of 0.5 m/s and 0.12 m during takeoff and standing up.
+Stamina must agree within 0.14 units on every sample. The runner also
+checks actual playback and authoritative NPC noise counts per route. The offline
+golden runner retains its exact CSV, motion and save-byte checks.
+
+For process coverage run `python3 tools/check_multiplayer.py --file-transport`
+with `COGITO_AUTHORITY_MOVEMENT=0` and again with `COGITO_AUTHORITY_MOVEMENT=1`.
+The child processes inherit the switch. Compare the `PR0 file` rows using
+`consume_tick`, `effect_tick` and `screen_ms`.

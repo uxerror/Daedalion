@@ -107,6 +107,10 @@ func spawn(
 		ray.process_mode = Node.PROCESS_MODE_DISABLED
 	var template := actor.inventory_data
 	root.add_child(actor)
+	if server and OS.get_environment("COGITO_AUTHORITY_MOVEMENT") == "1":
+		var profile := actor.authority_movement_profile()
+		if profile:
+			actor.authority_movement = preload("net_authority_movement.gd").new(actor, profile)
 	if not server:
 		for attr: CogitoAttribute in actor.player_attributes.values():
 			attr.set_block_signals(false)

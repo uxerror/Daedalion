@@ -443,7 +443,7 @@ Reliable spawn RPCs use `Session/Players` for the initial room and deterministic
 
 | Role | Movement and view |
 | --- | --- |
-| Listen host's own avatar | Local input drives the authoritative Advanced chart. Its camera and HUD belong to the host. |
+| Listen host's own avatar | Local input drives the authoritative actor once per physics tick. Its camera and HUD belong to the host. |
 | Client's own avatar | Local input drives immediate mouse/stick look and sends one command packet each physics tick. Translation follows authoritative positions with exponential smoothing. |
 | Another player on a client | Snapshot playback updates the mannequin, including body yaw, head pitch and crouch height. The locomotion chart and device sampling are inactive. |
 | Client-owned avatar on either server | A per-avatar network source supplies commands to the same Advanced physics controller used offline. |
@@ -453,6 +453,43 @@ The project uses 60 physics ticks per second by default. Commands use unreliable
 `CogitoNet.snapshot_hz` defaults to 25. After physics the server sends one batch on unreliable channel 1 per ready peer per snapshot tick. The batch contains the poses of every avatar sharing that observer’s `CogitoLevel` root. Each pose includes server tick, input acknowledgement, position, velocity, yaw, neck yaw, pitch, head height and posture/moving/seat state. The owner keeps local aim during ordinary updates. Remote playback uses a 100 ms buffer and extrapolates velocity for at most 50 ms. A position discontinuity over 4 m clears the history. After forcing a server teleport or look, call `CogitoNet.player_world.travel.endpoint_for(player_id).mark_teleport(player_id)`. The next pose revision resets local look and invalidates buffered input from before the change. A new incarnation starts with empty history.
 
 Use `CogitoNet.player_world.travel.endpoint_for(player_id)` to find the room hosting a live identity, then call its `avatar_for(player_id)`. Its `actor` is the Advanced node. On a replica, `timeline.latest()` exposes the last received pose including `tick` and `ack`. On the server, `actor.last_consumed_sequence` records the last applied command.
+
+### Fixed-tick authority movement (PR1b)
+
+The development switch defaults to OFF. Launch the authority with the environment variable
+`COGITO_AUTHORITY_MOVEMENT=1`. For a GUI listen session run
+`COGITO_AUTHORITY_MOVEMENT=1 nice -n 19 godot --path .` and host from the multiplayer menu.
+For dedicated add `--headless -- --server` to that command. The spawner checks the switch and
+the prefab's movement profile after an authority avatar enters its room. Both topologies use
+the same controller. Owners still send protocol 14 commands and follow the published poses.
+
+After input sampling and ordered edge dispatch, the authority reads movement permissions,
+posture clearance and the previous contact summary. It samples crouch and eligible jump,
+derives heading from the current axes, then asks the shared step for a velocity. Two query
+bodies with the prefab's shape offsets sweep from an explicit world transform. Stair checks
+try the full and half height, forward motion, wall slide and downward support, as in Advanced.
+The final sweep resolves sliding and floor snap. The query bodies have zero collision layer
+and only enable their mask during a synchronous query. The room adapter exposes
+`blocked(pose)`, `support(pose, standing)` and `solve(pose, state, profile, dt)`.
+Re-querying uses the supplied pose and the previous contacts in `state`. A caller using
+a collision-disabled avatar can supply the original mask to the constructor.
+
+The actor commits the resulting transform, velocities, posture, eye, shape and contacts.
+The chart receives state events for existing animation and gameplay listeners. Its physics
+callbacks sleep through the entire commit. Jump and slide cooldowns, run exhaustion and
+regeneration use physics time on these ticks. Jump sounds, landing, slide playback, footstep
+noise and attribute updates run once on authority. Interaction checks use
+`movement_grounded()` and slope exhaustion uses `movement_floor_normal()`.
+
+Water and ladder movement, ledge climbs, hard-landing rolls, free fall, dynamic contacts,
+seats and external forces use Advanced. A dynamic hit discards the trial before any effect
+or displacement. The chart resumes with the live momentum, pose, posture, timer phases and
+last contacts. A force or gravity change queues one legacy body move at the next boundary.
+The synchronous seat exit pose supersedes the offline sitting transition delay. Death
+freezes the avatar, and respawn invalidates its contacts. Forced positions inside collision
+geometry use Advanced penetration recovery. The next supported tick captures the actor
+again, including changes made by the legacy mode. Delivery to replicas continues at the
+normal snapshot rate.
 
 ## World interactions
 

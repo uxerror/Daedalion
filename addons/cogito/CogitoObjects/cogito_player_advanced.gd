@@ -4,6 +4,7 @@ class_name CogitoPlayerAdvanced
 extends CogitoPlayer
 
 const Movement := preload("cogito_movement_step.gd")
+const AuthorityMovement := preload("../Networking/net_authority_movement.gd")
 const ACTION := CogitoPlayerCommand.Action
 
 signal mouse_movement(relative_mouse_movement:Vector2)
@@ -168,6 +169,8 @@ var input_source: CogitoPlayerInputSource
 var current_command := CogitoPlayerCommand.new()
 ## Acknowledgement hook for the last accepted sequence.
 var last_consumed_sequence: int = -1
+var authority_movement: AuthorityMovement
+var authority_solve_count := 0
 var _input_suspended := false
 
 # Scratch storage for math with several inputs/outputs; refreshed at the callback that uses it.
@@ -328,6 +331,8 @@ func _ready():
 
 
 func _exit_tree() -> void:
+	if authority_movement:
+		authority_movement.unbind(self)
 	if is_local_presentation:
 		InputRouter.active_changed.disconnect(_on_input_owner_changed)
 		InputRouter.remove(on_input)
@@ -379,11 +384,16 @@ func capture_movement_state() -> CogitoMovementState:
 	state.gravity = gravity
 	state.gravity_vector = gravity_vector
 	state.gravity_vec = gravity_vec
-	state.on_floor = is_on_floor()
-	state.floor_normal = get_floor_normal() if state.on_floor else Vector3.ZERO
+	state.on_floor = movement_grounded()
+	state.floor_normal = movement_floor_normal() if state.on_floor else Vector3.ZERO
 	state.on_wall = is_on_wall()
 	state.wall_normal = get_wall_normal() if state.on_wall else Vector3.ZERO
 	state.on_ceiling = is_on_ceiling()
+	if authority_movement and authority_movement.contacts:
+		var contact := authority_movement.contacts
+		state.wall_normal = contact.wall_normal
+		state.on_wall = contact.wall_normal != Vector3.ZERO
+		state.on_ceiling = contact.ceiling
 	state.head_offset = head_offset
 	state.air_steps_enabled = is_enabled_stair_stepping_in_air
 	state.mode = current_moving_state as CogitoMovementState.Mode
@@ -427,6 +437,27 @@ func capture_movement_state() -> CogitoMovementState:
 		state.regen_stopped = stamina.regen_timer.is_stopped()
 	state.previous_y = stamina.last_y if stamina else 0.0
 	return state
+
+
+func movement_grounded() -> bool:
+	if authority_movement and authority_movement.contacts:
+		return authority_movement.contacts.floor_normal != Vector3.ZERO
+	return is_on_floor()
+
+
+func movement_floor_normal() -> Vector3:
+	if authority_movement and authority_movement.contacts:
+		return authority_movement.contacts.floor_normal
+	return get_floor_normal()
+
+
+## An inherited or custom prefab opts in by overriding this method with its matched tuning.
+func authority_movement_profile() -> CogitoMovementProfile:
+	if get_script().resource_path != "res://addons/cogito/CogitoObjects/cogito_player_advanced.gd":
+		return null
+	if scene_file_path != "res://addons/cogito/PackedScenes/cogito_player_advanced.tscn":
+		return null
+	return capture_movement_profile()
 
 
 func capture_movement_profile() -> CogitoMovementProfile:
@@ -626,7 +657,7 @@ func _free_look(delta):
 
 
 func _stair_handling(delta):
-	if not is_jumping_started and is_on_floor():
+	if not is_jumping_started and movement_grounded():
 		is_jumping_started = false
 		is_in_air = false
 	else:
@@ -740,7 +771,7 @@ func step_check(delta: float, is_jumping_started_: bool, step_result: StepResult
 							step_result.normal = test_motion_result.get_collision_normal()
 							break
 
-	if not is_jumping_started_ and not is_step and is_on_floor():
+	if not is_jumping_started_ and not is_step and movement_grounded():
 		step_result.is_step_up = false
 		var test_motion_result: PhysicsTestMotionResult3D = PhysicsTestMotionResult3D.new()
 		var transform3d: Transform3D = global_transform
@@ -807,6 +838,23 @@ func _on_animation_player_animation_finished(anim_name):
 	is_roll_animation_finished = anim_name == 'roll'
 
 
+func _move_body() -> void:
+	if network_movement_only:
+		authority_solve_count += 1
+		if authority_movement:
+			authority_movement.contacts = null
+	move_and_slide()
+
+
+func apply_external_force(force_vector: Vector3):
+	if authority_movement:
+		authority_movement.pending_force += force_vector
+		if force_vector != Vector3.ZERO:
+			authority_movement.force_requested = true
+	else:
+		super.apply_external_force(force_vector)
+
+
 func override_gravity(_external_gravity_force : float, _external_gravity_vector: Vector3):
 	CogitoGlobals.debug_log(true, "cogito_player.gd", "override gravity with " + str(_external_gravity_force) + ", " + str(_external_gravity_vector))
 	gravity = _external_gravity_force
@@ -814,8 +862,12 @@ func override_gravity(_external_gravity_force : float, _external_gravity_vector:
 	
 #	Forcing a move and slide with new gravity
 	gravity_vec = gravity_vector * gravity
+	if authority_movement:
+		authority_movement.pending_force += gravity_vec
+		authority_movement.force_requested = true
+		return
 	velocity += gravity_vec
-	move_and_slide()
+	_move_body()
 
 
 func _on_player_state_loaded():
@@ -856,6 +908,8 @@ func _physics_process(delta):
 			if current_command != command:
 				break # Opening a menu transferred input while consuming this frame.
 	_free_look(delta)
+	if authority_movement:
+		authority_movement.advance(self, delta)
 
 
 func _handle_command_edge(edge: int, index: int) -> void:
@@ -1213,7 +1267,7 @@ func _input_handling_and_movement(delta):
 	
 	velocity = main_velocity_before_stair_stepping
 	
-	move_and_slide()
+	_move_body()
 
 
 func _show_underwater_effect(show_effect: bool) -> void:
@@ -1323,6 +1377,22 @@ func _on_grounded_state_physics_processing(delta: float) -> void:
 		return
 	
 	
+	_ground_eye(delta)
+	direction = Movement.heading(body.global_transform.basis, input_direction)
+	_footstep_sounds_system()
+
+	if Movement.Slide.from_jump(
+		was_jumping, jumped_from_slide, current_command.is_held(ACTION.SPRINT),
+		is_sprinting_in_airborne, current_body_posture_state == BodyPostureState.Crouching,
+		jumped_from_crouch
+	):
+		was_sprinting = false
+		state_chart.send_event("slide")
+
+	is_sprinting_in_airborne = false
+
+
+func _ground_eye(delta: float) -> void:
 	if current_moving_state != MovingState.Sliding and input_direction != Vector2.ZERO:
 		wiggle_vector.y = sin(wiggle_index)
 		wiggle_vector.x = sin(wiggle_index / 2) + 0.5
@@ -1340,20 +1410,7 @@ func _on_grounded_state_physics_processing(delta: float) -> void:
 		eyes.position.y = lerp(eyes.position.y, 0.0, delta * LERP_SPEED)
 		eyes.position.x = lerp(eyes.position.x, 0.0, delta * LERP_SPEED)
 	
-	direction = Movement.heading(body.global_transform.basis, input_direction)
 	
-	_footstep_sounds_system()
-	
-	if Movement.Slide.from_jump(
-		was_jumping, jumped_from_slide, current_command.is_held(ACTION.SPRINT),
-		is_sprinting_in_airborne, current_body_posture_state == BodyPostureState.Crouching,
-		jumped_from_crouch
-	):
-		was_sprinting = false
-		state_chart.send_event("slide")
-
-	is_sprinting_in_airborne = false
-
 
 ## Submit a movement stimulus to the authoritative NPCs in this level.
 func _network_footstep(speed: float) -> void:
@@ -2030,11 +2087,12 @@ func _process_on_ladder(_delta):
 				return
 			
 			_jump(WALKING_SPEED)
-			
+			if authority_movement and current_moving_state == MovingState.Jumping:
+				authority_movement.advance(self, _delta)
 			return
 	
 	velocity = main_velocity
-	move_and_slide()
+	_move_body()
 	
 	#Step off ladder when on ground
 	if is_on_floor() and not ladder_on_cooldown:
@@ -2127,7 +2185,7 @@ func _handle_water_physics(delta) -> void:
 	if current_command.is_held(ACTION.JUMP):
 		direction.y = 1
 	elif current_command.is_held(ACTION.CROUCH):
-		if not is_on_floor():
+		if not movement_grounded():
 			direction.y = -1
 	
 	if not is_head_in_water() and direction.dot(Vector3.UP) > 0:
@@ -2145,7 +2203,7 @@ func _handle_water_physics(delta) -> void:
 	else:
 		main_velocity = lerp(main_velocity, Vector3.ZERO, delta * LERP_SPEED)
 		
-		if not is_on_floor():
+		if not movement_grounded():
 			main_velocity.y -= gravity * WATER_GRAVITY_COEFFICIENT * delta
 	
 	_handle_swim_under_water_sounds()
@@ -2160,7 +2218,7 @@ func _handle_water_physics(delta) -> void:
 	
 	velocity = main_velocity
 	
-	move_and_slide()
+	_move_body()
 
 
 func _on_swimming_state_entered() -> void:
@@ -2188,7 +2246,7 @@ func _on_swimming_state_physics_processing(delta: float) -> void:
 	
 	if not is_head_in_water():
 		_show_underwater_effect(false)
-		if is_on_floor():
+		if movement_grounded():
 			state_chart.send_event("grounded")
 			
 			if (AUTO_STAND_AFTER_SWIM or not was_in_crouching_state_before_swim) and is_in_crouching_state():
@@ -2248,7 +2306,7 @@ func _on_ledge_climbing_state_physics_processing(delta: float) -> void:
 	velocity = move_direction * CLIMBING_SPEED + platfrom_linear_velocity
 	
 	if crouching_collision_shape.global_position.y + ((standing_height - (2 * crouching_height)) + crouching_height / 2) < ledge_position.y:
-		move_and_slide()
+		_move_body()
 		return
 	
 	if current_body_posture_state != BodyPostureState.Crouching:
@@ -2260,7 +2318,7 @@ func _on_ledge_climbing_state_physics_processing(delta: float) -> void:
 	is_in_ledge_climbing_middle_stage = true
 	
 	if not is_in_ledge_climbing_final_stage and crouching_collision_shape.global_position.y - (crouching_height / 2 + MIN_FREE_SPACE_ABOVE_HEAD) < ledge_position.y:
-		move_and_slide()
+		_move_body()
 		return
 	
 	is_in_ledge_climbing_final_stage = true
@@ -2269,7 +2327,7 @@ func _on_ledge_climbing_state_physics_processing(delta: float) -> void:
 
 	velocity = move_direction * CLIMBING_SPEED + platfrom_linear_velocity
 	
-	move_and_slide()
+	_move_body()
 	
 	if (ledge_position + Vector3(0, crouching_height / 2, 0)).distance_to(crouching_collision_shape.global_position) < 0.1:
 		state_chart.send_event("idle")

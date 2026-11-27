@@ -607,6 +607,17 @@ func _stage_devices(server: Facade) -> void:
 	await _ticks(8)
 
 
+func _wipe(path: String) -> void:
+	var dir := DirAccess.open(path)
+	if not dir:
+		return
+	for child in dir.get_directories():
+		_wipe(path.path_join(child))
+	for file in dir.get_files():
+		DirAccess.remove_absolute(path.path_join(file))
+	DirAccess.remove_absolute(path)
+
+
 func _wire_input(branch: Facade, token: int, action: StringName, value: Variant) -> void:
 	var api := branch.player_world.interactions
 	var entities := api.world.entities
@@ -615,6 +626,8 @@ func _wire_input(branch: Facade, token: int, action: StringName, value: Variant)
 
 
 func test_spinner_exclusive_bounded_goal_and_disconnect() -> void:
+	# The goal destroys the spinner and the world save keeps that across runs in one user dir.
+	_wipe("user://net/spinner")
 	var server := _branch(1)
 	server.start_server({"save_dir": "user://net/spinner"})
 	var level := _arena(server)

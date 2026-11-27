@@ -33,6 +33,18 @@ func _ready() -> void:
 	regen_timer.timeout.connect(_on_regen_timer_timeout)
 
 
+func advance_movement_tick(delta: float) -> void:
+	if not regen_timer.is_stopped():
+		var remaining := regen_timer.time_left - delta
+		if remaining <= 0.000001:
+			regen_timer.stop()
+			_on_regen_timer_timeout()
+		else:
+			regen_timer.start(remaining)
+			regen_timer.wait_time = regenerate_after
+	_process(delta)
+
+
 func _process(delta):
 	if is_regenerating:
 		add(CogitoMovementStep.Stamina.amount(stamina_regen_speed, delta))
@@ -65,7 +77,7 @@ func  _run_exhaustion() -> float:
 		return run_exhaustion_speed
 	
 	return CogitoMovementStep.Stamina.run_rate(
-		player.get_floor_normal(), player.main_velocity, player.global_position.y, last_y,
+		player.movement_floor_normal(), player.main_velocity, player.global_position.y, last_y,
 		step_slope_multiplier, run_exhaustion_speed,
 		uphill_run_exhaustion_max_speed, downhill_run_exhaustion_max_speed
 	)

@@ -248,6 +248,14 @@ func decrease_currency(currency_name: String, value: float):
 	currency.subtract(value)
 
 
+func movement_grounded() -> bool:
+	return is_on_floor()
+
+
+func movement_floor_normal() -> Vector3:
+	return get_floor_normal()
+
+
 func apply_external_force(force_vector: Vector3):
 	if force_vector and force_vector.length() > 0:
 		CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Applying external force " + str(force_vector))

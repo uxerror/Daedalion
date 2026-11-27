@@ -234,7 +234,7 @@ func start_interaction(action: String) -> void:
 func _is_interaction_blocked(node: InteractionComponent) -> bool:
 	if "is_in_interaction_state" in player and not player.is_in_interaction_state:
 		return true
-	return not player.is_on_floor() and node.disable_interaction_in_air
+	return not player.movement_grounded() and node.disable_interaction_in_air
 
 
 ## Performs an action from InteractionComponent.get_actions(), for example one picked from a context menu.
