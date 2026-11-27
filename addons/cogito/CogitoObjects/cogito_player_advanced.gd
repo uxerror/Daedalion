@@ -3,6 +3,7 @@
 class_name CogitoPlayerAdvanced
 extends CogitoPlayer
 
+const Movement := preload("cogito_movement_step.gd")
 const ACTION := CogitoPlayerCommand.Action
 
 signal mouse_movement(relative_mouse_movement:Vector2)
@@ -168,6 +169,10 @@ var current_command := CogitoPlayerCommand.new()
 ## Acknowledgement hook for the last accepted sequence.
 var last_consumed_sequence: int = -1
 var _input_suspended := false
+
+# Scratch storage for math with several inputs/outputs; refreshed at the callback that uses it.
+var _motion := CogitoMovementState.new()
+var _speed_profile := CogitoMovementProfile.new()
  
 var initial_carryable_height #DEPRECATED Used to change carryable position based if player is standing or crouching
 
@@ -354,6 +359,125 @@ func _on_input_owner_changed() -> void:
 		hud.hold_ui.stop_holding()
 
 
+## Capture on demand at a tick boundary. The live chart remains the owner of its state.
+func capture_movement_state() -> CogitoMovementState:
+	var state := CogitoMovementState.new()
+	var stamina := stamina_attribute as CogitoStaminaAttribute
+	state.transform = transform
+	state.body_basis = body.global_transform.basis
+	state.body_yaw = body.rotation.y
+	state.neck_yaw = neck.rotation.y
+	state.head_pitch = head.rotation.x
+	state.requested_velocity = _motion.requested_velocity
+	state.velocity = velocity
+	state.main_velocity = main_velocity
+	state.last_velocity = last_velocity
+	state.direction = direction
+	state.input_direction = input_direction
+	state.current_speed = current_speed
+	state.current_lerp_speed = current_lerp_speed
+	state.gravity = gravity
+	state.gravity_vector = gravity_vector
+	state.gravity_vec = gravity_vec
+	state.on_floor = is_on_floor()
+	state.floor_normal = get_floor_normal() if state.on_floor else Vector3.ZERO
+	state.on_wall = is_on_wall()
+	state.wall_normal = get_wall_normal() if state.on_wall else Vector3.ZERO
+	state.on_ceiling = is_on_ceiling()
+	state.head_offset = head_offset
+	state.air_steps_enabled = is_enabled_stair_stepping_in_air
+	state.mode = current_moving_state as CogitoMovementState.Mode
+	state.posture = current_body_posture_state as CogitoMovementState.Posture
+	state.standing_shape = not standing_collision_shape.disabled
+	state.crouching_shape = not crouching_collision_shape.disabled
+	state.cast_enabled = crouch_shapecast.enabled
+	state.cast_blocked = crouch_shapecast.is_colliding()
+	state.try_crouch = try_crouch
+	state.head_position = head.position
+	state.eye_position = eyes.position
+	state.jump_target_speed = jump_target_speed
+	state.is_jumping_started = is_jumping_started
+	state.is_in_air = is_in_air
+	state.was_in_air = was_in_air
+	state.was_jumping = was_jumping
+	state.was_sprinting = was_sprinting
+	state.is_sprinting_in_airborne = is_sprinting_in_airborne
+	state.was_standing = was_standing
+	state.was_sliding = was_sliding
+	state.jumped_from_slide = jumped_from_slide
+	state.jumped_from_crouch = jumped_from_crouch
+	state.bunny_hop_speed = bunny_hop_speed
+	state.slide_vector = slide_vector
+	state.slide_remaining = sliding_timer.time_left
+	state.jump_remaining = jump_timer.time_left
+	state.slide_stopped = sliding_timer.is_stopped()
+	state.jump_stopped = jump_timer.is_stopped()
+	state.is_sitting = is_sitting
+	state.on_ladder = on_ladder
+	state.has_control = current_command.has_control
+	state.speed_multiplier = get_element_speed_multiplier()
+	state.jump_allowed = not actor_elements or actor_elements.can_jump()
+	state.posture_locked = is_movement_locked_by_elements()
+	state.has_stamina = stamina_attribute != null
+	state.stamina = stamina_attribute.value_current if stamina_attribute else 0.0
+	state.regen_active = stamina.is_regenerating if stamina else false
+	state.regen_stopped = true
+	if stamina and stamina.regen_timer:
+		state.regen_remaining = stamina.regen_timer.time_left
+		state.regen_stopped = stamina.regen_timer.is_stopped()
+	state.previous_y = stamina.last_y if stamina else 0.0
+	return state
+
+
+func capture_movement_profile() -> CogitoMovementProfile:
+	var profile := CogitoMovementProfile.new()
+	profile.min_speed = MIN_SPEED
+	profile.max_speed = MAX_SPEED
+	profile.walking_speed = WALKING_SPEED
+	profile.sprinting_speed = SPRINTING_SPEED
+	profile.crouching_speed = CROUCHING_SPEED
+	profile.lerp_speed = LERP_SPEED
+	profile.air_lerp_speed = AIR_LERP_SPEED
+	profile.crouching_depth = CROUCHING_DEPTH
+	profile.jump_velocity = JUMP_VELOCITY
+	profile.crouch_jump_velocity = CROUCH_JUMP_VELOCITY
+	profile.can_crouch_jump = CAN_CROUCH_JUMP
+	profile.can_bunnyhop = CAN_BUNNYHOP
+	profile.bunny_hop_acceleration = BUNNY_HOP_ACCELERATION
+	profile.bunny_hop_wall_slide_angle = BUNNY_HOP_WALL_SLIDE_ANGLE
+	profile.sliding_speed = SLIDING_SPEED
+	profile.slide_jump_mod = SLIDE_JUMP_MOD
+	profile.landing_min_velocity = LANDING_MIN_VELOCITY
+	profile.landing_min_roll_velocity = LANDING_MIN_ROLL_VELOCITY
+	profile.free_fall_min_velocity = FREE_FALL_MIN_VELOCITY
+	profile.fall_damage_threshold = fall_damage_threshold
+	profile.fall_damage = fall_damage
+	profile.disable_roll_anim = disable_roll_anim
+	profile.landing_threshold = landing_threshold
+	profile.step_height_default = STEP_HEIGHT_DEFAULT
+	profile.step_height_in_air_default = STEP_HEIGHT_IN_AIR_DEFAULT
+	profile.step_max_slope_degree = STEP_MAX_SLOPE_DEGREE
+	profile.step_height_camera_lerp = step_height_camera_lerp
+	profile.step_check_count = STEP_CHECK_COUNT
+	profile.wall_margin = WALL_MARGIN
+	profile.step_down_margin = STEP_DOWN_MARGIN
+	profile.speed_clamp_after_jump_coefficient = SPEED_CLAMP_AFTER_JUMP_COEFFICIENT
+	profile.slide_duration = sliding_timer.wait_time
+	profile.jump_cooldown = jump_timer.wait_time
+	profile.jump_cost = stamina_attribute.jump_exhaustion if stamina_attribute else 0.0
+	var stamina := stamina_attribute as CogitoStaminaAttribute
+	if stamina:
+		profile.run_exhaustion_speed = stamina.run_exhaustion_speed
+		profile.uphill_run_exhaustion_max_speed = stamina.uphill_run_exhaustion_max_speed
+		profile.downhill_run_exhaustion_max_speed = stamina.downhill_run_exhaustion_max_speed
+		profile.step_slope_multiplier = stamina.step_slope_multiplier
+		profile.stamina_regen_speed = stamina.stamina_regen_speed
+		profile.regenerate_after = stamina.regenerate_after
+		profile.use_floor_slope_for_run_exhaustion = stamina.use_floor_slope_for_run_exhaustion
+		profile.value_max = stamina.value_max
+	return profile
+
+
 func create_new_state() -> CogitoPlayerState:
 	return CogitoPlayerAdvancedState.new()
 
@@ -526,10 +650,12 @@ func _stair_handling(delta):
 		head_offset = head_offset.lerp(Vector3.ZERO, delta * LERP_SPEED)
 		#head.position.y = lerp(head.position.y, 0.0, delta * step_height_camera_lerp)
 	
-	if is_step and step_result.is_step_up and is_enabled_stair_stepping_in_air:
-		if is_in_air or direction.dot(step_result.normal) > 0:
-			main_velocity *= SPEED_CLAMP_AFTER_JUMP_COEFFICIENT
-			gravity_vec *= SPEED_CLAMP_AFTER_JUMP_COEFFICIENT
+	if is_step and Movement.Stairs.damp_momentum(
+		step_result.is_step_up, is_enabled_stair_stepping_in_air,
+		is_in_air, direction, step_result.normal
+	):
+		main_velocity *= SPEED_CLAMP_AFTER_JUMP_COEFFICIENT
+		gravity_vec *= SPEED_CLAMP_AFTER_JUMP_COEFFICIENT
 
 	if is_jumping_started:
 		is_jumping_started = false
@@ -539,18 +665,15 @@ func _stair_handling(delta):
 func step_check(delta: float, is_jumping_started_: bool, step_result: StepResult):
 	var is_step: bool = false
 	
-	var step_height_main: Vector3 = STEP_HEIGHT_DEFAULT
-	var step_incremental_check_height: Vector3 = STEP_HEIGHT_DEFAULT / STEP_CHECK_COUNT
-	
-	if is_in_air and is_enabled_stair_stepping_in_air:
-		step_height_main = STEP_HEIGHT_IN_AIR_DEFAULT
-		step_incremental_check_height = STEP_HEIGHT_IN_AIR_DEFAULT / STEP_CHECK_COUNT
-		
+	var step_height_main := Movement.Stairs.search_height(
+		is_in_air, is_enabled_stair_stepping_in_air, STEP_HEIGHT_DEFAULT, STEP_HEIGHT_IN_AIR_DEFAULT
+	)
+
 	if main_velocity.y >= 0:
 		for i in range(STEP_CHECK_COUNT):
 			var test_motion_result: PhysicsTestMotionResult3D = PhysicsTestMotionResult3D.new()
 			
-			var step_height: Vector3 = step_height_main - i * step_incremental_check_height
+			var step_height: Vector3 = Movement.Stairs.candidate(step_height_main, i, STEP_CHECK_COUNT)
 			var transform3d: Transform3D = global_transform
 			var motion: Vector3 = step_height
 			var test_motion_params: PhysicsTestMotionParameters3D = PhysicsTestMotionParameters3D.new()
@@ -578,16 +701,20 @@ func step_check(delta: float, is_jumping_started_: bool, step_result: StepResult
 				is_player_collided = PhysicsServer3D.body_test_motion(self.get_rid(), test_motion_params, test_motion_result)
 				
 				if is_player_collided:
-					if test_motion_result.get_collision_normal().angle_to(Vector3.UP) <= deg_to_rad(STEP_MAX_SLOPE_DEGREE):
+					var rise := Movement.Stairs.rise(
+						test_motion_result.get_collision_normal(),
+						test_motion_result.get_remainder(), STEP_MAX_SLOPE_DEGREE
+					)
+					if not is_nan(rise):
 						is_step = true
 						step_result.is_step_up = true
-						step_result.diff_position.y = -test_motion_result.get_remainder().y
+						step_result.diff_position.y = rise
 						step_result.normal = test_motion_result.get_collision_normal()
 						break
 			else:
 				var wall_collision_normal: Vector3 = test_motion_result.get_collision_normal()
 				transform3d.origin += wall_collision_normal * WALL_MARGIN
-				motion = (main_velocity * delta).slide(wall_collision_normal)
+				motion = Movement.Stairs.along_wall(main_velocity, delta, wall_collision_normal)
 				test_motion_params.from = transform3d
 				test_motion_params.motion = motion
 				
@@ -602,10 +729,14 @@ func step_check(delta: float, is_jumping_started_: bool, step_result: StepResult
 					is_player_collided = PhysicsServer3D.body_test_motion(self.get_rid(), test_motion_params, test_motion_result)
 					
 					if is_player_collided:
-						if test_motion_result.get_collision_normal().angle_to(Vector3.UP) <= deg_to_rad(STEP_MAX_SLOPE_DEGREE):
+						var rise := Movement.Stairs.rise(
+							test_motion_result.get_collision_normal(),
+							test_motion_result.get_remainder(), STEP_MAX_SLOPE_DEGREE
+						)
+						if not is_nan(rise):
 							is_step = true
 							step_result.is_step_up = true
-							step_result.diff_position.y = -test_motion_result.get_remainder().y
+							step_result.diff_position.y = rise
 							step_result.normal = test_motion_result.get_collision_normal()
 							break
 
@@ -629,15 +760,19 @@ func step_check(delta: float, is_jumping_started_: bool, step_result: StepResult
 			
 			is_player_collided = PhysicsServer3D.body_test_motion(self.get_rid(), test_motion_params, test_motion_result)
 			
-			if is_player_collided and test_motion_result.get_travel().y < -STEP_DOWN_MARGIN:
-				if test_motion_result.get_collision_normal().angle_to(Vector3.UP) <= deg_to_rad(STEP_MAX_SLOPE_DEGREE):
+			if is_player_collided:
+				var descent := Movement.Stairs.descent(
+					test_motion_result.get_collision_normal(), test_motion_result.get_travel(),
+					STEP_DOWN_MARGIN, STEP_MAX_SLOPE_DEGREE
+				)
+				if not is_nan(descent):
 					is_step = true
-					step_result.diff_position.y = test_motion_result.get_travel().y
+					step_result.diff_position.y = descent
 					step_result.normal = test_motion_result.get_collision_normal()
 		elif is_zero_approx(test_motion_result.get_collision_normal().y):
 			var wall_collision_normal: Vector3 = test_motion_result.get_collision_normal()
 			transform3d.origin += wall_collision_normal * WALL_MARGIN
-			motion = (main_velocity * delta).slide(wall_collision_normal)
+			motion = Movement.Stairs.along_wall(main_velocity, delta, wall_collision_normal)
 			test_motion_params.from = transform3d
 			test_motion_params.motion = motion
 			
@@ -651,10 +786,14 @@ func step_check(delta: float, is_jumping_started_: bool, step_result: StepResult
 				
 				is_player_collided = PhysicsServer3D.body_test_motion(self.get_rid(), test_motion_params, test_motion_result)
 				
-				if is_player_collided and test_motion_result.get_travel().y < -STEP_DOWN_MARGIN:
-					if test_motion_result.get_collision_normal().angle_to(Vector3.UP) <= deg_to_rad(STEP_MAX_SLOPE_DEGREE):
+				if is_player_collided:
+					var descent := Movement.Stairs.descent(
+						test_motion_result.get_collision_normal(), test_motion_result.get_travel(),
+						STEP_DOWN_MARGIN, STEP_MAX_SLOPE_DEGREE
+					)
+					if not is_nan(descent):
 						is_step = true
-						step_result.diff_position.y = test_motion_result.get_travel().y
+						step_result.diff_position.y = descent
 						step_result.normal = test_motion_result.get_collision_normal()
 
 	return is_step
@@ -730,7 +869,7 @@ func _handle_command_edge(edge: int, index: int) -> void:
 		actor_elements.struggle()
 	if action == ACTION.CROUCH and pressed and current_command.toggle_crouch and not is_movement_locked_by_elements():
 		if current_moving_state not in [MovingState.Swimming, MovingState.LedgeClimbing]:
-			try_crouch = not try_crouch
+			try_crouch = Movement.Posture.latch(try_crouch, true, false, true)
 	if network_movement_only:
 		if is_local_presentation and pressed and action == ACTION.PRIMARY:
 			var pic := player_interaction_component
@@ -776,29 +915,29 @@ func _handle_command_edge(edge: int, index: int) -> void:
 
 #region State Chart
 enum MovingState {
-	Undefined,
-	Grounded,
-	Idle,
-	Walking,
-	Sprinting,
-	Sliding,
-	Sneaking,
-	Sitting,
-	LadderClimbing,
-	Rolling,
-	LedgeClimbing,
-	Airborne,
-	AirControl,
-	Jumping,
-	FreeFall,
-	Swimming
+	Undefined = CogitoMovementState.Mode.UNDEFINED,
+	Grounded = CogitoMovementState.Mode.GROUNDED,
+	Idle = CogitoMovementState.Mode.IDLE,
+	Walking = CogitoMovementState.Mode.WALKING,
+	Sprinting = CogitoMovementState.Mode.SPRINTING,
+	Sliding = CogitoMovementState.Mode.SLIDING,
+	Sneaking = CogitoMovementState.Mode.SNEAKING,
+	Sitting = CogitoMovementState.Mode.SITTING,
+	LadderClimbing = CogitoMovementState.Mode.LADDER_CLIMBING,
+	Rolling = CogitoMovementState.Mode.ROLLING,
+	LedgeClimbing = CogitoMovementState.Mode.LEDGE_CLIMBING,
+	Airborne = CogitoMovementState.Mode.AIRBORNE,
+	AirControl = CogitoMovementState.Mode.AIR_CONTROL,
+	Jumping = CogitoMovementState.Mode.JUMPING,
+	FreeFall = CogitoMovementState.Mode.FREE_FALL,
+	Swimming = CogitoMovementState.Mode.SWIMMING
 }
 
 enum BodyPostureState {
-	Undefined,
-	Crouching,
-	Standing,
-	Sitting
+	Undefined = CogitoMovementState.Posture.UNDEFINED,
+	Crouching = CogitoMovementState.Posture.CROUCHING,
+	Standing = CogitoMovementState.Posture.STANDING,
+	Sitting = CogitoMovementState.Posture.SITTING
 }
 
 var current_moving_state : MovingState
@@ -960,21 +1099,20 @@ func _is_ledge_climbable() -> bool:
 
 
 func _can_jump() -> bool:
-	if is_sitting:
+	var permitted := not is_sitting and (not actor_elements or actor_elements.can_jump())
+	if not permitted:
 		return false
-	if actor_elements and !actor_elements.can_jump():
-		return false
-		
-	var doesnt_need_stamina = not stamina_attribute or stamina_attribute.value_current >= stamina_attribute.jump_exhaustion
-	var crouch_jump = current_body_posture_state != BodyPostureState.Crouching or CAN_CROUCH_JUMP
-
-	if not doesnt_need_stamina:
+	var affordable := Movement.Stamina.jump_affordable(
+		stamina_attribute != null, stamina_attribute.value_current if stamina_attribute else 0.0,
+		stamina_attribute.jump_exhaustion if stamina_attribute else 0.0
+	)
+	var eligibility := Movement.Jump.eligibility(
+		is_sitting, permitted, affordable,
+		current_body_posture_state == BodyPostureState.Crouching, CAN_CROUCH_JUMP
+	)
+	if eligibility == Movement.Jump.Eligibility.EXHAUSTED:
 		CogitoGlobals.debug_log(is_logging, "cogito_player.gd","Not enough stamina to jump.")
-		
-	if doesnt_need_stamina and crouch_jump:
-		return true
-		
-	return false
+	return eligibility == Movement.Jump.Eligibility.READY
 
 
 func _handle_jump_on_platform():
@@ -1001,7 +1139,7 @@ func _jump(_jump_target_speed) -> void:
 	is_in_air = false
 	jumped_from_crouch = current_body_posture_state == BodyPostureState.Crouching
 	
-	var jump_vel = CROUCH_JUMP_VELOCITY if jumped_from_crouch else JUMP_VELOCITY
+	var jump_vel := Movement.Jump.velocity(jumped_from_crouch, JUMP_VELOCITY, CROUCH_JUMP_VELOCITY)
 	
 	# If Stamina Component is used, this checks if there's enough stamina to jump and denies it if not.
 	if stamina_attribute:
@@ -1040,7 +1178,7 @@ func _sliding_jump(_jump_target_speed) -> void:
 	if is_local_presentation:
 		CogitoAudio.play_sound(jump_sound)
 
-	main_velocity.y = JUMP_VELOCITY * SLIDE_JUMP_MOD
+	main_velocity.y = Movement.Jump.slide_velocity(JUMP_VELOCITY, SLIDE_JUMP_MOD)
 	
 	was_jumping = true
 	jumped_from_slide = true
@@ -1057,26 +1195,21 @@ func _sliding_jump(_jump_target_speed) -> void:
 func _input_handling_and_movement(delta):
 	input_direction = current_command.move
 	current_speed = clamp(current_speed, MIN_SPEED, MAX_SPEED)
-	# Element states (chilled, frozen, stunned) slow the player down.
-	var target_speed : float = current_speed * get_element_speed_multiplier()
-	
-	if direction and current_command.has_control:
-		main_velocity.x = lerp(main_velocity.x, direction.x * target_speed, delta * current_lerp_speed)
-		main_velocity.z = lerp(main_velocity.z, direction.z * target_speed, delta * current_lerp_speed)
-	else:
-		main_velocity.x = lerp(main_velocity.x, 0.0, delta * current_lerp_speed)
-		main_velocity.z = lerp(main_velocity.z, 0.0, delta * current_lerp_speed)
-	
-	# Store current velocity for the next frame
-	last_velocity = main_velocity
-	
-	# Velocity for current frame
-	var main_velocity_before_stair_stepping : Vector3 = main_velocity + gravity_vec
+	_motion.current_speed = current_speed
+	_motion.speed_multiplier = get_element_speed_multiplier()
+	_motion.direction = direction
+	_motion.main_velocity = main_velocity
+	_motion.current_lerp_speed = current_lerp_speed
+	_motion.gravity_vec = gravity_vec
+	Movement.request_motion(_motion, current_command.has_control, delta, _motion)
+	main_velocity = _motion.main_velocity
+	last_velocity = _motion.last_velocity
+	var main_velocity_before_stair_stepping := _motion.requested_velocity
 	
 	_stair_handling(delta)
 	
 	# Velocity for next frame. Stair steppting can modify main_velocity and gravity_vec.
-	main_velocity += gravity_vec
+	main_velocity = Movement.with_gravity(main_velocity, gravity_vec)
 	
 	velocity = main_velocity_before_stair_stepping
 	
@@ -1175,13 +1308,14 @@ func _on_grounded_state_physics_processing(delta: float) -> void:
 		var damage_ratio : float = last_velocity.y / fall_damage_threshold
 		decrease_attribute("health", int(fall_damage * damage_ratio))
 		
-	if last_velocity.y <= LANDING_MIN_ROLL_VELOCITY:
+	var landing := Movement.landing(last_velocity.y, LANDING_MIN_ROLL_VELOCITY, LANDING_MIN_VELOCITY)
+	if landing == Movement.Landing.HARD:
 		if !disable_roll_anim:
 			was_standing = current_body_posture_state == BodyPostureState.Standing
 			is_sprinting_in_airborne = false
 			state_chart.send_event("roll")
 			return
-	elif last_velocity.y <= LANDING_MIN_VELOCITY:
+	elif landing == Movement.Landing.LAND:
 		animationPlayer.play("landing")
 		
 	if was_sliding and is_on_floor():
@@ -1206,15 +1340,18 @@ func _on_grounded_state_physics_processing(delta: float) -> void:
 		eyes.position.y = lerp(eyes.position.y, 0.0, delta * LERP_SPEED)
 		eyes.position.x = lerp(eyes.position.x, 0.0, delta * LERP_SPEED)
 	
-	direction = (body.global_transform.basis * Vector3(input_direction.x, 0, input_direction.y)).normalized()
+	direction = Movement.heading(body.global_transform.basis, input_direction)
 	
 	_footstep_sounds_system()
 	
-	if was_jumping and not jumped_from_slide and current_command.is_held(ACTION.SPRINT) and is_sprinting_in_airborne:
-		if current_body_posture_state == BodyPostureState.Crouching and not jumped_from_crouch:
-			was_sprinting = false
-			state_chart.send_event("slide")
-			
+	if Movement.Slide.from_jump(
+		was_jumping, jumped_from_slide, current_command.is_held(ACTION.SPRINT),
+		is_sprinting_in_airborne, current_body_posture_state == BodyPostureState.Crouching,
+		jumped_from_crouch
+	):
+		was_sprinting = false
+		state_chart.send_event("slide")
+
 	is_sprinting_in_airborne = false
 
 
@@ -1293,17 +1430,36 @@ func _on_walking_state_exited() -> void:
 	current_moving_state = MovingState.Undefined
 
 
+func _read_speed_inputs() -> void:
+	_motion.current_speed = current_speed
+	_motion.bunny_hop_speed = bunny_hop_speed
+	_motion.jump_target_speed = jump_target_speed
+	_speed_profile.walking_speed = WALKING_SPEED
+	_speed_profile.sprinting_speed = SPRINTING_SPEED
+	_speed_profile.crouching_speed = CROUCHING_SPEED
+	_speed_profile.lerp_speed = LERP_SPEED
+	_speed_profile.can_bunnyhop = CAN_BUNNYHOP
+
+
+func _speed_for(mode: CogitoMovementState.Mode, delta: float) -> float:
+	_read_speed_inputs()
+	return Movement.Ground.speed(mode, _motion, _speed_profile, delta)
+
+
 func _on_walking_state_physics_processing(delta: float) -> void:
 	
 	if current_body_posture_state == BodyPostureState.Crouching:
 		state_chart.send_event("sneak")
 		return
 
-	if not on_ladder and current_command.is_held(ACTION.SPRINT) and stamina_attribute and stamina_attribute.value_current > 5:
+	if Movement.Stamina.can_start_sprint(
+		on_ladder, current_command.is_held(ACTION.SPRINT), stamina_attribute != null,
+		stamina_attribute.value_current if stamina_attribute else 0.0
+	):
 		state_chart.send_event("sprint")
 		return
 		
-	current_speed = lerp(current_speed, WALKING_SPEED, delta * LERP_SPEED)
+	current_speed = _speed_for(CogitoMovementState.Mode.WALKING, delta)
 	wiggle_current_intensity = WIGGLE_ON_WALKING_INTENSITY * HEADBOBBLE
 	wiggle_index += WIGGLE_ON_WALKING_SPEED * delta
 	
@@ -1331,8 +1487,11 @@ func _on_sprinting_state_exited() -> void:
 func _on_sprinting_state_physics_processing(delta: float) -> void:
 	
 	if current_command.is_held(ACTION.SPRINT):
-		if !stamina_attribute or (stamina_attribute and stamina_attribute.value_current > 0):
-			if stamina_attribute and stamina_attribute.value_current <= 0.2:
+		var eligibility := Movement.Stamina.sprint(
+			stamina_attribute != null, stamina_attribute.value_current if stamina_attribute else 0.0
+		)
+		if eligibility != Movement.Stamina.Sprint.EMPTY:
+			if eligibility == Movement.Stamina.Sprint.LOW:
 				bunny_hop_speed = SPRINTING_SPEED
 				state_chart.send_event("walk")
 				return
@@ -1340,24 +1499,19 @@ func _on_sprinting_state_physics_processing(delta: float) -> void:
 			if !current_command.is_held(ACTION.JUMP):
 				if CAN_BUNNYHOP:
 					bunny_hop_speed = SPRINTING_SPEED
-					current_speed = lerp(current_speed, bunny_hop_speed, delta * LERP_SPEED)
-				else:
-					current_speed = lerp(current_speed, SPRINTING_SPEED, delta * LERP_SPEED)
-				
+				current_speed = _speed_for(CogitoMovementState.Mode.SPRINTING, delta)
+
 			wiggle_current_intensity = WIGGLE_ON_SPRINTING_INTENSITY * HEADBOBBLE
 			wiggle_index += WIGGLE_ON_SPRINTING_SPEED * delta
 		
 		if current_command.is_held(ACTION.JUMP) and jump_timer.is_stopped():
-			if current_speed < bunny_hop_speed - 0.2:
-				current_speed = lerp(current_speed, bunny_hop_speed, delta * LERP_SPEED)
-			else:
-				if CAN_BUNNYHOP:
-					bunny_hop_speed += BUNNY_HOP_ACCELERATION
-					bunny_hop_speed = clamp(bunny_hop_speed, SPRINTING_SPEED, MAX_SPEED)
-					current_speed = bunny_hop_speed
-				else:
-					current_speed = SPRINTING_SPEED
-			
+			_read_speed_inputs()
+			_speed_profile.bunny_hop_acceleration = BUNNY_HOP_ACCELERATION
+			_speed_profile.max_speed = MAX_SPEED
+			Movement.Ground.sprint_takeoff(_motion, _speed_profile, delta, _motion)
+			bunny_hop_speed = _motion.bunny_hop_speed
+			current_speed = _motion.current_speed
+
 			if not _can_jump():
 				bunny_hop_speed = SPRINTING_SPEED
 				return
@@ -1376,11 +1530,14 @@ var slide_vector : Vector2 = Vector2.ZERO
 func _on_sliding_state_entered() -> void:
 	current_moving_state = MovingState.Sliding
 	
+	_motion.was_sliding = was_sliding
+	_motion.slide_vector = slide_vector
+	_motion.slide_remaining = sliding_timer.time_left
+	Movement.Slide.enter(_motion, input_direction, sliding_timer.wait_time, _motion)
 	if not was_sliding:
 		sliding_timer.start()
-		slide_vector = input_direction
-		
-	was_sliding = false
+	slide_vector = _motion.slide_vector
+	was_sliding = _motion.was_sliding
 
 
 func _on_sliding_state_exited() -> void:
@@ -1391,34 +1548,32 @@ func _on_sliding_state_exited() -> void:
 
 
 func _on_sliding_state_physics_processing(delta: float) -> void:
-	
-	if input_direction == Vector2.ZERO:
-		sliding_timer.stop()
-		state_chart.send_event("idle")
+	var sprint := current_command.is_held(ACTION.SPRINT)
+	var action := Movement.Slide.action(
+		input_direction, sprint, sliding_timer.is_stopped(),
+		current_body_posture_state == BodyPostureState.Standing
+	)
+	if action != Movement.Slide.Action.CONTINUE:
+		if input_direction == Vector2.ZERO or not sprint:
+			sliding_timer.stop()
+		match action:
+			Movement.Slide.Action.IDLE:
+				state_chart.send_event("idle")
+			Movement.Slide.Action.WALK:
+				state_chart.send_event("walk")
+			Movement.Slide.Action.SNEAK:
+				state_chart.send_event("sneak")
 		return
-		
-	if !current_command.is_held(ACTION.SPRINT):
-		sliding_timer.stop()
-		if current_body_posture_state == BodyPostureState.Standing:
-			state_chart.send_event("walk")
-		else:
-			state_chart.send_event("sneak")
-		return
-		
-	if sliding_timer.is_stopped():
-		if current_body_posture_state == BodyPostureState.Standing:
-			state_chart.send_event("walk")
-		else:
-			state_chart.send_event("sneak")
-	else:
-		direction = (body.global_transform.basis * Vector3(slide_vector.x, 0.0, slide_vector.y)).normalized()
-		current_speed = (sliding_timer.time_left / sliding_timer.wait_time + 0.5) * SLIDING_SPEED
-		
-		if current_command.is_held(ACTION.JUMP) and jump_timer.is_stopped():
-			if not _can_jump():
-				return
-				
-			_sliding_jump(current_speed)
+
+	direction = Movement.heading(body.global_transform.basis, slide_vector)
+	current_speed = Movement.Slide.speed(
+		sliding_timer.time_left, sliding_timer.wait_time, SLIDING_SPEED
+	)
+
+	if current_command.is_held(ACTION.JUMP) and jump_timer.is_stopped():
+		if not _can_jump():
+			return
+		_sliding_jump(current_speed)
 #endregion
 
 
@@ -1437,7 +1592,7 @@ func _on_sneaking_state_physics_processing(delta: float) -> void:
 	eyes.position.y = lerp(eyes.position.y, 0.0, delta * LERP_SPEED)
 	eyes.position.x = lerp(eyes.position.x, 0.0, delta * LERP_SPEED)
 	
-	current_speed = lerp(current_speed, CROUCHING_SPEED, delta * LERP_SPEED)
+	current_speed = _speed_for(CogitoMovementState.Mode.SNEAKING, delta)
 
 	if main_velocity.is_equal_approx(Vector3.ZERO):
 		state_chart.send_event("idle")
@@ -1726,17 +1881,20 @@ func _on_airborne_state_physics_processing(delta: float) -> void:
 		state_chart.send_event("swim")
 		return
 	
-	if is_on_ceiling():
-		main_velocity.y = 0
-	
-	gravity_vec = gravity_vector * gravity * delta
-
-	if was_sprinting and current_command.is_held(ACTION.SPRINT):
-		is_sprinting_in_airborne = true
-	else:
-		bunny_hop_speed = SPRINTING_SPEED
-		was_sprinting = false
-		is_sprinting_in_airborne = false
+	_motion.main_velocity = main_velocity
+	_motion.gravity_vector = gravity_vector
+	_motion.gravity = gravity
+	_motion.was_sprinting = was_sprinting
+	_motion.bunny_hop_speed = bunny_hop_speed
+	Movement.finish_air(
+		_motion, is_on_ceiling(), current_command.is_held(ACTION.SPRINT), SPRINTING_SPEED,
+		delta, _motion
+	)
+	main_velocity = _motion.main_velocity
+	gravity_vec = _motion.gravity_vec
+	was_sprinting = _motion.was_sprinting
+	is_sprinting_in_airborne = _motion.is_sprinting_in_airborne
+	bunny_hop_speed = _motion.bunny_hop_speed
 
 	if slide_audio_player:
 		slide_audio_player.stop()
@@ -1756,8 +1914,7 @@ func _on_air_control_state_exited() -> void:
 
 
 func _on_air_control_state_physics_processing(delta: float) -> void:
-	if input_direction != Vector2.ZERO:
-		direction = (body.global_transform.basis * Vector3(input_direction.x, 0, input_direction.y)).normalized()
+	direction = Movement.air_heading(direction, body.global_transform.basis, input_direction)
 	
 	if main_velocity.y <= FREE_FALL_MIN_VELOCITY:
 		state_chart.send_event("fall")
@@ -1774,15 +1931,12 @@ func _on_jumping_state_exited() -> void:
 
 
 func _on_jumping_state_physics_processing(delta: float) -> void:
-	if input_direction != Vector2.ZERO:
-		direction = (body.global_transform.basis * Vector3(input_direction.x, 0, input_direction.y)).normalized()
+	direction = Movement.air_heading(direction, body.global_transform.basis, input_direction)
 	
-	current_speed = lerp(current_speed, jump_target_speed, delta * LERP_SPEED)
+	current_speed = _speed_for(CogitoMovementState.Mode.JUMPING, delta)
 	
 	if is_on_wall():
-		var normal = get_wall_normal()
-		var angle = rad_to_deg(direction.angle_to(normal))
-		if angle > BUNNY_HOP_WALL_SLIDE_ANGLE:
+		if Movement.Jump.hits_wall(direction, get_wall_normal(), BUNNY_HOP_WALL_SLIDE_ANGLE):
 			bunny_hop_speed = SPRINTING_SPEED
 	
 	if current_body_posture_state != BodyPostureState.Crouching:
@@ -2138,7 +2292,9 @@ func _on_crouching_state_exited() -> void:
 
 
 func _on_crouching_state_physics_processing(delta: float) -> void:
-	head.position.y = lerp(head.position.y, CROUCHING_DEPTH, delta * LERP_SPEED)
+	head.position.y = Movement.Posture.head_height(
+		head.position.y, true, CROUCHING_DEPTH, delta, LERP_SPEED
+	)
 	
 	_handle_eyes_position_in_water(delta)
 	
@@ -2148,10 +2304,11 @@ func _on_crouching_state_physics_processing(delta: float) -> void:
 	state_chart.set_expression_property("is_crouch_shapecast_colliding", crouch_shapecast.is_colliding())
 
 	if current_moving_state != MovingState.Swimming and current_moving_state != MovingState.LedgeClimbing and !is_movement_locked_by_elements():
-		if !current_command.toggle_crouch:
-			try_crouch = current_command.is_held(ACTION.CROUCH)
+		try_crouch = Movement.Posture.latch(
+			try_crouch, current_command.toggle_crouch, current_command.is_held(ACTION.CROUCH)
+		)
 		
-		if not try_crouch and not crouch_shapecast.is_colliding():
+		if not Movement.Posture.crouch_requested(try_crouch, crouch_shapecast.is_colliding()):
 			state_chart.send_event("stand_up")
 #endregion
 
@@ -2170,19 +2327,21 @@ func _on_standing_state_exited() -> void:
 
 func _on_standing_state_physics_processing(delta: float) -> void:
 	if not current_command.toggle_crouch and not is_movement_locked_by_elements() and current_moving_state != MovingState.Rolling:
-		try_crouch = current_command.is_held(ACTION.CROUCH)
+		try_crouch = Movement.Posture.latch(try_crouch, false, current_command.is_held(ACTION.CROUCH))
 	if current_moving_state != MovingState.LedgeClimbing:
-		if try_crouch or crouch_shapecast.is_colliding():
+		if Movement.Posture.crouch_requested(try_crouch, crouch_shapecast.is_colliding()):
 			state_chart.send_event("crouch")
 			return
 	
-	head.position.y = lerp(head.position.y, 0.0, delta * LERP_SPEED)
+	head.position.y = Movement.Posture.head_height(
+		head.position.y, false, CROUCHING_DEPTH, delta, LERP_SPEED
+	)
 	
 	_handle_eyes_position_in_water(delta)
 	
 	swimming_head_shapecast.global_position = head.global_position
 	
-	if head.position.y > CROUCHING_DEPTH/4:
+	if Movement.Posture.tall_shape_ready(head.position.y, CROUCHING_DEPTH):
 		if is_sitting:
 			return
 		standing_collision_shape.disabled = false

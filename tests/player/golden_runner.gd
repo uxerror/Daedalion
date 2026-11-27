@@ -2,6 +2,7 @@ extends Node
 ## Launch with --fixed-fps 60 so physics, idle chart delays, stamina, tweens and roll
 ## animation all advance by exactly 1/60 s, independently of host scheduling.
 
+const Checkpoint := preload("golden_checkpoint.gd")
 const Driver := preload("golden_input.gd")
 const Footsteps := preload("golden_footsteps.gd")
 const GoldenLevel := preload("golden_level.tscn")
@@ -11,6 +12,7 @@ const DIRECTORY := "res://tests/player/golden/"
 
 var actor: CogitoPlayerAdvanced
 var states: Array[Node]
+var fingerprint: String
 var jumps := 0
 var slides := 0
 var slide_playing := false
@@ -24,16 +26,24 @@ func _run() -> void:
 	var traces := {}
 	CogitoAudio.child_entered_tree.connect(_one_shot)
 	for lap in 2:
+		var fingerprints := PackedStringArray(["lane,motion_sha256,save_sha256"])
 		for lane: String in Driver.START:
 			var trace := await _record(lane)
 			if trace.is_empty():
 				get_tree().quit(1)
 				return
+			fingerprints.append(lane + "," + fingerprint)
 			if lap == 0:
 				traces[lane] = trace
 			elif not _matches(lane, traces[lane], trace):
 				get_tree().quit(1)
 				return
+		var manifest := "\n".join(fingerprints) + "\n"
+		if lap == 0:
+			traces["precision"] = manifest
+		elif not _matches("precision", traces.precision, manifest):
+			get_tree().quit(1)
+			return
 	var regenerate := "--regenerate" in OS.get_cmdline_user_args()
 	var digests := PackedStringArray()
 	for lane: String in traces:
@@ -89,6 +99,12 @@ func _spawn(level: Node3D, lane: String) -> void:
 	actor.inventory_data = actor.inventory_data.duplicate_deep(Resource.DEEP_DUPLICATE_ALL)
 	actor.input_source = driver
 	actor.position = Driver.START[lane]
+	if lane == "high_jump":
+		actor.JUMP_VELOCITY = 8.0
+	elif lane == "sprint_wall":
+		actor.CAN_CLIMB_LEDGE = false
+	elif lane == "tired":
+		actor.get_node("StaminaAttribute").value_start = 5.05
 	# Preserve the prefab's exported surface libraries when attaching the playback counter.
 	var detector := actor.get_node("FootstepPlayer")
 	var exports := {}
@@ -128,6 +144,9 @@ func _record(lane: String) -> String:
 			)
 		)
 	)
+	var replay := Checkpoint.new() if lane in ["high_jump", "slide"] else null
+	var motion_hash := HashingContext.new()
+	motion_hash.start(HashingContext.HASH_SHA256)
 	for tick: int in Driver.LENGTH[lane]:
 		await tree.physics_frame
 		if lane == "platform":
@@ -139,7 +158,19 @@ func _record(lane: String) -> String:
 		if actor.last_consumed_sequence != tick or Engine.physics_ticks_per_second != 60:
 			printerr("Unexpected physics sample on ", lane, " tick ", tick)
 			return ""
+		if replay and not replay.observe(lane, tick, actor):
+			return ""
 		rows.append(_row(tick))
+		motion_hash.update(_motion_bytes())
+	var save := actor.create_new_state() as CogitoPlayerAdvancedState
+	save.populate_save_data(actor, "golden")
+	save.player_uid = 1
+	save.player_state_savetime = 0
+	var path := "user://golden-player-%d.v2.json" % OS.get_process_id()
+	if CogitoSceneManager.write_state_resource(save, path) != OK:
+		return ""
+	fingerprint = motion_hash.finish().hex_encode() + "," + FileAccess.get_sha256(path)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	tree.current_scene = self
 	level.free()
 	await tree.physics_frame
@@ -187,3 +218,26 @@ func _row(tick: int) -> String:
 	]:
 		fields.append(str(value))
 	return ",".join(fields)
+
+
+## Hash unrounded motion in addition to the human-readable PR0 rows.
+func _motion_bytes() -> PackedByteArray:
+	return var_to_bytes(
+		[
+			actor.transform,
+			actor.velocity,
+			actor.main_velocity,
+			actor.last_velocity,
+			actor.direction,
+			actor.current_speed,
+			actor.gravity_vec,
+			actor.head_offset,
+			actor.head.transform,
+			actor.eyes.transform,
+			actor.slide_vector,
+			actor.sliding_timer.time_left,
+			actor.jump_timer.time_left,
+			actor.stamina_attribute.value_current,
+			actor.try_crouch,
+		]
+	)

@@ -14,7 +14,7 @@ func test_offline_trace_repeats_within_and_across_processes(_timeout := 90000) -
 			"--fixed-fps",
 			"60",
 			"--quit-after",
-			"5500",
+			"8000",
 			RUNNER,
 		]
 		# Each child inherits the host process priority and runs two independent laps.

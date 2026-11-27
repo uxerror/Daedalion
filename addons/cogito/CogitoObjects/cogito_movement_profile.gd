@@ -1,0 +1,46 @@
+class_name CogitoMovementProfile
+extends RefCounted
+## Captured from one configured prefab. The controller owns the editable defaults.
+
+var min_speed: float
+var max_speed: float
+var walking_speed: float
+var sprinting_speed: float
+var crouching_speed: float
+var lerp_speed: float
+var air_lerp_speed: float
+var crouching_depth: float
+var jump_velocity: float
+var crouch_jump_velocity: float
+var can_crouch_jump: bool
+var can_bunnyhop: bool
+var bunny_hop_acceleration: float
+var bunny_hop_wall_slide_angle: int
+var sliding_speed: float
+var slide_jump_mod: float
+var landing_min_velocity: float
+var landing_min_roll_velocity: float
+var free_fall_min_velocity: float
+var fall_damage_threshold: float
+var fall_damage: int
+var disable_roll_anim: bool
+var landing_threshold: float
+var step_height_default: Vector3
+var step_height_in_air_default: Vector3
+var step_max_slope_degree: float
+var step_height_camera_lerp: float
+var step_check_count: int
+var wall_margin: float
+var step_down_margin: float
+var speed_clamp_after_jump_coefficient: float
+var slide_duration: float
+var jump_cooldown: float
+var jump_cost: float
+var run_exhaustion_speed: float
+var uphill_run_exhaustion_max_speed: float
+var downhill_run_exhaustion_max_speed: float
+var step_slope_multiplier: float
+var stamina_regen_speed: float
+var regenerate_after: float
+var use_floor_slope_for_run_exhaustion: bool
+var value_max: float

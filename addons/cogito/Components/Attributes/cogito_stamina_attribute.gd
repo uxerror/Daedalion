@@ -35,16 +35,18 @@ func _ready() -> void:
 
 func _process(delta):
 	if is_regenerating:
-		add(stamina_regen_speed * delta)
+		add(CogitoMovementStep.Stamina.amount(stamina_regen_speed, delta))
 		if value_current >= value_max:
 			is_regenerating = false
 	
 	# Decreases stamina during sprinting
-	if player.is_in_sprinting_state() and player.current_speed > player.WALKING_SPEED and player.velocity.length() > 0.1:
+	if player.is_in_sprinting_state() and CogitoMovementStep.Stamina.spends_on_run(
+		player.current_speed, player.WALKING_SPEED, player.velocity
+	):
 		regen_timer.stop()
 		is_regenerating = false
 		var exhaustion: float = _run_exhaustion()
-		subtract(exhaustion * delta)
+		subtract(CogitoMovementStep.Stamina.amount(exhaustion, delta))
 	last_y = player.global_position.y
 	
 	if !is_regenerating and regen_timer.is_stopped() and value_current < value_max and !player.is_in_sprinting_state():
@@ -62,27 +64,8 @@ func  _run_exhaustion() -> float:
 	if !use_floor_slope_for_run_exhaustion:
 		return run_exhaustion_speed
 	
-	# Using floor slope to determine run exhaustion speed
-	var floor_normal: Vector3 = player.get_floor_normal()
-	var movement_direction: Vector3 = player.main_velocity.normalized()
-	# Between -1 (180 deg) and 1 (0 deg), based on move direction
-	var slope_factor: float = movement_direction.dot(floor_normal)
-	
-	if is_equal_approx(slope_factor, 0.0): # Running on a flat surface
-		# Catches sprinting on flat stairs using last player y position and a multiplier
-		if !is_equal_approx(player.global_position.y, last_y): # Still moved up or down
-			#print("running on a stepped surface")
-			slope_factor = (last_y - player.global_position.y) * step_slope_multiplier
-			slope_factor = clampf(slope_factor, -1.0, 1.0)
-		else: # Running on flat ground and not moving up or down
-			#print("flat ground exhaustion speed is ", run_exhaustion_speed)
-			return run_exhaustion_speed
-	
-	if slope_factor < 0.0001: # Running uphill
-		var uphill_run_exhaustion: float = lerpf(run_exhaustion_speed, uphill_run_exhaustion_max_speed, abs(slope_factor))
-		#print("uphill exhaustion speed is ", uphill_run_exhaustion)
-		return uphill_run_exhaustion
-	else: # Running downhill
-		var downhill_run_exhaustion: float = lerpf(run_exhaustion_speed, downhill_run_exhaustion_max_speed, slope_factor)
-		#print("downhill exhaustion speed is ", downhill_run_exhaustion)
-		return downhill_run_exhaustion
+	return CogitoMovementStep.Stamina.run_rate(
+		player.get_floor_normal(), player.main_velocity, player.global_position.y, last_y,
+		step_slope_multiplier, run_exhaustion_speed,
+		uphill_run_exhaustion_max_speed, downhill_run_exhaustion_max_speed
+	)

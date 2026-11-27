@@ -10,6 +10,26 @@ Godot State Charts runs three parallel branches in the packed scene. Moving hand
 
 Use `no_pause_menu_states` to restrict the pause menu in specific states. Entering a state in `no_interaction_states` (Rolling and FreeFall by default) clears `is_in_interaction_state`, and the interaction component rejects input interactions and direct actions while it is false. A custom controller can expose the same `is_in_interaction_state` property to get this behaviour. The camera's InteractionRaycast sets the player's reach. Carry and wieldable placement are assigned on the player interaction component. See [Interactions](interactions.md) for the child nodes and public API.
 
+## Movement step
+
+`CogitoMovementStep` computes ground acceleration and speed, air control and gravity, jumps and
+landing thresholds, crouch clearance and head height, static stair candidates, slides and movement
+stamina costs. Advanced calls these phases from its existing chart callbacks. It accelerates using
+the stored direction, saves the requested velocity, queries stairs, then carries the adjusted
+momentum into the next tick. The controller owns the sweeps, shape changes and `move_and_slide()`.
+The chart, Timers and stamina attribute still advance on their respective clocks and commit effects.
+
+For a simulation starting at a physics boundary, call `capture_movement_state()` and
+`capture_movement_profile()` on the configured actor. Both return independent values. Timer
+remainders are in seconds. Pass the sampled command values and fixed delta to the phases, and supply
+fresh contact observations at each solve. The live actor reuses its scratch records and reads tuning
+when each rule runs. The golden runner exercises checkpoint restoration during a jump and a slide.
+
+Games overriding Advanced can keep their existing callbacks, exports and stair queries. A callback
+that calls `super` runs the shared rules there. A custom movement mode can supply its own profile,
+contact observations and mode memory. Ladder, water, ledge, roll and platform handling continue
+through their existing Advanced callbacks.
+
 ## Per-actor input and presentation
 
 Advanced samples one `CogitoPlayerInputSource` at the start of each physics tick, before its child
