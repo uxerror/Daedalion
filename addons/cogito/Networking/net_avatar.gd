@@ -155,7 +155,12 @@ func apply_pose(frame: Dictionary, weight: float, force_look: bool) -> void:
 		if actor.current_seat and actor.current_seat.look_marker_node:
 			actor.sittable_look_marker = actor.current_seat.look_marker_node.global_position
 			actor.sittable_look_angle = actor.current_seat.horizontal_look_angle
-	actor.head.position.y = frame.height
+	# The owner gets 25 Hz frames; snapping the eye height to each one made crouching
+	# visibly step. Arrivals leave it to present(), which follows the latest height.
+	if not local or force_look:
+		actor.head.position.y = frame.height
+	elif weight < 1.0:
+		actor.head.position.y = lerpf(actor.head.position.y, frame.height, weight)
 	if not local or force_look:
 		actor.body.rotation.y = frame.yaw
 		actor.head.rotation.x = frame.pitch

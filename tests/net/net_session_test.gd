@@ -187,6 +187,19 @@ func test_avatar_late_join_move_remove_and_reconnect(_timeout := 15000) -> void:
 	first.player_world.avatar_for(id).receive(past)
 	first.player_world.avatar_for(id).present(0.1)
 	assert_float(local_actor.head.rotation.x).is_equal_approx(0.9, 0.001)
+	# The owner's eye height eases toward each 25 Hz frame instead of stepping (crouch).
+	var owner_view := first.player_world.avatar_for(id)
+	var standing := local_actor.head.position.y
+	var crouched := owner_view.timeline.latest().duplicate()
+	crouched.tick += 1
+	crouched.height = standing - 0.9
+	owner_view.receive(crouched)
+	assert_float(local_actor.head.position.y).is_equal_approx(standing, 0.001)
+	owner_view.present(1.0 / 60.0)
+	assert_float(local_actor.head.position.y).is_between(standing - 0.9 + 0.05, standing - 0.05)
+	for frame in 60:
+		owner_view.present(1.0 / 60.0)
+	assert_float(local_actor.head.position.y).is_equal_approx(standing - 0.9, 0.01)
 	assert_int(second.join("memory", 1402)).is_equal(OK)
 	_pump()
 	assert_object(second.local_player()).is_null()
