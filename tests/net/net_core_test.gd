@@ -64,6 +64,13 @@ func test_protocol_and_content_are_checked_separately() -> void:
 	assert_str(reason).is_equal("Content version mismatch")
 
 
+# Exports skip plugin.cfg by default, so the version is a constant mirrored from it.
+func test_content_version_matches_plugin_cfg() -> void:
+	var plugin := ConfigFile.new()
+	assert_int(plugin.load("res://addons/cogito/plugin.cfg")).is_equal(OK)
+	assert_str(NetConfig.content_version()).is_equal(plugin.get_value("plugin", "version"))
+
+
 func test_identity_registration_restart_replay_and_forgery() -> void:
 	var identity := Identity.new()
 	assert_int(identity.open_server(SERVER_DIR)).is_equal(OK)

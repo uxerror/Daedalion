@@ -145,7 +145,7 @@ respawn_delay=10.0
 | `profile_command` | Empty. Dedicated one-shot administration before transport startup. | `--profile-command 'list'` or `--profile-command 'rebind OLD NEW [force]'` |
 | `import_slot` | Empty. A named solo slot to copy into a new world before binding its first level. | `--import-slot` |
 | `import_player` | Empty. Dedicated import requires an explicit recipient player ID. | `--import-player` |
-| `content_version` | The `version` string from `addons/cogito/plugin.cfg`. Include the plugin config in an export or supply a game release or content hash. Set the same value in client join credentials. | Config file |
+| `content_version` | The `version` string from `addons/cogito/plugin.cfg`, compiled in as `NetConfig.CONTENT_VERSION` so exports need not include the plugin config. A game can supply its own release or content hash instead. Set the same value in client join credentials. | Config file |
 | `level` | First scene for a new world. The server sends each client its own level path. | `--level` |
 | `level_residency` | `stream` (default), `keep_visited` or `preload_all`. Applies to both server roles. | `--level-residency` |
 | `preload_levels` | Array of scene paths or UIDs, default `[]`. In `preload_all`, add `"auto"` to follow transition zones transitively. | `--preload-levels` (comma-separated, e.g. `auto` or `res://a.tscn,res://b.tscn`) |

@@ -3,6 +3,8 @@ extends RefCounted
 
 const WorldFiles := preload("../SceneManagement/cogito_world_files.gd")
 const PROTOCOL_VERSION := 14
+## Keep equal to `version` in addons/cogito/plugin.cfg (net_core_test checks it).
+const CONTENT_VERSION := "1.3.1"
 const DEMO_LEVEL := "res://addons/cogito/DemoScenes/COGITO_4_Laboratory.tscn"
 const ENET_CEILING := 4095
 const DEFAULT_PORT := 7777
@@ -28,12 +30,11 @@ const CLI_FLAGS := [
 ]
 
 
-## Reads the template version only when an online session needs it.
+## Default content version: the bundled plugin.cfg `version` (a test keeps them equal).
+## Not read from plugin.cfg at run time: exports omit non-resource files unless a preset
+## lists them, and an exported client would then announce "" and be refused.
 static func content_version() -> String:
-	var plugin := ConfigFile.new()
-	if plugin.load("res://addons/cogito/plugin.cfg") != OK:
-		return ""
-	return plugin.get_value("plugin", "version", "")
+	return CONTENT_VERSION
 
 
 ## Returns a printable rejection reason, or an empty string for a compatible client.
