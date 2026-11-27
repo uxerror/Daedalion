@@ -6,7 +6,14 @@ const NetConfig := preload("net_config.gd")
 
 
 func _ready() -> void:
-	var config := NetConfig.parse_cli(OS.get_cmdline_user_args())
+	var args := OS.get_cmdline_user_args()
+	var exported := OS.has_feature("dedicated_server")
+	print("NET BOOT dedicated_server=", exported)
+	if exported and not "--config" in args:
+		var path := OS.get_executable_path().get_base_dir().path_join("server.cfg")
+		if FileAccess.file_exists(path):
+			args.append_array(["--config", path])
+	var config := NetConfig.parse_cli(args)
 	if config.has("reason"):
 		push_error("CogitoNet: " + String(config.reason))
 		get_tree().quit(1)

@@ -59,6 +59,33 @@ func _recover(world: String) -> Error:
 	return storage.recover(SLOT) if damaged.is_empty() else ERR_FILE_CORRUPT
 
 
+## Read only public manifest headers; opening a selected world still verifies its members.
+static func list_worlds(save_dir: String) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var base := save_dir.path_join("worlds")
+	if not DirAccess.dir_exists_absolute(base):
+		return result
+	for world in DirAccess.get_directories_at(base):
+		if not valid_name(world):
+			continue
+		for prefix: String in ["", Storage.PREVIOUS, Storage.READY]:
+			var path := base.path_join(world).path_join(prefix + SLOT).path_join(MANIFEST)
+			var header := _load(path, "world")
+			if header.get("id") != world or not header.get("generation") is int:
+				continue
+			if header.get("players") is Dictionary:
+				var summary := {
+					"name": world,
+					"saved": FileAccess.get_modified_time(path),
+					"generation": header.generation,
+					"players": header.players.size(),
+				}
+				result.append(summary)
+				break
+	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.saved > b.saved)
+	return result
+
+
 ## World directories use a single, visible, portable filename component.
 static func valid_name(world: String) -> bool:
 	return (

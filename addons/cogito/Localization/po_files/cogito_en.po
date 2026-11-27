@@ -1190,3 +1190,174 @@ msgstr "%s arrived from %s"
 
 msgid "Loading…"
 msgstr "Loading…"
+
+msgid "Multiplayer"
+msgstr "Multiplayer"
+
+msgid "Host"
+msgstr "Host"
+
+msgid "Join"
+msgstr "Join"
+
+msgid "Saved worlds"
+msgstr "Saved worlds"
+
+msgid "New world name"
+msgstr "New world name"
+
+msgid "UDP port"
+msgstr "UDP port"
+
+msgid "Maximum players"
+msgstr "Maximum players"
+
+msgid "Friendly fire"
+msgstr "Friendly fire"
+
+msgid "Continue selected world"
+msgstr "Continue selected world"
+
+msgid "New world"
+msgstr "New world"
+
+msgid "Solo save slot"
+msgstr "Solo save slot"
+
+msgid "Import solo save into new world"
+msgstr "Import solo save into new world"
+
+msgid "Player name"
+msgstr "Player name"
+
+msgid "Server address"
+msgstr "Server address"
+
+msgid "Recent servers"
+msgstr "Recent servers"
+
+msgid "Remove selected server"
+msgstr "Remove selected server"
+
+msgid "Back"
+msgstr "Back"
+
+msgid "Cancel"
+msgstr "Cancel"
+
+msgid "%s · %s UTC · generation %d · %d players"
+msgstr "%s · %s UTC · generation %d · %d players"
+
+msgid "Kick"
+msgstr "Kick"
+
+msgid "Kick %s from this world?"
+msgstr "Kick %s from this world?"
+
+msgid " (you)"
+msgstr " (you)"
+
+msgid "%d ms"
+msgstr "%d ms"
+
+msgid "Ready"
+msgstr "Ready"
+
+msgid "Connecting…"
+msgstr "Connecting…"
+
+msgid "Authenticating…"
+msgstr "Authenticating…"
+
+msgid "Connection failed or timed out. Check the address, port and firewall."
+msgstr "Connection failed or timed out. Check the address, port and firewall."
+
+msgid "Version mismatch. Use the same game build as the server."
+msgstr "Version mismatch. Use the same game build as the server."
+
+msgid "Enter a player name of 1–64 printable characters."
+msgstr "Enter a player name of 1–64 printable characters."
+
+msgid "Server full. Try again after a player leaves."
+msgstr "Server full. Try again after a player leaves."
+
+msgid "Cannot listen on this port. Choose another port."
+msgstr "Cannot listen on this port. Choose another port."
+
+msgid "Invalid server address or port"
+msgstr "Invalid server address or port"
+
+msgid "World is locked"
+msgstr "World is locked"
+
+msgid "World already exists"
+msgstr "World already exists"
+
+msgid "World has no saved generation"
+msgstr "World has no saved generation"
+
+msgid "Invalid world directory name"
+msgstr "Invalid world directory name"
+
+msgid "Port must be in 1..65535"
+msgstr "Port must be in 1..65535"
+
+msgid "Cannot save multiplayer preferences"
+msgstr "Cannot save multiplayer preferences"
+
+msgid "Cannot initialize host"
+msgstr "Cannot initialize host"
+
+msgid "World save failed"
+msgstr "World save failed"
+
+msgid "Kicked by host"
+msgstr "Kicked by host"
+
+msgid "Server disconnected"
+msgstr "Server disconnected"
+
+msgid "Identity already connected"
+msgstr "Identity already connected"
+
+msgid "Invalid identity"
+msgstr "Invalid identity"
+
+msgid "Identity verification failed"
+msgstr "Identity verification failed"
+
+msgid "Cannot save client identity"
+msgstr "Cannot save client identity"
+
+msgid "Cannot read client identity"
+msgstr "Cannot read client identity"
+
+msgid "Signed in from another session"
+msgstr "Signed in from another session"
+
+msgid "Level travel timed out"
+msgstr "Level travel timed out"
+
+msgid "Cannot install travel destination"
+msgstr "Cannot install travel destination"
+
+msgid "Cannot load travel destination"
+msgstr "Cannot load travel destination"
+
+msgid "Invalid player capacity"
+msgstr "Invalid player capacity"
+
+msgid "World could not be opened. Check the save directory."
+msgstr "World could not be opened. Check the save directory."
+
+msgid "Cannot read host identity"
+msgstr "Cannot read host identity"
+
+msgid "Cannot open server identity store"
+msgstr "Cannot open server identity store"
+
+msgid "Cannot import this save. Choose another solo slot."
+msgstr "Cannot import this save. Choose another solo slot."
+
+msgid "Cannot load world level %s. Check the world files."
+msgstr "Cannot load world level %s. Check the world files."

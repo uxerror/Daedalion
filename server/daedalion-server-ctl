@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+usage() {
+	echo 'Usage: daedalion-server-ctl WORLD_DIR save|stop|list|kick ID_OR_NAME|rebind OLD_ID NEW_ID [force]' >&2
+	exit 2
+}
+[ "$#" -ge 2 ] || usage
+world=$1
+command=$2
+shift 2
+cd -- "$world"
+case "$command" in
+	save|stop|list) [ "$#" -eq 0 ] || usage ;;
+	kick) [ "$#" -eq 1 ] && [ -n "$1" ] || usage ;;
+	rebind) [ "$#" -eq 2 ] || { [ "$#" -eq 3 ] && [ "$3" = force ]; } || usage ;;
+	*) usage ;;
+esac
+umask 077
+tmp=$(mktemp "./.$command.XXXXXX")
+trap 'rm -f -- "$tmp"' EXIT
+trap 'exit 1' HUP INT TERM
+printf '%s\n' "$*" > "$tmp"
+# A hard link publishes complete text atomically and refuses to replace a pending request.
+if ! ln -- "$tmp" "$command.request"; then
+	echo "Could not queue $command in $world. Check for a pending request and directory permissions." >&2
+	exit 1
+fi
+echo "Queued $command in $world. See the server log for the result."

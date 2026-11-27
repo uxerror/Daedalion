@@ -127,6 +127,9 @@ func _answer(reply: Dictionary, display_name: String) -> void:
 	var pending: Dictionary = _pending.get(sender, {})
 	if not _api.is_server() or not pending.has("nonce") or pending.has("rejected"):
 		return
+	if not NetConfig.valid_display_name(display_name):
+		_reject(sender, "Name rejected")
+		return
 	var id := identity.authenticate(pending.claim, pending.nonce, reply)
 	if id.is_empty():
 		_reject(sender, "Identity verification failed")

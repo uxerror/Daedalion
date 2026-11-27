@@ -1,6 +1,8 @@
 extends "res://addons/cogito/Networking/enet_transport.gd"
 ## Socket-free process transport for the same SceneMultiplayer endpoints as the ENet harness.
 
+static var _connections := 0
+
 
 class FilePeer:
 	extends MultiplayerPeerExtension
@@ -130,5 +132,6 @@ func open_server(_config: Dictionary, _listen: bool) -> Error:
 
 func open_client(_address: String, _port: int) -> Error:
 	var id := OS.get_environment("COGITO_FILE_ID").to_int()
-	peer = FilePeer.new(OS.get_environment("COGITO_FILE_BUS"), id)
+	peer = FilePeer.new(OS.get_environment("COGITO_FILE_BUS"), id + (_connections << 16))
+	_connections += 1
 	return OK

@@ -68,3 +68,35 @@ func test_server_options() -> void:
 	assert_int(settings.autosave_seconds).is_zero()
 	assert_bool(Config.parse_cli(["--autosave-seconds", "-1"]).has("reason")).is_true()
 	assert_bool(Config.parse_cli(["--world", "../save"]).has("reason")).is_true()
+
+
+func test_import_button_copies_indexed_slot_and_starts_its_level() -> void:
+	var player := make_slot("11")
+	var path := manager.legacy_player_file("11")
+	player.player_current_scene_path = "res://tests/player/movement_level.tscn"
+	assert_int(ResourceSaver.save(player, path)).is_equal(OK)
+	assert_int(manager.save_last_saved_slot("11")).is_equal(OK)
+	var source_hash := FileAccess.get_sha256(path)
+	var transport := CogitoNet.transport_factory
+	var api := CogitoNet.menu
+	var prior_dir := api.save_dir
+	var peers := {}
+	var Memory := preload("res://tests/net/memory_session_suite.gd")
+	CogitoNet.transport_factory = func(): return Memory.MemoryTransport.new(peers, 1)
+	api.save_dir = create_temp_dir("menu-import")
+	var screen := preload("res://addons/cogito/EasyMenus/Scenes/MultiplayerMenu.tscn").instantiate()
+	get_tree().current_scene.add_child(screen)
+	screen.get_node("%WorldName").text = "expedition"
+	assert_str(screen.get_node("%SoloSlot").get_item_text(0)).is_equal("11")
+	screen.host_world("import")
+	var level := CogitoNet.starting_level("")
+	var worlds := api.worlds()
+	var err := CogitoNet.disconnect_session()
+	CogitoNet.transport_factory = transport
+	api.save_dir = prior_dir
+	assert_int(err).is_equal(OK)
+	assert_str(level).is_equal(player.player_current_scene_path)
+	assert_int(worlds.size()).is_equal(1)
+	assert_str(worlds[0].name).is_equal("expedition")
+	assert_int(worlds[0].players).is_equal(1)
+	assert_str(FileAccess.get_sha256(path)).is_equal(source_hash)

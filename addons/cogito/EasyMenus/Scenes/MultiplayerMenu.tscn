@@ -1,0 +1,148 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/cogito/EasyMenus/Scripts/multiplayer_menu.gd" id="1"]
+[ext_resource type="Script" path="res://addons/cogito/Theme/CogitoUiButton.gd" id="2"]
+[ext_resource type="Theme" path="res://addons/cogito/Theme/Cogito_Theme_A.tres" id="3"]
+
+[node name="MultiplayerMenu" type="PanelContainer"]
+anchor_left = 0.5
+anchor_right = 0.5
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_left = -420.0
+offset_right = 420.0
+grow_vertical = 2
+theme = ExtResource("3")
+script = ExtResource("1")
+
+[node name="Body" type="VBoxContainer" parent="."]
+
+[node name="Heading" type="Label" parent="Body"]
+text = "Multiplayer"
+horizontal_alignment = 1
+
+[node name="Tabs" type="TabContainer" parent="Body"]
+unique_name_in_owner = true
+
+[node name="Host" type="VBoxContainer" parent="Body/Tabs"]
+
+[node name="Fields" type="GridContainer" parent="Body/Tabs/Host"]
+columns = 2
+
+[node name="WorldLabel" type="Label" parent="Body/Tabs/Host/Fields"]
+text = "Saved worlds"
+
+[node name="Worlds" type="OptionButton" parent="Body/Tabs/Host/Fields"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+clip_text = true
+
+[node name="WorldNameLabel" type="Label" parent="Body/Tabs/Host/Fields"]
+text = "New world name"
+
+[node name="WorldName" type="LineEdit" parent="Body/Tabs/Host/Fields"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+text = ""
+
+[node name="HostPortLabel" type="Label" parent="Body/Tabs/Host/Fields"]
+text = "UDP port"
+
+[node name="HostPort" type="LineEdit" parent="Body/Tabs/Host/Fields"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+text = "7777"
+
+[node name="CapacityLabel" type="Label" parent="Body/Tabs/Host/Fields"]
+text = "Maximum players"
+
+[node name="Capacity" type="LineEdit" parent="Body/Tabs/Host/Fields"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+text = "8"
+
+[node name="FriendlyFire" type="CheckButton" parent="Body/Tabs/Host"]
+unique_name_in_owner = true
+text = "Friendly fire"
+button_pressed = true
+
+[node name="ContinueWorld" type="Button" parent="Body/Tabs/Host"]
+unique_name_in_owner = true
+text = "Continue selected world"
+script = ExtResource("2")
+
+[node name="NewWorld" type="Button" parent="Body/Tabs/Host"]
+unique_name_in_owner = true
+text = "New world"
+script = ExtResource("2")
+
+[node name="SlotLabel" type="Label" parent="Body/Tabs/Host"]
+text = "Solo save slot"
+
+[node name="SoloSlot" type="OptionButton" parent="Body/Tabs/Host"]
+unique_name_in_owner = true
+
+[node name="Import" type="Button" parent="Body/Tabs/Host"]
+unique_name_in_owner = true
+text = "Import solo save into new world"
+script = ExtResource("2")
+
+[node name="Join" type="VBoxContainer" parent="Body/Tabs"]
+
+[node name="Fields" type="GridContainer" parent="Body/Tabs/Join"]
+columns = 2
+
+[node name="PlayerNameLabel" type="Label" parent="Body/Tabs/Join/Fields"]
+text = "Player name"
+
+[node name="PlayerName" type="LineEdit" parent="Body/Tabs/Join/Fields"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+text = ""
+
+[node name="AddressLabel" type="Label" parent="Body/Tabs/Join/Fields"]
+text = "Server address"
+
+[node name="Address" type="LineEdit" parent="Body/Tabs/Join/Fields"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+text = "127.0.0.1"
+
+[node name="JoinPortLabel" type="Label" parent="Body/Tabs/Join/Fields"]
+text = "UDP port"
+
+[node name="JoinPort" type="LineEdit" parent="Body/Tabs/Join/Fields"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+text = "7777"
+
+[node name="JoinServer" type="Button" parent="Body/Tabs/Join"]
+unique_name_in_owner = true
+text = "Join"
+script = ExtResource("2")
+
+[node name="RecentLabel" type="Label" parent="Body/Tabs/Join"]
+text = "Recent servers"
+
+[node name="Recent" type="ItemList" parent="Body/Tabs/Join"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 160)
+
+[node name="Remove" type="Button" parent="Body/Tabs/Join"]
+unique_name_in_owner = true
+text = "Remove selected server"
+script = ExtResource("2")
+
+[node name="Status" type="Label" parent="Body"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="Cancel" type="Button" parent="Body"]
+unique_name_in_owner = true
+text = "Cancel"
+script = ExtResource("2")
+
+[node name="Back" type="Button" parent="Body"]
+unique_name_in_owner = true
+text = "Back"
+script = ExtResource("2")

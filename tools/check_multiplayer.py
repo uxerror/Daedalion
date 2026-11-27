@@ -942,6 +942,82 @@ class Scenario:
                 self.next_line()
         print("PASS world restart and offline profile", "dedicated" if dedicated else "listen")
 
+    def menus(self):
+        self.port = 17777 if self.file_transport else available_port()
+        if self.file_transport:
+            self.bus = self.directory / "menu-bus"
+            self.bus.mkdir()
+        self.server = self.fixture("Host", "menu")
+        client = self.fixture("Ada", "menu", expected_failure="Kicked by host")
+
+        def event(role, prefix):
+            return self.wait_line(role, lambda line: line.startswith(prefix))
+
+        def click(role, action):
+            pending = role.directory / "menu.pending"
+            pending.write_text(action)
+            pending.rename(role.directory / "menu.request")
+
+        def check_roster(role, count):
+            click(role, "pause")
+            expected = count - 1 if role is self.server else 0
+            event(role, f"NET KICK BUTTONS {expected}")
+            rows = json.loads(event(role, "NET MENU ROSTER ")[16:])
+            if len(rows) != count or any(not row["level"] for row in rows):
+                raise CheckFailed(f"incomplete menu roster: {rows}")
+
+        event(self.server, "NET MAIN")
+        event(client, "NET MAIN")
+        click(self.server, "host")
+        event(self.server, "NET MENU PLAYING")
+        click(client, "join")
+        first = event(client, "NET MENU PLAYING")
+        check_roster(client, 2)
+        click(client, "leave")
+        event(client, "NET MAIN")
+        click(client, "join")
+        if event(client, "NET MENU PLAYING") != first:
+            raise CheckFailed("identity changed on rejoin")
+        check_roster(self.server, 2)
+        click(self.server, "kick")
+        event(self.server, "NET HOST KICK confirmed")
+        event(client, "NET MAIN Kicked by host")
+        click(client, "join")
+        if event(client, "NET MENU PLAYING") != first:
+            raise CheckFailed("identity changed after kick")
+        check_roster(client, 2)
+        client.expected_failure = "Server disconnected"
+        click(self.server, "leave")
+        event(client, "NET MAIN Server disconnected")
+        event(self.server, "NET MAIN")
+        click(self.server, "host")
+        event(self.server, "NET MENU PLAYING")
+        check_roster(self.server, 1)
+        click(self.server, "leave")
+        event(self.server, "NET MAIN")
+        click(self.server, "solo")
+        event(self.server, "NET SOLO READY")
+        self.stop(self.server)
+
+        self.stop(client)
+        self.start(dedicated=True, world="menu-dedicated")
+        client = self.fixture("Ada", "menu", expected_failure="Kicked by host")
+        event(client, "NET MAIN")
+        click(client, "join")
+        event(client, "NET MENU PLAYING")
+        world = self.directory / "world/worlds/menu-dedicated"
+        (world / "list.request").touch()
+        row = json.loads(event(self.server, "NET CONNECTED ").removeprefix("NET CONNECTED "))
+        if row["display_name"] != "Ada" or not row["player_id"]:
+            raise CheckFailed(f"operator list is missing the connected client: {row}")
+        (world / "kick.request").write_text("unknown")
+        event(self.server, "NET KICK Does not exist")
+        (world / "kick.request").write_text("Ada")
+        event(self.server, "NET KICK OK")
+        event(client, "NET MAIN Kicked by host")
+        self.stop(client)
+        print("PASS menu rejoin, live roster, host kick, host restart, solo and dedicated kick")
+
     def travel_dedicated(self):
         self.travel(True)
 
@@ -1027,7 +1103,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     scenarios = ("dedicated", "listen", "friendly_fire_off", "npc_dedicated", "npc_listen",
                  "persistent_dedicated", "persistent_listen", "travel_dedicated", "travel_listen",
-                 "residency_dedicated")
+                 "residency_dedicated", "menus")
     parser.add_argument("--scenario", choices=scenarios)
     parser.add_argument("--file-transport", action="store_true", help="use a socket-free packet bus")
     parser.add_argument("--survival-only", action="store_true", help="run only MP5 scenarios")

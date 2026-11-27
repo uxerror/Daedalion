@@ -50,15 +50,17 @@ func spawn(
 	actor.position = start.origin
 	actor.get_node("Body").rotation.y = start.basis.get_euler().y
 	# The dedicated avatar loses its HUD on tree entry. Read the authored bar size first.
-	var bar := actor.player_hud.get_node("InventoryInterface/QuickSlots") as CogitoQuickslots
-	actor.set_meta(&"quickslot_count", bar.quickslot_containers.size())
-	actor.set_meta(&"multiple_quickslot_binds", bar.allow_multiple_quickslot_binds)
+	if actor.player_hud:
+		var bar := actor.player_hud.get_node("InventoryInterface/QuickSlots") as CogitoQuickslots
+		actor.set_meta(&"quickslot_count", bar.quickslot_containers.size())
+		actor.set_meta(&"multiple_quickslot_binds", bar.allow_multiple_quickslot_binds)
 	actor.is_local_presentation = local
 	actor.network_movement_only = true
 	actor.set_meta(&"net_player_id", id)
 	var meter := actor.get_node_or_null("LightMeterAttribute")
 	if meter is CogitoLightmeter:
-		meter.get_node("SubViewport").free()
+		if meter.has_node("SubViewport"):
+			meter.get_node("SubViewport").free()
 		if actor.find_children("*", "CogitoVisibilityAttribute", false, false).is_empty():
 			var visibility := (
 				preload("../Components/Attributes/VisibilityAttribute.tscn").instantiate()
@@ -71,7 +73,7 @@ func spawn(
 			attr.network_frozen = true
 			attr.set_block_signals(true)
 			attr.process_mode = Node.PROCESS_MODE_DISABLED
-	if not local:
+	if not local and actor.has_node("FootstepPlayer"):
 		actor.get_node("FootstepPlayer").free()
 	if server and not local:
 		source = INPUT.new()

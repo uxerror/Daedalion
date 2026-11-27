@@ -50,7 +50,7 @@ func bind_to_signal(sig: Signal, callable: Callable):
 
 ## Plays a bark. Passes in a sound that could be null if not configured, so checks a barker exists and sound exists before attempting to play it
 func bark(nullable_sound: AudioStream):
-	if not barker or not nullable_sound:
+	if not nullable_sound:
 		return
 	if npc.perception:
 		# Send a reference to an authored property within the shared NPC scene.
@@ -61,6 +61,6 @@ func bark(nullable_sound: AudioStream):
 					npc, &"bark", npc.global_position, Vector3.ZERO, path
 				)
 				break
-	elif not npc.network_state:
+	elif barker and not npc.network_state:
 		barker.stream = nullable_sound
 		barker.play()

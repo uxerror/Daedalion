@@ -68,6 +68,17 @@ func _ready():
 	else:
 		%NewGame.grab_focus()
 
+	if not CogitoNet.menu.return_message.is_empty():
+		%NetworkStatus.text = CogitoNet.menu.return_message
+		%NetworkStatus.show()
+		CogitoNet.menu.return_message = ""
+
+
+## Open the replaceable multiplayer screen, preserving keyboard and controller focus.
+func open_multiplayer() -> void:
+	%Multiplayer.grab_focus()
+	_open_sub_menu(preload("../Scenes/MultiplayerMenu.tscn"))
+
 
 func quit():
 	get_tree().quit()
@@ -137,7 +148,7 @@ func _close_sub_menu() -> void:
 	v_box_container_title.show()
 	game_menu.show()
 	# When using gamepad, set focus back to previously focused button:
-	if InputHelper.device_index != -1:
+	if InputHelper.device_index != -1 or previously_focused_button == %Multiplayer:
 		if previously_focused_button : previously_focused_button.grab_focus()
 
 

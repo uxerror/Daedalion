@@ -21,6 +21,8 @@ signal travel_failed(player_id: String, reason: String)
 
 enum Mode { OFFLINE, LISTEN_HOST, CLIENT, DEDICATED }
 
+const MenuApi := preload("net_menu_api.gd")
+const Roster := preload("net_roster.gd")
 const Persistence := preload("net_persistence.gd")
 const ReconnectPolicy := preload("net_reconnect_policy.gd")
 const NetConfig := preload("net_config.gd")
@@ -71,6 +73,15 @@ var snapshot_hz := 25:
 ## Online-only level, spawn and pose endpoint.
 var player_world: NET_PLAYERS
 
+## Public pause roster endpoint, available throughout an online session.
+var roster: Roster
+## Player-facing lifecycle, created when a menu first needs it.
+var menu: MenuApi:
+	get:
+		if not menu:
+			menu = MenuApi.new(self)
+		return menu
+
 var _mode := Mode.OFFLINE
 var _session: Session
 var _previous_peer: MultiplayerPeer
@@ -98,8 +109,8 @@ func _select_dedicated_scene() -> void:
 
 
 ## Opens a server and admits its local host. The host counts toward max_players.
-func host(config: Dictionary) -> Error:
-	return _serve(config, Mode.LISTEN_HOST)
+func host(config: Dictionary, intent := "") -> Error:
+	return _serve(config, Mode.LISTEN_HOST, intent)
 
 
 ## Opens a server with an initially empty roster.
@@ -107,7 +118,7 @@ func start_server(config: Dictionary) -> Error:
 	return _serve(config, Mode.DEDICATED)
 
 
-func _serve(input: Dictionary, role: Mode) -> Error:
+func _serve(input: Dictionary, role: Mode, intent := "") -> Error:
 	if is_online():
 		return _report("Session already open", ERR_ALREADY_IN_USE)
 	var listen := role == Mode.LISTEN_HOST
@@ -124,17 +135,29 @@ func _serve(input: Dictionary, role: Mode) -> Error:
 	var profile := provider.load_client(scope, {}) if listen else {}
 	if listen and profile.is_empty():
 		return _report("Cannot read host identity", ERR_FILE_CANT_READ)
-	return _serve_world(config, role, provider, scope, profile)
+	return _serve_world(config, role, provider, scope, profile, intent)
 
 
 func _serve_world(
-	config: Dictionary, role: Mode, provider: Identity, scope: String, profile: Dictionary
+	config: Dictionary,
+	role: Mode,
+	provider: Identity,
+	scope: String,
+	profile: Dictionary,
+	intent: String
 ) -> Error:
 	var listen := role == Mode.LISTEN_HOST
 	var persistence := Persistence.new()
 	var err := persistence.files.open(config.save_dir, config.world)
 	if err != OK:
-		return _report("Cannot open world " + config.world, err)
+		var detail: String = "Cannot open world " + config.world
+		return _report("World is locked" if err == ERR_BUSY else detail, err)
+	if intent == "new" and not persistence.files.manifest.is_empty():
+		persistence.close()
+		return _report("World already exists", ERR_ALREADY_EXISTS)
+	if intent == "continue" and persistence.files.manifest.is_empty():
+		persistence.close()
+		return _report("World has no saved generation", ERR_DOES_NOT_EXIST)
 	if reconnect_policy:
 		persistence.placement = reconnect_policy
 	persistence.match_legacy_object = match_legacy_object
@@ -154,10 +177,11 @@ func _serve_world(
 	persistence.install(player_world)
 	if listen:
 		err = _session.admit_host()
+	var reason := "Cannot initialize host"
 	if err == OK and not config.import_slot.is_empty():
 		var owner_id: String = _session.local_id if listen else config.import_player
 		err = import_solo(config.import_slot, owner_id)
-	var reason := "Cannot initialize host or import slot"
+		reason = "Cannot import solo save"
 	if err == OK and config.level_residency == "preload_all":
 		err = _preload_world(config.level)
 		reason = player_world.travel.residency.failure
@@ -303,6 +327,9 @@ func _attach(
 		_session.joined.connect(_quest_baseline)
 	_session.joined.connect(player_joined.emit)
 	_session.add_child(player_world)
+	roster = Roster.new()
+	roster.name = "Roster"
+	_session.add_child(roster)
 	player_world.travel.notice_received.connect(travel_notification.emit)
 	player_world.travel.failed.connect(travel_failed.emit)
 	_session.left.connect(player_left.emit)
@@ -381,6 +408,7 @@ func disconnect_session() -> Error:
 	if persistence:
 		persistence.close()
 	player_world = null
+	roster = null
 	_session.detach()
 	if _mode == Mode.CLIENT and peer != null and 1 in api.get_peers():
 		peer.disconnect_peer(1, true)
@@ -397,6 +425,14 @@ func disconnect_session() -> Error:
 	for record: Dictionary in old_records:
 		player_left.emit(record.player_id)
 	return err
+
+
+## Cancel a player-facing join during connection, authentication or initial level loading.
+func cancel() -> void:
+	if menu.pending:
+		menu.cancel()
+	elif _mode == Mode.CLIENT and not local_player():
+		disconnect_session()
 
 
 ## Returns the selected role, including CLIENT while admission is pending.

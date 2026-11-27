@@ -181,6 +181,11 @@ func is_saved_slots_empty() -> bool:
 	return _save_index.is_saved_slots_empty()
 
 
+## Ordered names from the solo slot index, shared by the load and multiplayer import menus.
+func saved_slots() -> Array:
+	return _save_index.saved_slots()
+
+
 func saved_slots_count() -> int:
 	return _save_index.saved_slots_count()
 

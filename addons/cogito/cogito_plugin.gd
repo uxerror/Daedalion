@@ -4,11 +4,13 @@ const cogito_plugin_icon: Texture2D = preload("./Cogito.svg")
 const DEFAULT_COGITO_SETTINGS_FILEPATH := "res://addons/cogito/CogitoSettings.tres"
 const COGITO_SETTINGS_PROJECT_SETTING := "cogito/settings/settings_file"
 
+var dedicated_export := preload("Networking/dedicated_export.gd").new()
 var parser_plugin: EditorTranslationParserPlugin
 var inspector_plugin: EditorInspectorPlugin
 
 
 func _enter_tree():
+	add_export_plugin(dedicated_export)
 	_register_project_settings()
 	add_autoload_singleton("CogitoGlobals", "/cogito_globals.gd")
 	add_autoload_singleton("CogitoNet", "res://addons/cogito/Networking/cogito_net.gd")
@@ -44,6 +46,7 @@ func _enter_tree():
 
 
 func _exit_tree():
+	remove_export_plugin(dedicated_export)
 	remove_custom_type("FloatableBody3D")
 	remove_custom_type("FluidArea3D")
 

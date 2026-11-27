@@ -18,6 +18,8 @@ run/max_fps=1000
 boot_splash/stretch_mode=0
 boot_splash/image="uid://ba066ltlqn7w2"
 config/icon="res://addons/cogito/COGITO_icon.png"
+run/main_scene.dedicated_server="res://addons/cogito/Networking/dedicated_server.tscn"
+run/flush_stdout_on_print.dedicated_server=true
 
 [autoload]
 

@@ -91,7 +91,7 @@ var can_play_footstep: bool = true
 var wiggle_vector : Vector2 = Vector2.ZERO
 var wiggle_index : float = 0.0
 
-@onready var footstep_player = $FootstepPlayer
+@onready var footstep_player = get_node_or_null("FootstepPlayer")
 @onready var nav_agent: NavigationAgent3D = $NavigationAgent3D
 @onready var animation_tree: AnimationTree = $AnimationTree
 @onready var velocity_debug_shape: MeshInstance3D = $VelocityDebugShape
@@ -374,8 +374,9 @@ func npc_footsteps(delta):
 		wiggle_index += WIGGLE_ON_SPRINTING_SPEED * delta
 		
 		if can_play_footstep and wiggle_vector.y > 0.9:
-			footstep_player.volume_db = sprint_volume_db
-			footstep_player._play_interaction("footstep", 1)
+			if footstep_player:
+				footstep_player.volume_db = sprint_volume_db
+				footstep_player._play_interaction("footstep", 1)
 			can_play_footstep = false
 		
 		if !can_play_footstep and wiggle_vector.y < 0.9:
@@ -387,8 +388,9 @@ func npc_footsteps(delta):
 		wiggle_index += WIGGLE_ON_WALKING_SPEED * delta
 		
 		if can_play_footstep and wiggle_vector.y > 0.9:
-			footstep_player.volume_db = walk_volume_db
-			footstep_player._play_interaction("footstep", 1)
+			if footstep_player:
+				footstep_player.volume_db = walk_volume_db
+				footstep_player._play_interaction("footstep", 1)
 			can_play_footstep = false
 		
 		if !can_play_footstep and wiggle_vector.y < 0.9:

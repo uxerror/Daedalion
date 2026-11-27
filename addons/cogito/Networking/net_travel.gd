@@ -27,6 +27,7 @@ var _policy := CogitoTravelPolicy.new()
 
 
 func _ready() -> void:
+	host.dedicated = _facade().is_dedicated()
 	var config: Dictionary = _session().config
 	if config.has("level_residency"):
 		host.room_clock = config.level_residency != "stream" or _facade().travel_policy != null
@@ -503,7 +504,7 @@ func _present(key: String) -> void:
 
 
 func _show_loading() -> void:
-	if _overlay:
+	if _overlay or _facade().menu.pending:
 		return
 	_overlay = CanvasLayer.new()
 	_overlay.layer = 120
@@ -537,11 +538,16 @@ func _hide_loading() -> void:
 		fade.tween_callback(layer.queue_free)
 
 
-func _notify(endpoint: Node, except_peer: int, id: String, other: Node, arrived: bool) -> void:
-	var root: Node = other.active_level()
-	var title := root.scene_file_path.get_file().get_basename()
+## Display name shared by travel notices and the pause roster.
+func level_title(endpoint: Node) -> String:
+	var root: Node = endpoint.active_level()
 	if "level_display_name" in root and not root.level_display_name.is_empty():
-		title = root.level_display_name
+		return root.level_display_name
+	return root.scene_file_path.get_file().get_basename()
+
+
+func _notify(endpoint: Node, except_peer: int, id: String, other: Node, arrived: bool) -> void:
+	var title := level_title(other)
 	var who: String = _session().for_id(id).display_name
 	var room: String = endpoint.world.entities.level_key
 	for member: Dictionary in _session().records():

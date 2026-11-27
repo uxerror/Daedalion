@@ -2,7 +2,7 @@ extends RefCounted
 ## Session configuration shared by programmatic startup and the dedicated CLI.
 
 const WorldFiles := preload("../SceneManagement/cogito_world_files.gd")
-const PROTOCOL_VERSION := 13
+const PROTOCOL_VERSION := 14
 const DEMO_LEVEL := "res://addons/cogito/DemoScenes/COGITO_4_Laboratory.tscn"
 const ENET_CEILING := 4095
 const DEFAULT_PORT := 7777
@@ -43,6 +43,16 @@ static func version_error(protocol: int, content: String, expected: String) -> S
 	if content != expected:
 		return "Content version mismatch"
 	return ""
+
+
+## Labels must fit the public roster and operator request on a single line.
+static func valid_display_name(value: String) -> bool:
+	if value.strip_edges().is_empty() or value.length() > 64:
+		return false
+	for index in value.length():
+		if value.unicode_at(index) < 32 or value.unicode_at(index) == 127:
+			return false
+	return true
 
 
 ## Returns the validated settings, or a dictionary containing a reason.

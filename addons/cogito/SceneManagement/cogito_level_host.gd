@@ -4,6 +4,8 @@ extends Node
 
 ## Use node-bound gameplay delays in server rooms eligible for suspension.
 var room_clock := false
+## A dedicated world needs physics isolation only.
+var dedicated := false
 var _surfaces: Dictionary[StringName, SubViewportContainer] = {}
 var _levels: Dictionary[StringName, Node] = {}
 var _silent_bus: StringName
@@ -55,6 +57,12 @@ func prepare_level(scene: PackedScene, key: StringName, network: bool) -> Node:
 		if marker:
 			root.set_meta(&"network_start", marker.transform)
 			marker.free()
+		if dedicated:
+			for kind in [
+				"Camera3D", "AudioStreamPlayer", "AudioStreamPlayer2D", "AudioStreamPlayer3D"
+			]:
+				for child in root.find_children("*", kind, true, false):
+					child.free()
 	return root
 
 
@@ -81,7 +89,7 @@ func mount_level(root: Node, key: StringName, network: bool) -> Node:
 	viewport.audio_listener_enable_3d = false
 	_levels[key] = root
 	viewport.add_child(root)
-	if network:
+	if network and not dedicated:
 		if not get_tree().node_added.is_connected(_route_audio):
 			get_tree().node_added.connect(_route_audio)
 		var surface := SubViewportContainer.new()
@@ -165,7 +173,7 @@ func unload_level(key: StringName, checkpoint := true) -> void:
 			if checkpoint and players.persistence:
 				players.persistence.before_unload(players)
 		_levels.erase(key)
-		var network := _surfaces.has(key)
+		var network := _surfaces.has(key) or dedicated
 		var owner_node: Node = _surfaces.get(key, root.get_parent())
 		_surfaces.erase(key)
 		owner_node.queue_free()

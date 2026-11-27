@@ -544,6 +544,8 @@ func _consume_stop(players: Node) -> bool:
 func _operator_request(players: Node, tick: int) -> bool:
 	var path := files.directory.path_join("save.request")
 	if not FileAccess.file_exists(path):
+		if players.get_parent().local_id.is_empty() and _kick_request(players):
+			return true
 		return _profile_request(players, tick)
 	var err := DirAccess.remove_absolute(path)
 	if err == OK:
@@ -552,6 +554,25 @@ func _operator_request(players: Node, tick: int) -> bool:
 	if err != OK:
 		_operator_save = false
 		_inbox_error("SAVE", err)
+	return true
+
+
+func _kick_request(players: Node) -> bool:
+	var path := files.directory.path_join("kick.request")
+	if not FileAccess.file_exists(path):
+		return false
+	var file := FileAccess.open(path, FileAccess.READ)
+	if not file:
+		_inbox_error("KICK", FileAccess.get_open_error())
+		return true
+	var target := file.get_as_text().strip_edges() if file.get_length() <= 4096 else ""
+	file.close()
+	var err := DirAccess.remove_absolute(path)
+	if err != OK:
+		_inbox_error("KICK", err)
+	else:
+		err = players.get_parent().get_parent().roster.kick(target)
+		print("NET KICK ", error_string(err))
 	return true
 
 
@@ -570,6 +591,8 @@ func _profile_request(players: Node, tick: int) -> bool:
 			if avatar:
 				records[member.player_id] = lives.capture(member.player_id, avatar.actor, endpoint)
 		ProfileTools.list_profiles(records)
+		for row: Dictionary in players.get_parent().get_parent().roster.connected():
+			print("NET CONNECTED ", JSON.stringify(row))
 	var path := files.directory.path_join("rebind.request")
 	if not _move.is_empty() or not FileAccess.file_exists(path):
 		return false

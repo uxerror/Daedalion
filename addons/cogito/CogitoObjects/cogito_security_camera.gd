@@ -140,14 +140,14 @@ func stop_detecting():
 func switch_to_searching():
 	detection_time = 0
 	current_state = DetectorState.SEARCHING
-	if audio_stream_player_3d.playing:
+	if audio_stream_player_3d and audio_stream_player_3d.playing:
 		audio_stream_player_3d.stop()
 	stop_alarm_light()
 	update_indicator_mesh()
 
 
 func turn_off():
-	if audio_stream_player_3d.playing:
+	if audio_stream_player_3d and audio_stream_player_3d.playing:
 		audio_stream_player_3d.stop()
 	current_state = DetectorState.OFFLINE
 	turned_off.emit()

@@ -1,0 +1,21 @@
+[Unit]
+Description=Daedalion dedicated server
+After=network.target
+
+[Service]
+Type=simple
+User=daedalion
+Group=daedalion
+WorkingDirectory=/opt/daedalion
+StateDirectory=daedalion
+Environment=XDG_DATA_HOME=/var/lib/daedalion
+ExecStart=/opt/daedalion/daedalion-server --headless -- --save-dir /var/lib/daedalion --world default
+# Godot headless does not flush on SIGTERM. Allow polling plus the 3-second flush budget.
+ExecStop=/bin/sh -c 'kill -0 "$MAINPID" 2>/dev/null || exit 0; touch /var/lib/daedalion/worlds/default/stop.request && while kill -0 "$MAINPID" 2>/dev/null; do sleep 0.2; done'
+TimeoutStopSec=15s
+Restart=on-failure
+RestartSec=3s
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -82,6 +82,8 @@ func _ready() -> void:
 	temp_screenshot = CogitoSceneManager.grab_screenshot(CogitoGlobals.screenshot_scale)
 	options_tab_menu.hide()
 	update_load_related_gui()
+	if CogitoNet.roster:
+		$Content/GameMenu/VBoxContainer.add_child(preload("multiplayer_roster.gd").new())
 	var writer := CogitoNet.player_world.persistence if CogitoNet.player_world else null
 	if writer and CogitoNet.mode() == CogitoNet.Mode.LISTEN_HOST:
 		writer.save_finished.connect(_world_save_finished)
@@ -97,6 +99,7 @@ func _ready() -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _exit_tree() -> void:
+	InputRouter.remove(on_input)
 	InputHelper.device_changed.disconnect(_on_input_device_changed)
 
 func on_input(event):
@@ -294,13 +297,9 @@ func _on_back_to_main_menu_pressed() -> void:
 	var menu := CogitoGlobals.cogito_settings.main_menu_scene
 	if not menu:
 		return
-	if not _pauses_world:
-		# Leaving frees this avatar (and this menu) at once; the autoload finishes the load.
+	if CogitoNet.is_online():
 		InputRouter.remove(on_input)
-		CogitoNet.disconnect_session()
-		CogitoSceneManager.load_next_scene(
-			menu.resource_path, "", "temp", CogitoSceneManager.CogitoSceneLoadMode.RESET
-		)
+		CogitoNet.menu.leave()
 		return
 	var error := await CogitoSceneManager.load_next_scene(
 		menu.resource_path, "", "temp", CogitoSceneManager.CogitoSceneLoadMode.RESET

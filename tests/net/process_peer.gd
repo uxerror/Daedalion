@@ -11,12 +11,18 @@ func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	for index in range(0, args.size(), 2):
 		_args[args[index]] = args[index + 1]
+	if OS.has_environment("COGITO_FILE_BUS"):
+		CogitoNet.transport_factory = func(): return preload("file_transport.gd").new()
+	if _args["--role"] in ["menu", "export-client"]:
+		var driver := preload("process_menu.gd").new()
+		driver.args = _args
+		get_tree().root.add_child.call_deferred(driver)
+		set_process(false)
+		return
 	CogitoNet.session_ready.connect(_admitted_session)
 	CogitoNet.session_failed.connect(_failed)
 	CogitoNet.player_joined.connect(_roster_changed)
 	CogitoNet.player_left.connect(_roster_changed)
-	if OS.has_environment("COGITO_FILE_BUS"):
-		CogitoNet.transport_factory = func(): return preload("file_transport.gd").new()
 	var port := int(_args["--port"])
 	if _args["--role"] == "authority":
 		var config := {

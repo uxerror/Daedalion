@@ -35,6 +35,14 @@ The `upstream`, `1.3.0-dev` and `pr/*` branches stay in Cogito's format (Godot 4
 remain applicable to Cogito. Opening them in 4.7 rewrites ~260 `.import` files and a few resources;
 do not commit those changes there (`git checkout -- .`).
 
+## Multiplayer
+
+1. Open **Multiplayer → Host** on the machine that will run the world.
+2. Name a new world or select an existing one, then choose the port and player limit.
+3. On a second machine, open **Multiplayer → Join**, enter a name and the host’s address and port.
+4. Open the pause menu for the roster. The listen host can save or kick a player.
+5. To run an unattended world, follow the [dedicated server guide](docs/dedicated-server.md).
+
 ## What is different from Cogito
 
 See the [Daedalion 1.3 changelog](docs/changelog.md) and the [migration guide](docs/migration-1.2-to-1.3.md).

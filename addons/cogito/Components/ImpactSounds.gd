@@ -1,7 +1,7 @@
 extends Node3D
 class_name ImpactSounds
 # Attached to a RigidBody, this components will emit sounds when the RigidBody collides with something.
-@onready var audio_stream_player_3d: AudioStreamPlayer3D = $AudioStreamPlayer3D
+@onready var audio_stream_player_3d: AudioStreamPlayer3D = get_node_or_null("AudioStreamPlayer3D")
 @onready var parent_node = get_parent()
 
 ## This is used to grab sounds to play.
@@ -32,13 +32,14 @@ func _on_parent_node_collision(_collided_node):
 		if parent.linear_velocity.length() < 0.5:
 			return
 	
-	if audio_stream_player_3d and !audio_stream_player_3d.playing and !is_delaying:
+	if not is_delaying and (not audio_stream_player_3d or not audio_stream_player_3d.playing):
 		if parent.has_meta(&"cogito_net_world"):
 			var world: Node = parent.get_meta(&"cogito_net_world")
 			if not world.multiplayer.is_server():
 				return
 			world.get_parent().bodies.impact(parent, self)
-		audio_stream_player_3d.play()
+		if audio_stream_player_3d:
+			audio_stream_player_3d.play()
 		impact_time_delay()
 
 

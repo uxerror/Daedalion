@@ -312,8 +312,9 @@ func _ready():
 
 	CogitoGlobals.debug_log(is_logging, "cogito_player.gd", "Player has no reference to pause menu.")
 
-	call_deferred("slide_audio_init")
-	call_deferred("swim_audio_init")
+	if is_local_presentation:
+		call_deferred("slide_audio_init")
+		call_deferred("swim_audio_init")
 	
 	if is_local_presentation:
 		Input.mouse_mode = gameplay_mouse_mode
@@ -1088,6 +1089,8 @@ func _show_underwater_effect(show_effect: bool) -> void:
 
 
 func _handle_swim_under_water_sounds():
+	if not is_local_presentation:
+		return
 	if is_head_in_water():
 		if not swim_under_water_audio_player:
 			swim_audio_init()

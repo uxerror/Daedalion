@@ -4,6 +4,51 @@ Daedalion 1.4 gives each admitted identity a server-owned Advanced player and pr
 
 Listen hosts and dedicated servers publish transactional world saves on request, on a dirty autosave interval, after departures and at orderly shutdown. Reopening a named world restores its last complete generation and each returning identity's private profile.
 
+## Multiplayer menus
+
+Open **Multiplayer** from the demo main menu. On **Host**, select a saved world to
+continue or enter a new world name. The list shows last save time (UTC), generation
+and the number of saved player profiles. Set the UDP port, capacity and friendly
+fire. To import, select a solo slot, enter a new world name and choose **Import solo
+save into new world**. The authenticated host receives the copied solo profile.
+The source slot stays available for offline Continue.
+
+On **Join**, enter your player name, host address and port. The menu remembers the
+name and the ten most recently attempted endpoints in `user://net/recent_servers.cfg`.
+Select a row to fill the form. Activate it to join, or remove it from history.
+Client keys remain in `user://net/identity.cfg`. Cancel works through connection,
+authentication and initial loading. A lost server or host kick returns you to the
+main menu, where you can immediately start solo, host, or join again.
+
+Online pause shows names, level titles and round-trip time in milliseconds.
+The listen player has zero RTT and transports without RTT report a dash.
+**Kick** on a listen host asks for confirmation. Dedicated operators can publish
+`kick.request` with an ID or exact display name. Use the ID for ambiguous names.
+Each open roster subscribes to a reliable server snapshot up to once per second.
+With every panel closed the server sends no roster snapshots. At most one list of
+public records is sent per watching client per second, independent of physics rate.
+[Dedicated operator guide](dedicated-server.md)
+
+### Replace the menus
+
+The stock EasyMenus scene is an adapter to `CogitoNet.menu`. Games can replace it
+and observe `status_changed(message)` before calling any startup method.
+
+| API | Contract |
+| --- | --- |
+| `CogitoNet.menu.join(address, port, label)` | Validates and remembers the endpoint and label, calls `CogitoNet.join`, tracks admission, loading and local avatar readiness. |
+| `CogitoNet.menu.host(config, intent)` | Calls `CogitoNet.host` then starts travel in the committed or configured room. Pass `"new"` or `"continue"` to check the selected action under the writer lock. |
+| `menu.worlds()`, `menu.solo_slots()` | Read-only lists for the host screen. Set `menu.save_dir` to choose the listen directory. Each world row contains name, saved (Unix seconds), generation and players. |
+| `menu.host({"world": name, "import_slot": slot}, "new")` | Runs the MP9 solo import before level binding. The lower-level API is `CogitoNet.import_solo(slot, player_id)`. |
+| `menu.player_name()`, `menu.recent_servers()`, `menu.forget_server(address, port)` | Access preferences independently of identity credentials. |
+| `menu.cancel()`, `CogitoNet.cancel()`, `menu.leave()` | Cancel a pending menu join or flush and leave an established game. The latter loads the game's configured main menu. |
+| `CogitoNet.roster.updated(rows)`, `roster.watch(open)` | Subscribe while showing a roster and unsubscribe on close. Rows contain player_id, peer_id, display_name, level and ping. |
+| `roster.kick(player_id)` | Local authority operation. Confirm with the operator before calling. Unavailable on clients. |
+
+The menu API retires the launching scene when its local avatar is ready. The custom
+menu can display `menu.return_message` once on return and clear it. Games managing
+their own scene lifecycle can use the lower-level facade directly.
+
 ## Try the Laboratory
 
 Run from the project root. On the host machine, open a listen session with a playable first-person view.
@@ -110,9 +155,9 @@ respawn_delay=10.0
 | `respawn_delay` | Finite, nonnegative seconds, default `10.0`. Zero enables immediate requests. | `--respawn-delay 1.5` |
 | `display_name` | `Host` for the listen player. Clients supply their own name in join credentials, default `Player`. | Config file |
 
-The protocol version is 13. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
+The protocol version is 14. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
 
-The dedicated level starts empty and simulates admitted remote avatars. Their first-person cameras, HUDs and light-meter cameras are omitted. The default demo boot prevents the menu subtree from entering the tree. Dedicated startup skips solo save recovery and cleanup, the fade panel, game options, graphics and input-map setup by Cogito's menu autoload. The engine still loads project resources, Cogito settings and the existing autoload nodes, including InputHelper, DebugLine, InputRouter, audio and quest services. Full export stripping is scheduled for MP11.
+The dedicated level starts empty and simulates admitted remote avatars. Their first-person cameras, HUDs and light-meter cameras are omitted. The default demo boot prevents the menu subtree from entering the tree. Dedicated startup skips solo save recovery and cleanup, the fade panel, game options, graphics and input-map setup by Cogito's menu autoload. The engine still loads project resources, Cogito settings and the existing autoload nodes, including InputHelper, DebugLine, InputRouter, audio and quest services. The dedicated export configures a simulation main scene and strips authored presentation when packing. Room physics uses a non-rendering SubViewport. The operator guide describes the pack and service installation.
 
 ## Save and reopen a world
 
@@ -989,6 +1034,8 @@ Baselines only install state. Award gameplay rewards from the server-only
 `committed(event, definition, owner_id)` signal. Shared events have an empty owner ID.
 
 ## Current limitations
+
+- Direct address and port entry are required. LAN discovery, relay and NAT traversal are outside the 1.4 feature set.
 
 - Resident levels consume memory until shutdown. Auto-discovery sees targets present on mounted zones at startup. List procedural or script-only routes explicitly. Game code using an autoload, a raw SceneTreeTimer or a wall-clock deadline must bind that work to room time.
 - Scenes and controllers attach on the Godot main thread. Cold room activation and synchronous capture can exceed a 60 Hz frame budget. Client movement prediction, lag compensation and transport tuning are separate from independent travel.

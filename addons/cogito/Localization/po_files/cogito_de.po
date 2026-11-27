@@ -1213,3 +1213,174 @@ msgstr "%s kommt aus %s"
 
 msgid "Loading…"
 msgstr "Laden…"
+
+msgid "Multiplayer"
+msgstr "Mehrspieler"
+
+msgid "Host"
+msgstr "Hosten"
+
+msgid "Join"
+msgstr "Beitreten"
+
+msgid "Saved worlds"
+msgstr "Gespeicherte Welten"
+
+msgid "New world name"
+msgstr "Name der neuen Welt"
+
+msgid "UDP port"
+msgstr "UDP-Port"
+
+msgid "Maximum players"
+msgstr "Maximale Spielerzahl"
+
+msgid "Friendly fire"
+msgstr "Teamschaden"
+
+msgid "Continue selected world"
+msgstr "Gewählte Welt fortsetzen"
+
+msgid "New world"
+msgstr "Neue Welt"
+
+msgid "Solo save slot"
+msgstr "Einzelspieler-Spielstand"
+
+msgid "Import solo save into new world"
+msgstr "Spielstand in neue Welt importieren"
+
+msgid "Player name"
+msgstr "Spielername"
+
+msgid "Server address"
+msgstr "Serveradresse"
+
+msgid "Recent servers"
+msgstr "Zuletzt verwendete Server"
+
+msgid "Remove selected server"
+msgstr "Gewählten Server entfernen"
+
+msgid "Back"
+msgstr "Zurück"
+
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgid "%s · %s UTC · generation %d · %d players"
+msgstr "%s · %s UTC · Generation %d · %d Spieler"
+
+msgid "Kick"
+msgstr "Entfernen"
+
+msgid "Kick %s from this world?"
+msgstr "%s aus dieser Welt entfernen?"
+
+msgid " (you)"
+msgstr " (du)"
+
+msgid "%d ms"
+msgstr "%d ms"
+
+msgid "Ready"
+msgstr "Bereit"
+
+msgid "Connecting…"
+msgstr "Verbindung wird hergestellt…"
+
+msgid "Authenticating…"
+msgstr "Anmeldung läuft…"
+
+msgid "Connection failed or timed out. Check the address, port and firewall."
+msgstr "Verbindung fehlgeschlagen. Adresse, Port und Firewall prüfen."
+
+msgid "Version mismatch. Use the same game build as the server."
+msgstr "Die Version passt nicht. Dieselbe Spielversion wie auf dem Server verwenden."
+
+msgid "Enter a player name of 1–64 printable characters."
+msgstr "Einen Spielernamen mit 1–64 druckbaren Zeichen eingeben."
+
+msgid "Server full. Try again after a player leaves."
+msgstr "Server voll. Erneut versuchen, sobald ein Spieler geht."
+
+msgid "Cannot listen on this port. Choose another port."
+msgstr "Port nicht verfügbar. Anderen Port wählen."
+
+msgid "Invalid server address or port"
+msgstr "Ungültige Serveradresse oder ungültiger Port"
+
+msgid "World is locked"
+msgstr "Die Welt wird von einem anderen Prozess verwendet"
+
+msgid "World already exists"
+msgstr "Welt ist bereits vorhanden"
+
+msgid "World has no saved generation"
+msgstr "Die Welt hat keinen gespeicherten Stand"
+
+msgid "Invalid world directory name"
+msgstr "Ungültiger Weltname"
+
+msgid "Port must be in 1..65535"
+msgstr "Der Port muss zwischen 1 und 65535 liegen"
+
+msgid "Cannot save multiplayer preferences"
+msgstr "Mehrspieler-Einstellungen konnten nicht gespeichert werden"
+
+msgid "Cannot initialize host"
+msgstr "Host konnte nicht gestartet werden."
+
+msgid "World save failed"
+msgstr "Welt konnte nicht gespeichert werden"
+
+msgid "Kicked by host"
+msgstr "Vom Host entfernt"
+
+msgid "Server disconnected"
+msgstr "Verbindung zum Server getrennt"
+
+msgid "Identity already connected"
+msgstr "Identität bereits verbunden"
+
+msgid "Invalid identity"
+msgstr "Ungültige Identität"
+
+msgid "Identity verification failed"
+msgstr "Identitätsprüfung fehlgeschlagen"
+
+msgid "Cannot save client identity"
+msgstr "Spieleridentität konnte nicht gespeichert werden"
+
+msgid "Cannot read client identity"
+msgstr "Spieleridentität konnte nicht gelesen werden"
+
+msgid "Signed in from another session"
+msgstr "Aus einer anderen Sitzung angemeldet"
+
+msgid "Level travel timed out"
+msgstr "Zeitlimit beim Laden der Ebene erreicht"
+
+msgid "Cannot install travel destination"
+msgstr "Zielebene konnte nicht geladen werden"
+
+msgid "Cannot load travel destination"
+msgstr "Zielebene konnte nicht geöffnet werden"
+
+msgid "Invalid player capacity"
+msgstr "Ungültige Spielerzahl"
+
+msgid "World could not be opened. Check the save directory."
+msgstr "Welt konnte nicht geöffnet werden. Speicherordner prüfen."
+
+msgid "Cannot read host identity"
+msgstr "Host-Identität konnte nicht gelesen werden"
+
+msgid "Cannot open server identity store"
+msgstr "Identitätsspeicher konnte nicht geöffnet werden"
+
+msgid "Cannot import this save. Choose another solo slot."
+msgstr "Import fehlgeschlagen. Wähle einen anderen Einzelspieler-Spielstand."
+
+msgid "Cannot load world level %s. Check the world files."
+msgstr "Weltebene %s konnte nicht geladen werden. Prüfe die Weltdateien."

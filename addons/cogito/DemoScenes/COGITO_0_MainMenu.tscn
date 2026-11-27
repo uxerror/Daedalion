@@ -1,6 +1,5 @@
 [gd_scene format=3 uid="uid://c4arko3ktkygh"]
 
-[ext_resource type="PackedScene" uid="uid://dq6tvhqcy2aps" path="res://addons/cogito/EasyMenus/Scenes/main_menu.tscn" id="1_jlj1d"]
 [ext_resource type="Script" path="res://addons/cogito/DemoScenes/main_menu_boot.gd" id="2_boot"]
 
 [node name="01_MainMenu" type="Control" unique_id=453982374]
@@ -11,6 +10,3 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-
-[node name="MainMenu" parent="." unique_id=1156913712 instance=ExtResource("1_jlj1d")]
-layout_mode = 1
