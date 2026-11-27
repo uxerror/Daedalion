@@ -18,6 +18,11 @@ else
 	if [[ $rc == 77 ]]; then echo "SKIP dedicated binary smoke: matching export templates missing"; exit 0; fi
 	exit "$rc"
 fi
+# Stripped visuals must not remove level collision (CSG ramps are baked at export).
+nice -n 19 "${GODOT_BIN:-godot}" --headless --path "$root" \
+	-s res://tools/dedicated_pack_probe.gd -- "$tmp/daedalion-server.pck" > "$tmp/probe.log" 2>&1 \
+	|| { cat "$tmp/probe.log" >&2; exit 1; }
+grep -F "PACK PROBE" "$tmp/probe.log"
 port=$(python3 -c 'import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
 cat > "$tmp/server.cfg" <<CFG
 [server]

@@ -62,6 +62,8 @@ func _customize_scene(scene: Node, path: String) -> Node:
 			scene.add_child(marker)
 			marker.owner = scene
 			changed = true
+	if _bake_csg_collision(scene):
+		changed = true
 	for kind in ["Camera3D", "AudioStreamPlayer", "AudioStreamPlayer2D", "AudioStreamPlayer3D"]:
 		for child in scene.find_children("*", kind, true, false):
 			if child.owner == scene:
@@ -70,6 +72,52 @@ func _customize_scene(scene: Node, path: String) -> Node:
 	if changed:
 		_clear_detached_references(scene, scene)
 	return scene if changed else null
+
+
+# Visual stripping turns a CSGMesh3D's mesh into a PlaceholderMesh, so the server would
+# build no collision for it and players walk through ramps. Bake every colliding CSG
+# root into a StaticBody3D with the same name and layers while the real mesh is loaded.
+func _bake_csg_collision(scene: Node) -> bool:
+	var roots: Array[CSGShape3D] = []
+	for node in scene.find_children("*", "CSGShape3D", true, false):
+		var csg := node as CSGShape3D
+		if csg.owner == scene and csg.use_collision and not csg.get_parent() is CSGShape3D:
+			roots.append(csg)
+	for csg in roots:
+		var body := StaticBody3D.new()
+		body.collision_layer = csg.collision_layer
+		body.collision_mask = csg.collision_mask
+		body.collision_priority = csg.collision_priority
+		var shape := csg.bake_collision_shape()
+		if shape and not shape.get_faces().is_empty():
+			var holder := CollisionShape3D.new()
+			holder.name = "BakedCollision"
+			holder.shape = shape
+			body.add_child(holder)
+		else:
+			push_warning("CSG %s has no collision geometry" % scene.get_path_to(csg))
+		for child in csg.get_children():
+			if child is CSGShape3D:
+				_discard(child)
+		var parent := csg.get_parent()
+		body.transform = csg.transform
+		body.visible = csg.visible
+		parent.add_child(body)
+		parent.move_child(body, csg.get_index())
+		for child in csg.get_children():
+			child.reparent(body, false)
+		_discard(csg)
+		body.name = csg.name
+		_own(body, scene)
+	return not roots.is_empty()
+
+
+func _own(node: Node, scene: Node) -> void:
+	if node.owner == null or node.owner == node:
+		node.owner = scene
+	for child in node.get_children():
+		if child.owner == null:
+			_own(child, scene)
 
 
 func _clear_detached_references(root: Node, node: Node) -> void:

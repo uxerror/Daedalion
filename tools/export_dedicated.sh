@@ -12,4 +12,6 @@ if [[ ! -r "$dir/$template" && ! -r "/usr/share/godot/export_templates/$version/
 fi
 output=$(realpath -m "${1:-$root/build/daedalion-server}")
 mkdir -p "$(dirname "$output")"
+# Godot reuses customized scenes from this cache even after the export plugin changes.
+rm -rf "$root/.godot/exported"
 nice -n 19 "$godot" --headless --path "$root" --export-release "Linux dedicated server" "$output"
