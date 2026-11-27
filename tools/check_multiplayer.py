@@ -958,13 +958,15 @@ class Scenario:
             pending.write_text(action)
             pending.rename(role.directory / "menu.request")
 
-        def check_roster(role, count):
+        def check_roster(role, count, level=None):
             click(role, "pause")
             expected = count - 1 if role is self.server else 0
             event(role, f"NET KICK BUTTONS {expected}")
             rows = json.loads(event(role, "NET MENU ROSTER ")[16:])
             if len(rows) != count or any(not row["level"] for row in rows):
                 raise CheckFailed(f"incomplete menu roster: {rows}")
+            if level and any(row["level"] != level for row in rows):
+                raise CheckFailed(f"expected {level} as the roster display name: {rows}")
 
         event(self.server, "NET MAIN")
         event(client, "NET MAIN")
@@ -999,6 +1001,19 @@ class Scenario:
         event(self.server, "NET SOLO READY")
         self.stop(self.server)
 
+        # A direct SceneTree.quit() tears down a live Laboratory and its visible roster.
+        self.server = self.fixture("QuitHost", "menu")
+        event(self.server, "NET MAIN")
+        click(self.server, "host-lab")
+        event(self.server, "NET MENU PLAYING")
+        click(client, "join")
+        event(client, "NET MENU PLAYING")
+        check_roster(self.server, 2, level="Laboratory")
+        self.server.stopping = True
+        click(self.server, "quit-tree")
+        while not self.server.exited:
+            self.next_line()
+
         self.stop(client)
         self.start(dedicated=True, world="menu-dedicated")
         client = self.fixture("Ada", "menu", expected_failure="Kicked by host")
@@ -1016,7 +1031,7 @@ class Scenario:
         event(self.server, "NET KICK OK")
         event(client, "NET MAIN Kicked by host")
         self.stop(client)
-        print("PASS menu rejoin, live roster, host kick, host restart, solo and dedicated kick")
+        print("PASS menu rejoin, live roster, host kick, host restart, solo, tree shutdown and dedicated kick")
 
     def travel_dedicated(self):
         self.travel(True)

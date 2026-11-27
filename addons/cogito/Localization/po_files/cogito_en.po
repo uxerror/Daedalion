@@ -1361,3 +1361,33 @@ msgstr "Cannot import this save. Choose another solo slot."
 
 msgid "Cannot load world level %s. Check the world files."
 msgstr "Cannot load world level %s. Check the world files."
+
+msgid "Continue"
+msgstr "Continue"
+
+msgid "World name"
+msgstr "World name"
+
+msgid "Import"
+msgstr "Import"
+
+msgid "Create"
+msgstr "Create"
+
+msgid "Continue a world"
+msgstr "Continue a world"
+
+msgid "Import solo save"
+msgstr "Import solo save"
+
+msgid "No saved worlds"
+msgstr "No saved worlds"
+
+msgid "No recent servers"
+msgstr "No recent servers"
+
+msgid "Players (%d)"
+msgstr "Players (%d)"
+
+msgid "Save slot"
+msgstr "Save slot"

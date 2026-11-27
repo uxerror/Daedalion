@@ -76,8 +76,38 @@ func _ready():
 
 ## Open the replaceable multiplayer screen, preserving keyboard and controller focus.
 func open_multiplayer() -> void:
+	if is_sub_menu_open:
+		return
+	is_sub_menu_open = true
+	game_menu.focus_behavior_recursive = Control.FOCUS_BEHAVIOR_DISABLED
+	game_menu.mouse_behavior_recursive = Control.MOUSE_BEHAVIOR_DISABLED
+	sub_menu = preload("../Scenes/MultiplayerMenu.tscn").instantiate()
+	$ContentMain.add_child(sub_menu)
+	sub_menu.closed.connect(_close_multiplayer)
+	resized.connect(_fit_multiplayer_column)
+	_fit_multiplayer_column()
+
+
+# A saved windowed resolution can use native canvas pixels instead of project stretch.
+func _fit_multiplayer_column() -> void:
+	var column: VBoxContainer = $ContentMain
+	var base_height: float = ProjectSettings.get_setting("display/window/size/viewport_height")
+	var factor := minf(1.0, size.y / base_height)
+	column.pivot_offset.x = column.size.x * 0.5
+	column.scale = Vector2.ONE * factor
+	column.offset_bottom = maxf(0.0, base_height - size.y)
+
+
+func _close_multiplayer() -> void:
+	resized.disconnect(_fit_multiplayer_column)
+	$ContentMain.scale = Vector2.ONE
+	$ContentMain.offset_bottom = 0
+	sub_menu.queue_free()
+	sub_menu = null
+	is_sub_menu_open = false
+	game_menu.focus_behavior_recursive = Control.FOCUS_BEHAVIOR_INHERITED
+	game_menu.mouse_behavior_recursive = Control.MOUSE_BEHAVIOR_INHERITED
 	%Multiplayer.grab_focus()
-	_open_sub_menu(preload("../Scenes/MultiplayerMenu.tscn"))
 
 
 func quit():

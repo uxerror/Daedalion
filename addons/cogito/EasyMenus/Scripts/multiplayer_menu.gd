@@ -1,10 +1,11 @@
-extends PanelContainer
+extends VBoxContainer
 ## Thin EasyMenus adapter. Games can supply their own controls to the same menu API.
 
 signal closed
 
 const MenuApi := preload("../../Networking/net_menu_api.gd")
 
+## Override before entering the tree to use an isolated menu profile.
 var api: MenuApi
 
 
@@ -13,6 +14,10 @@ func _ready() -> void:
 		api = CogitoNet.menu
 	api.status_changed.connect(_show_status)
 	%PlayerName.text = api.player_name()
+	for spin: SpinBox in [%HostPort, %Capacity]:
+		var edit := spin.get_line_edit()
+		edit.add_theme_font_size_override("font_size", 18)
+		edit.add_theme_font_override("font", get_theme_font("font", "OptionButton"))
 	%Tabs.set_tab_title(0, tr("Host"))
 	%Tabs.set_tab_title(1, tr("Join"))
 	%Tabs.tab_changed.connect(_focus_tab)
@@ -21,8 +26,12 @@ func _ready() -> void:
 		var pattern := tr("%s · %s UTC · generation %d · %d players")
 		var title := pattern % [world.name, saved, world.generation, world.players]
 		%Worlds.add_item(title)
+		%Worlds.set_item_tooltip(%Worlds.item_count - 1, title)
 		%Worlds.set_item_metadata(%Worlds.item_count - 1, world.name)
+	_size_list(%Worlds)
 	%ContinueWorld.disabled = %Worlds.item_count == 0
+	if not %ContinueWorld.disabled:
+		%Worlds.select(0)
 	for slot: String in api.solo_slots():
 		%SoloSlot.add_item(slot)
 	%Import.disabled = %SoloSlot.item_count == 0
@@ -59,12 +68,12 @@ func _port(value: String) -> int:
 func host_world(action: String) -> void:
 	var config := {
 		"world": %WorldName.text.strip_edges(),
-		"port": _port(%HostPort.text),
-		"max_players": _port(%Capacity.text),
+		"port": int(%HostPort.value),
+		"max_players": int(%Capacity.value),
 		"friendly_fire": %FriendlyFire.button_pressed,
 	}
-	if action == "continue" and %Worlds.selected >= 0:
-		config.world = %Worlds.get_selected_metadata()
+	if action == "continue" and %Worlds.is_anything_selected():
+		config.world = %Worlds.get_item_metadata(%Worlds.get_selected_items()[0])
 	if action == "import" and %SoloSlot.selected >= 0:
 		config.import_slot = %SoloSlot.get_item_text(%SoloSlot.selected)
 	api.host(config, "continue" if action == "continue" else "new")
@@ -75,7 +84,18 @@ func _refresh_recent() -> void:
 	for item: Dictionary in api.recent_servers():
 		%Recent.add_item("%s  ·  %d" % [item.address, item.port])
 		%Recent.set_item_metadata(%Recent.item_count - 1, item)
+	_size_list(%Recent)
 	%Remove.disabled = true
+
+
+func _size_list(list: ItemList) -> void:
+	var font := list.get_theme_font("font")
+	var row_height := font.get_height(list.get_theme_font_size("font_size"))
+	row_height += list.get_theme_constant("v_separation")
+	var padding := list.get_theme_stylebox("panel").get_minimum_size().y
+	list.custom_minimum_size.y = maxf(40, padding + row_height * mini(list.item_count, 5))
+	list.get_node("Empty").visible = list.item_count == 0
+	list.focus_mode = Control.FOCUS_NONE if list.item_count == 0 else Control.FOCUS_ALL
 
 
 func _fill(index: int) -> void:
@@ -100,6 +120,14 @@ func _remove() -> void:
 
 func _show_status(message: String) -> void:
 	%Status.text = message
+	%Status.visible = not message.is_empty()
+	if api.status_is_error:
+		var color := Color.SALMON
+		if %Status.has_theme_color("warning_color", "Label"):
+			color = %Status.get_theme_color("warning_color", "Label")
+		%Status.add_theme_color_override("font_color", color)
+	else:
+		%Status.remove_theme_color_override("font_color")
 	%Cancel.visible = api.pending
 	%Back.visible = not api.pending
 	%Tabs.visible = not api.pending
@@ -116,6 +144,12 @@ func close() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if is_queued_for_deletion():
+		return
 	if event.is_action_pressed("ui_cancel") or event.is_action_pressed("menu"):
 		accept_event()
 		close()
+	elif %Tabs.visible and event is InputEventJoypadButton:
+		if event.is_action_pressed("ui_next_tab") or event.is_action_pressed("ui_prev_tab"):
+			%Tabs.current_tab = 1 - %Tabs.current_tab
+			accept_event()

@@ -1,0 +1,38 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/cogito/EasyMenus/Scripts/multiplayer_roster.gd" id="1"]
+[ext_resource type="Theme" path="res://addons/cogito/Theme/Cogito_Theme_A.tres" id="2"]
+
+[node name="Players" type="PanelContainer"]
+custom_minimum_size = Vector2(420, 0)
+size_flags_vertical = 0
+theme = ExtResource("2")
+script = ExtResource("1")
+
+[node name="Padding" type="MarginContainer" parent="."]
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 12
+
+[node name="Body" type="VBoxContainer" parent="Padding"]
+theme_override_constants/separation = 8
+
+[node name="Count" type="Label" parent="Padding/Body"]
+unique_name_in_owner = true
+theme_override_font_sizes/font_size = 25
+
+[node name="Rule" type="HSeparator" parent="Padding/Body"]
+
+[node name="Scroll" type="ScrollContainer" parent="Padding/Body"]
+unique_name_in_owner = true
+horizontal_scroll_mode = 0
+follow_focus = true
+
+[node name="Rows" type="VBoxContainer" parent="Padding/Body/Scroll"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Confirm" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true

@@ -16,6 +16,9 @@ func _ready() -> void:
 
 ## Enable or disable public roster delivery for this screen.
 func watch(open: bool) -> void:
+	# The pause overlay can outlive the session branch during SceneTree shutdown.
+	if not is_inside_tree() or not multiplayer.has_multiplayer_peer():
+		return
 	if multiplayer.is_server():
 		_set_watch(1, open)
 	elif 1 in multiplayer.get_peers():

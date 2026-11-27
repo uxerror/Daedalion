@@ -63,12 +63,15 @@ func _process(_delta: float) -> void:
 	DirAccess.remove_absolute(path)
 	var main := get_tree().current_scene as CogitoMainMenuController
 	match op:
-		"host":
+		"host", "host-lab":
 			var config := {
 				"save_dir": args["--save-dir"],
 				"port": int(args["--port"]),
 				"level": "res://addons/cogito/DemoScenes/COGITO_3_Lobby.tscn",
 			}
+			if op == "host-lab":
+				config.world = "quit-test"
+				config.erase("level")
 			CogitoNet.menu.host(config)
 		"join":
 			_join(main)
@@ -79,6 +82,8 @@ func _process(_delta: float) -> void:
 			_open_pause = actor.pause_menu.instantiate()
 			actor.add_child(_open_pause)
 			CogitoNet.roster.updated.connect(_roster, CONNECT_ONE_SHOT)
+		"quit-tree":
+			get_tree().quit()
 		"solo":
 			_await_solo = true
 			main.start_new_game()

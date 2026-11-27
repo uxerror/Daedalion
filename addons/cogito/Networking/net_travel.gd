@@ -541,9 +541,15 @@ func _hide_loading() -> void:
 ## Display name shared by travel notices and the pause roster.
 func level_title(endpoint: Node) -> String:
 	var root: Node = endpoint.active_level()
+	if not root:
+		return ""
 	if "level_display_name" in root and not root.level_display_name.is_empty():
 		return root.level_display_name
-	return root.scene_file_path.get_file().get_basename()
+	var filename := root.scene_file_path.get_file().get_basename()
+	var parts := filename.split("_", false, 2)
+	if parts.size() == 3 and parts[0] == "COGITO" and parts[1].is_valid_int():
+		filename = parts[2]
+	return filename.replace("_", " ").capitalize()
 
 
 func _notify(endpoint: Node, except_peer: int, id: String, other: Node, arrived: bool) -> void:

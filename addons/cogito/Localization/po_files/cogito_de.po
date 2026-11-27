@@ -1384,3 +1384,33 @@ msgstr "Import fehlgeschlagen. Wähle einen anderen Einzelspieler-Spielstand."
 
 msgid "Cannot load world level %s. Check the world files."
 msgstr "Weltebene %s konnte nicht geladen werden. Prüfe die Weltdateien."
+
+msgid "Continue"
+msgstr "Fortsetzen"
+
+msgid "World name"
+msgstr "Weltname"
+
+msgid "Import"
+msgstr "Importieren"
+
+msgid "Create"
+msgstr "Erstellen"
+
+msgid "Continue a world"
+msgstr "Welt fortsetzen"
+
+msgid "Import solo save"
+msgstr "Einzelspielstand importieren"
+
+msgid "No saved worlds"
+msgstr "Keine gespeicherten Welten"
+
+msgid "No recent servers"
+msgstr "Keine kürzlich besuchten Server"
+
+msgid "Players (%d)"
+msgstr "Spieler (%d)"
+
+msgid "Save slot"
+msgstr "Speicherplatz"

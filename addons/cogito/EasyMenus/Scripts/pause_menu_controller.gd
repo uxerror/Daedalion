@@ -9,6 +9,8 @@ extends Control
 signal pause_menu_closed
 signal pause_menu_opened
 
+const RosterPanel := preload("multiplayer_roster.gd")
+
 #region Variables
 @export var nodes_to_focus: Array[Control]
 @export var sound_hover : AudioStream
@@ -83,7 +85,9 @@ func _ready() -> void:
 	options_tab_menu.hide()
 	update_load_related_gui()
 	if CogitoNet.roster:
-		$Content/GameMenu/VBoxContainer.add_child(preload("multiplayer_roster.gd").new())
+		var listen_host := CogitoNet.mode() == CogitoNet.Mode.LISTEN_HOST
+		var panel := show_players(CogitoNet.local_player_id(), listen_host)
+		panel.watch(CogitoNet.roster)
 	var writer := CogitoNet.player_world.persistence if CogitoNet.player_world else null
 	if writer and CogitoNet.mode() == CogitoNet.Mode.LISTEN_HOST:
 		writer.save_finished.connect(_world_save_finished)
@@ -130,7 +134,7 @@ func on_input(event):
 
 func update_load_related_gui():
 	if CogitoNet.is_online():
-		_hide_save_slots()
+		_hide_save_slots(CogitoNet.mode() == CogitoNet.Mode.LISTEN_HOST)
 		return
 	if CogitoSceneManager.is_loaded_from_start_new_game:
 		%Screenshot_Spot.texture = empty_slot_texture
@@ -160,15 +164,30 @@ func update_load_related_gui():
 		load_button.disabled = true
 		label_active_slot.visible = false
 	if not _pauses_world:
-		_hide_save_slots()
+		_hide_save_slots(false)
 
 
 # Only the listen host owns a manual world-save action.
-func _hide_save_slots() -> void:
-	save_button.visible = CogitoNet.mode() == CogitoNet.Mode.LISTEN_HOST
+func _hide_save_slots(listen_host: bool) -> void:
+	save_button.visible = listen_host
 	load_button.hide()
 	%QuickLoadButton.get_parent().get_parent().hide()
 	label_active_slot.hide()
+
+
+## Arrange the online pause actions and the roster together below the title.
+func show_players(local_id: String, listen_host: bool) -> RosterPanel:
+	_hide_save_slots(listen_host)
+	var buttons := resume_game_button.get_parent() as VBoxContainer
+	buttons.custom_minimum_size.x = 300
+	buttons.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	buttons.add_theme_constant_override("separation", 6)
+	buttons.get_node("Separator_PanelContainer2").visible = listen_host
+	var panel: RosterPanel = preload("../Scenes/MultiplayerRoster.tscn").instantiate()
+	panel.local_id = local_id
+	panel.can_kick = listen_host
+	game_menu.get_node("Columns").add_child(panel)
+	return panel
 
 
 func load_slot_data():

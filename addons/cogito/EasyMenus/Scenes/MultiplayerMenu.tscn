@@ -3,146 +3,301 @@
 [ext_resource type="Script" path="res://addons/cogito/EasyMenus/Scripts/multiplayer_menu.gd" id="1"]
 [ext_resource type="Script" path="res://addons/cogito/Theme/CogitoUiButton.gd" id="2"]
 [ext_resource type="Theme" path="res://addons/cogito/Theme/Cogito_Theme_A.tres" id="3"]
+[ext_resource type="FontFile" path="res://addons/cogito/Assets/Fonts/Montserrat/Montserrat-Regular.ttf" id="4"]
 
-[node name="MultiplayerMenu" type="PanelContainer"]
-anchor_left = 0.5
-anchor_right = 0.5
-anchor_top = 0.5
-anchor_bottom = 0.5
-offset_left = -420.0
-offset_right = 420.0
-grow_vertical = 2
+[node name="MultiplayerMenu" type="VBoxContainer"]
+offset_right = 500.0
+offset_bottom = 540.0
+custom_minimum_size = Vector2(500, 0)
+size_flags_horizontal = 4
+size_flags_vertical = 3
 theme = ExtResource("3")
 script = ExtResource("1")
 
-[node name="Body" type="VBoxContainer" parent="."]
-
-[node name="Heading" type="Label" parent="Body"]
-text = "Multiplayer"
-horizontal_alignment = 1
-
-[node name="Tabs" type="TabContainer" parent="Body"]
+[node name="Tabs" type="TabContainer" parent="."]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(500, 160)
+custom_maximum_size = Vector2(-1, 500)
+size_flags_vertical = 3
+theme_override_fonts/font = ExtResource("4")
 
-[node name="Host" type="VBoxContainer" parent="Body/Tabs"]
+[node name="Host" type="ScrollContainer" parent="Tabs"]
+horizontal_scroll_mode = 0
+follow_focus = true
 
-[node name="Fields" type="GridContainer" parent="Body/Tabs/Host"]
-columns = 2
-
-[node name="WorldLabel" type="Label" parent="Body/Tabs/Host/Fields"]
-text = "Saved worlds"
-
-[node name="Worlds" type="OptionButton" parent="Body/Tabs/Host/Fields"]
-unique_name_in_owner = true
+[node name="Padding" type="MarginContainer" parent="Tabs/Host"]
 size_flags_horizontal = 3
-clip_text = true
+theme_override_constants/margin_left = 15
+theme_override_constants/margin_right = 15
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_bottom = 12
 
-[node name="WorldNameLabel" type="Label" parent="Body/Tabs/Host/Fields"]
-text = "New world name"
-
-[node name="WorldName" type="LineEdit" parent="Body/Tabs/Host/Fields"]
-unique_name_in_owner = true
+[node name="Fields" type="VBoxContainer" parent="Tabs/Host/Padding"]
 size_flags_horizontal = 3
-text = ""
+theme_override_constants/separation = 6
 
-[node name="HostPortLabel" type="Label" parent="Body/Tabs/Host/Fields"]
+[node name="ContinueHeading" type="HBoxContainer" parent="Tabs/Host/Padding/Fields"]
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Tabs/Host/Padding/Fields/ContinueHeading"]
+text = "Continue a world"
+theme_override_font_sizes/font_size = 20
+
+[node name="Rule" type="HSeparator" parent="Tabs/Host/Padding/Fields/ContinueHeading"]
+size_flags_horizontal = 3
+
+[node name="Worlds" type="ItemList" parent="Tabs/Host/Padding/Fields"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+theme_override_fonts/font = ExtResource("4")
+theme_override_font_sizes/font_size = 18
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 4
+allow_reselect = true
+
+[node name="Empty" type="Label" parent="Tabs/Host/Padding/Fields/Worlds"]
+text = "No saved worlds"
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+mouse_filter = 2
+vertical_alignment = 1
+
+[node name="ContinueWorld" type="Button" parent="Tabs/Host/Padding/Fields"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(142, 36)
+size_flags_horizontal = 8
+theme_override_font_sizes/font_size = 25
+text = "Continue"
+script = ExtResource("2")
+
+[node name="NewHeading" type="HBoxContainer" parent="Tabs/Host/Padding/Fields"]
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Tabs/Host/Padding/Fields/NewHeading"]
+text = "New world"
+theme_override_font_sizes/font_size = 20
+
+[node name="Rule" type="HSeparator" parent="Tabs/Host/Padding/Fields/NewHeading"]
+size_flags_horizontal = 3
+
+[node name="WorldNameRow" type="HBoxContainer" parent="Tabs/Host/Padding/Fields"]
+custom_minimum_size = Vector2(0, 40)
+
+[node name="Label" type="Label" parent="Tabs/Host/Padding/Fields/WorldNameRow"]
+text = "World name"
+size_flags_horizontal = 3
+
+[node name="WorldName" type="LineEdit" parent="Tabs/Host/Padding/Fields/WorldNameRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 0)
+theme_override_fonts/font = ExtResource("4")
+theme_override_font_sizes/font_size = 18
+
+[node name="HostPortRow" type="HBoxContainer" parent="Tabs/Host/Padding/Fields"]
+custom_minimum_size = Vector2(0, 40)
+
+[node name="Label" type="Label" parent="Tabs/Host/Padding/Fields/HostPortRow"]
 text = "UDP port"
-
-[node name="HostPort" type="LineEdit" parent="Body/Tabs/Host/Fields"]
-unique_name_in_owner = true
 size_flags_horizontal = 3
-text = "7777"
 
-[node name="CapacityLabel" type="Label" parent="Body/Tabs/Host/Fields"]
+[node name="HostPort" type="SpinBox" parent="Tabs/Host/Padding/Fields/HostPortRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 0)
+theme_override_font_sizes/font_size = 18
+min_value = 1.0
+max_value = 65535.0
+value = 7777.0
+
+[node name="CapacityRow" type="HBoxContainer" parent="Tabs/Host/Padding/Fields"]
+custom_minimum_size = Vector2(0, 40)
+
+[node name="Label" type="Label" parent="Tabs/Host/Padding/Fields/CapacityRow"]
 text = "Maximum players"
+size_flags_horizontal = 3
 
-[node name="Capacity" type="LineEdit" parent="Body/Tabs/Host/Fields"]
+[node name="Capacity" type="SpinBox" parent="Tabs/Host/Padding/Fields/CapacityRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 0)
+theme_override_font_sizes/font_size = 18
+min_value = 1.0
+max_value = 4096.0
+value = 8.0
+
+[node name="Rules" type="HBoxContainer" parent="Tabs/Host/Padding/Fields"]
+custom_minimum_size = Vector2(0, 40)
+
+[node name="FriendlyFire" type="CheckBox" parent="Tabs/Host/Padding/Fields/Rules"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
-text = "8"
-
-[node name="FriendlyFire" type="CheckButton" parent="Body/Tabs/Host"]
-unique_name_in_owner = true
+theme_override_font_sizes/font_size = 18
 text = "Friendly fire"
 button_pressed = true
 
-[node name="ContinueWorld" type="Button" parent="Body/Tabs/Host"]
+[node name="NewWorld" type="Button" parent="Tabs/Host/Padding/Fields/Rules"]
 unique_name_in_owner = true
-text = "Continue selected world"
+custom_minimum_size = Vector2(142, 36)
+size_flags_horizontal = 8
+theme_override_font_sizes/font_size = 25
+text = "Create"
 script = ExtResource("2")
 
-[node name="NewWorld" type="Button" parent="Body/Tabs/Host"]
+[node name="ImportHeading" type="HBoxContainer" parent="Tabs/Host/Padding/Fields"]
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Tabs/Host/Padding/Fields/ImportHeading"]
+text = "Import solo save"
+theme_override_font_sizes/font_size = 20
+
+[node name="Rule" type="HSeparator" parent="Tabs/Host/Padding/Fields/ImportHeading"]
+size_flags_horizontal = 3
+
+[node name="Slot" type="HBoxContainer" parent="Tabs/Host/Padding/Fields"]
+custom_minimum_size = Vector2(0, 40)
+theme_override_constants/separation = 10
+
+[node name="Label" type="Label" parent="Tabs/Host/Padding/Fields/Slot"]
+text = "Save slot"
+size_flags_horizontal = 3
+
+[node name="SoloSlot" type="OptionButton" parent="Tabs/Host/Padding/Fields/Slot"]
 unique_name_in_owner = true
-text = "New world"
+custom_minimum_size = Vector2(110, 0)
+clip_text = true
+fit_to_longest_item = false
+
+[node name="Import" type="Button" parent="Tabs/Host/Padding/Fields/Slot"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(142, 36)
+size_flags_horizontal = 8
+theme_override_font_sizes/font_size = 25
+text = "Import"
 script = ExtResource("2")
 
-[node name="SlotLabel" type="Label" parent="Body/Tabs/Host"]
-text = "Solo save slot"
+[node name="Join" type="ScrollContainer" parent="Tabs"]
+horizontal_scroll_mode = 0
+follow_focus = true
 
-[node name="SoloSlot" type="OptionButton" parent="Body/Tabs/Host"]
-unique_name_in_owner = true
+[node name="Padding" type="MarginContainer" parent="Tabs/Join"]
+size_flags_horizontal = 3
+theme_override_constants/margin_left = 15
+theme_override_constants/margin_right = 15
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_bottom = 12
 
-[node name="Import" type="Button" parent="Body/Tabs/Host"]
-unique_name_in_owner = true
-text = "Import solo save into new world"
-script = ExtResource("2")
+[node name="Fields" type="VBoxContainer" parent="Tabs/Join/Padding"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
 
-[node name="Join" type="VBoxContainer" parent="Body/Tabs"]
+[node name="PlayerNameRow" type="HBoxContainer" parent="Tabs/Join/Padding/Fields"]
+custom_minimum_size = Vector2(0, 40)
 
-[node name="Fields" type="GridContainer" parent="Body/Tabs/Join"]
-columns = 2
-
-[node name="PlayerNameLabel" type="Label" parent="Body/Tabs/Join/Fields"]
+[node name="Label" type="Label" parent="Tabs/Join/Padding/Fields/PlayerNameRow"]
 text = "Player name"
-
-[node name="PlayerName" type="LineEdit" parent="Body/Tabs/Join/Fields"]
-unique_name_in_owner = true
 size_flags_horizontal = 3
-text = ""
 
-[node name="AddressLabel" type="Label" parent="Body/Tabs/Join/Fields"]
+[node name="PlayerName" type="LineEdit" parent="Tabs/Join/Padding/Fields/PlayerNameRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 0)
+theme_override_fonts/font = ExtResource("4")
+theme_override_font_sizes/font_size = 18
+
+[node name="AddressRow" type="HBoxContainer" parent="Tabs/Join/Padding/Fields"]
+custom_minimum_size = Vector2(0, 40)
+
+[node name="Label" type="Label" parent="Tabs/Join/Padding/Fields/AddressRow"]
 text = "Server address"
-
-[node name="Address" type="LineEdit" parent="Body/Tabs/Join/Fields"]
-unique_name_in_owner = true
 size_flags_horizontal = 3
+
+[node name="Address" type="LineEdit" parent="Tabs/Join/Padding/Fields/AddressRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 0)
+theme_override_fonts/font = ExtResource("4")
+theme_override_font_sizes/font_size = 18
 text = "127.0.0.1"
 
-[node name="JoinPortLabel" type="Label" parent="Body/Tabs/Join/Fields"]
-text = "UDP port"
+[node name="JoinPortRow" type="HBoxContainer" parent="Tabs/Join/Padding/Fields"]
+custom_minimum_size = Vector2(0, 40)
 
-[node name="JoinPort" type="LineEdit" parent="Body/Tabs/Join/Fields"]
-unique_name_in_owner = true
+[node name="Label" type="Label" parent="Tabs/Join/Padding/Fields/JoinPortRow"]
+text = "UDP port"
 size_flags_horizontal = 3
+
+[node name="JoinPort" type="LineEdit" parent="Tabs/Join/Padding/Fields/JoinPortRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 0)
+theme_override_fonts/font = ExtResource("4")
+theme_override_font_sizes/font_size = 18
 text = "7777"
 
-[node name="JoinServer" type="Button" parent="Body/Tabs/Join"]
+[node name="JoinServer" type="Button" parent="Tabs/Join/Padding/Fields"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(142, 36)
+size_flags_horizontal = 8
+theme_override_font_sizes/font_size = 25
 text = "Join"
 script = ExtResource("2")
 
-[node name="RecentLabel" type="Label" parent="Body/Tabs/Join"]
+[node name="RecentHeading" type="HBoxContainer" parent="Tabs/Join/Padding/Fields"]
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Tabs/Join/Padding/Fields/RecentHeading"]
 text = "Recent servers"
+theme_override_font_sizes/font_size = 20
 
-[node name="Recent" type="ItemList" parent="Body/Tabs/Join"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 160)
+[node name="Rule" type="HSeparator" parent="Tabs/Join/Padding/Fields/RecentHeading"]
+size_flags_horizontal = 3
 
-[node name="Remove" type="Button" parent="Body/Tabs/Join"]
+[node name="Recent" type="ItemList" parent="Tabs/Join/Padding/Fields"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+theme_override_fonts/font = ExtResource("4")
+theme_override_font_sizes/font_size = 18
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 4
+allow_reselect = true
+
+[node name="Empty" type="Label" parent="Tabs/Join/Padding/Fields/Recent"]
+text = "No recent servers"
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+mouse_filter = 2
+vertical_alignment = 1
+
+[node name="Remove" type="Button" parent="Tabs/Join/Padding/Fields"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(142, 36)
+size_flags_horizontal = 8
+theme_override_font_sizes/font_size = 25
 text = "Remove selected server"
 script = ExtResource("2")
 
-[node name="Status" type="Label" parent="Body"]
+[node name="Footer" type="MarginContainer" parent="."]
+theme_override_constants/margin_left = 5
+theme_override_constants/margin_right = 5
+
+[node name="Actions" type="VBoxContainer" parent="Footer"]
+
+[node name="Status" type="Label" parent="Footer/Actions"]
 unique_name_in_owner = true
+visible = false
+theme_override_font_sizes/font_size = 18
 autowrap_mode = 3
 
-[node name="Cancel" type="Button" parent="Body"]
+[node name="Cancel" type="Button" parent="Footer/Actions"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(230, 36)
+size_flags_horizontal = 8
+theme_override_font_sizes/font_size = 25
 text = "Cancel"
 script = ExtResource("2")
+visible = false
 
-[node name="Back" type="Button" parent="Body"]
+[node name="Back" type="Button" parent="Footer/Actions"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(230, 36)
+size_flags_horizontal = 8
+theme_override_font_sizes/font_size = 25
 text = "Back"
 script = ExtResource("2")

@@ -3,6 +3,7 @@ extends "memory_session_suite.gd"
 const MenuApi := preload("res://addons/cogito/Networking/net_menu_api.gd")
 const Files := preload("res://addons/cogito/SceneManagement/cogito_world_files.gd")
 const Screen := preload("res://addons/cogito/EasyMenus/Scenes/MultiplayerMenu.tscn")
+const PlayerPanel := preload("res://addons/cogito/EasyMenus/Scenes/MultiplayerRoster.tscn")
 const Main := preload("res://addons/cogito/EasyMenus/Scenes/main_menu.tscn")
 
 var _previous: Node
@@ -35,12 +36,18 @@ func test_open_navigate_back_and_restore_keyboard_focus() -> void:
 	main.open_multiplayer()
 	await get_tree().process_frame
 	var screen := main.sub_menu
+	assert_bool(main.game_menu.is_visible_in_tree()).is_true()
+	assert_bool(screen.get_node("%Worlds/Empty").visible).is_true()
+	assert_bool(screen.get_node("%Recent/Empty").visible).is_true()
+	var background: Button = main.get_node("%Multiplayer")
+	assert_int(background.get_focus_mode_with_override()).is_equal(Control.FOCUS_NONE)
 	assert_object(get_viewport().gui_get_focus_owner()).is_same(screen.get_node("%WorldName"))
 	var next := InputEventAction.new()
 	next.action = "ui_focus_next"
 	next.pressed = true
 	get_viewport().push_input(next)
-	assert_object(get_viewport().gui_get_focus_owner()).is_same(screen.get_node("%HostPort"))
+	var port: SpinBox = screen.get_node("%HostPort")
+	assert_object(get_viewport().gui_get_focus_owner()).is_same(port.get_line_edit())
 	var tabs: TabContainer = screen.get_node("%Tabs")
 	tabs.get_tab_bar().grab_focus()
 	next.action = "ui_right"
@@ -133,7 +140,14 @@ func test_host_screen_validates_and_reports_lock_and_import_errors() -> void:
 	assert_int(worlds[0].generation).is_greater(0)
 	assert_int(worlds[0].players).is_equal(1)
 	assert_int(host.menu.host(config, "new")).is_equal(ERR_ALREADY_EXISTS)
-	assert_int(host.menu.host(config, "continue")).is_equal(OK)
+	var reopened := Screen.instantiate()
+	reopened.api = host.menu
+	_root.add_child(reopened)
+	var saved: ItemList = reopened.get_node("%Worlds")
+	assert_bool(saved.get_node("Empty").visible).is_false()
+	assert_str(saved.get_item_metadata(saved.get_selected_items()[0])).is_equal("held")
+	reopened.host_world("continue")
+	assert_bool(host.is_online()).is_true()
 	assert_int(host.disconnect_session()).is_equal(OK)
 	await get_tree().process_frame
 
@@ -161,7 +175,7 @@ func test_roster_subscription_rate_authority_kick_and_dedicated_request(_timeout
 		var rows := client.roster.rows
 		assert_int(rows.size()).is_equal(1)
 		assert_str(rows[0].display_name).is_equal("Ada")
-		assert_str(rows[0].level).is_equal("movement_level")
+		assert_str(rows[0].level).is_equal("Movement Level")
 		assert_int(rows[0].ping).is_equal(-1)
 		var received: Array[int] = []
 		client.roster.updated.connect(func(_rows: Array[Dictionary]): received.append(1))
@@ -200,3 +214,38 @@ func test_failure_messages_cover_protocol_and_transport_reasons() -> void:
 	assert_str(client.menu.readable("Server full")).contains("player leaves")
 	assert_str(client.menu.readable("Cannot bind *:77")).contains("another port")
 	assert_str(client.menu.readable("Kicked by host")).is_equal("Kicked by host")
+
+
+func test_roster_keeps_kick_visible_and_focused_across_snapshots() -> void:
+	var panel := PlayerPanel.instantiate()
+	panel.local_id = "0"
+	panel.can_kick = true
+	_root.add_child(panel)
+	var players: Array[Dictionary] = []
+	for i in 8:
+		var player := {"player_id": str(i), "display_name": "Ada".repeat(20), "ping": -1}
+		player.level = "Laboratory"
+		players.append(player)
+	panel.set_players(players)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var scroll: ScrollContainer = panel.get_node("%Scroll")
+	var rows: VBoxContainer = panel.get_node("%Rows")
+	assert_bool(scroll.get_v_scroll_bar().visible).is_false()
+	assert_bool(scroll.get_h_scroll_bar().visible).is_false()
+	assert_object(rows.get_child(0).get_node_or_null("%Kick")).is_null()
+	assert_bool(rows.get_child(0).get_node("%Local").visible).is_true()
+	var kick: Button = rows.get_child(1).get_node("%Kick")
+	assert_bool(scroll.get_global_rect().encloses(kick.get_global_rect())).is_true()
+	kick.grab_focus()
+	assert_str(rows.get_child(1).get_node("%Ping").text).is_equal("—")
+	players[1].ping = 28
+	players.append({"player_id": "8", "display_name": "Ben", "level": "Lobby", "ping": -1})
+	panel.set_players(players)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_object(get_viewport().gui_get_focus_owner()).is_same(kick)
+	assert_str(rows.get_child(1).get_node("%Ping").text).is_equal("28 ms")
+	assert_str(panel.get_node("%Count").text).is_equal("Players (9)")
+	assert_bool(scroll.get_v_scroll_bar().visible).is_true()
+	assert_bool(scroll.get_h_scroll_bar().visible).is_false()

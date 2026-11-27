@@ -43,7 +43,8 @@ func allows_damage(victim: CogitoPlayer, source: Node, environment := false) -> 
 
 ## Retain the private session profile across disconnects. Deadlines stay on the server clock.
 func detach(id: String, actor: CogitoPlayer) -> void:
-	if multiplayer.is_server():
+	# During tree shutdown the death service exits before its parent releases the avatars.
+	if is_inside_tree() and multiplayer.is_server():
 		var profile := {"attributes": Attributes.capture(actor)}
 		if actor.is_dead:
 			profile.equipped = actor.get_meta(&"net_wield").stack

@@ -1,69 +1,79 @@
-extends ScrollContainer
-## Keep buttons alive across ping updates so keyboard and controller focus stays put.
+extends PanelContainer
+## A pause roster keeps the same buttons and focus across ping updates.
 
 const Roster := preload("../../Networking/net_roster.gd")
+const PlayerRow := preload("../Scenes/MultiplayerPlayerRow.tscn")
+const VISIBLE_ROWS := 8
 
+var local_id := ""
+var can_kick := false
 var _session_roster: Roster
-var _list := VBoxContainer.new()
-var _confirm := ConfirmationDialog.new()
 var _target := ""
-var _rows := {}
+var _rows: Dictionary[String, HBoxContainer] = {}
 
 
 func _ready() -> void:
-	custom_minimum_size.y = 160
-	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	add_child(_list)
-	add_child(_confirm)
-	_confirm.confirmed.connect(_kick)
-	_session_roster = CogitoNet.roster
-	_session_roster.updated.connect(_refresh)
-	_session_roster.watch(true)
-	_refresh(_session_roster.rows)
+	%Confirm.confirmed.connect(_kick)
+	set_players([])
+
+
+## Subscribe while the panel is in the session's pause menu.
+func watch(source: Roster) -> void:
+	_session_roster = source
+	source.updated.connect(set_players)
+	source.watch(true)
+	set_players(source.rows)
 
 
 func _exit_tree() -> void:
-	if is_instance_valid(_session_roster) and _session_roster == CogitoNet.roster:
+	if is_instance_valid(_session_roster):
+		_session_roster.updated.disconnect(set_players)
 		_session_roster.watch(false)
 
 
-func _refresh(snapshot: Array[Dictionary]) -> void:
+## Display a public snapshot. A negative ping denotes an unmeasured round trip.
+func set_players(snapshot: Array[Dictionary]) -> void:
+	%Count.text = tr("Players (%d)") % snapshot.size()
 	var present := {}
-	for row in snapshot:
-		var id: String = row.player_id
+	for player in snapshot:
+		var id: String = player.player_id
 		present[id] = true
-		var line: HBoxContainer = _rows.get(id)
-		if not line:
-			line = HBoxContainer.new()
-			_list.add_child(line)
-			_rows[id] = line
-			var label := Label.new()
-			label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			line.add_child(label)
-			if CogitoNet.mode() == CogitoNet.Mode.LISTEN_HOST and id != CogitoNet.local_player_id():
-				var button := CogitoUiButton.new()
-				button.text = tr("Kick")
-				button.pressed.connect(_ask.bind(id, row.display_name))
-				line.add_child(button)
-		var local := tr(" (you)") if id == CogitoNet.local_player_id() else ""
-		var ping := tr("%d ms") % row.ping if row.ping >= 0 else "—"
-		var level := tr(row.level) if not row.level.is_empty() else tr("Loading…")
-		line.get_child(0).text = "%s%s  ·  %s  ·  %s" % [row.display_name, local, level, ping]
+		if not _rows.has(id):
+			var row: HBoxContainer = PlayerRow.instantiate()
+			if can_kick and id != local_id:
+				row.get_node("%Kick").pressed.connect(_ask.bind(id))
+			else:
+				row.get_node("%Kick").free()
+			row.get_node("%Moderation").visible = can_kick
+			row.get_node("%Local").visible = id == local_id
+			%Rows.add_child(row)
+			_rows[id] = row
+		var line := _rows[id]
+		line.get_node("%PlayerName").text = player.display_name
+		line.get_node("%PlayerName").tooltip_text = player.display_name
+		var level := tr(player.level) if not player.level.is_empty() else tr("Loading…")
+		line.get_node("%Level").text = level
+		line.get_node("%Level").tooltip_text = level
+		line.get_node("%Ping").text = tr("%d ms") % player.ping if player.ping >= 0 else "—"
 	for id: String in _rows.keys():
 		if not present.has(id):
-			_rows[id].queue_free()
+			_rows[id].free()
 			_rows.erase(id)
 			if _target == id:
-				_confirm.hide()
+				%Confirm.hide()
+	var count := mini(snapshot.size(), VISIBLE_ROWS)
+	var height: float = %Rows.get_child(0).get_combined_minimum_size().y if count else 0.0
+	var gap: int = %Rows.get_theme_constant("separation")
+	%Scroll.custom_minimum_size.y = count * height + maxi(count - 1, 0) * gap
 
 
-func _ask(id: String, label: String) -> void:
+func _ask(id: String) -> void:
 	_target = id
-	_confirm.dialog_text = tr("Kick %s from this world?") % label
-	_confirm.popup_centered()
-	_confirm.get_cancel_button().grab_focus()
+	%Confirm.dialog_text = tr("Kick %s from this world?") % _rows[id].get_node("%PlayerName").text
+	%Confirm.popup_centered()
+	%Confirm.get_cancel_button().grab_focus()
 
 
 func _kick() -> void:
-	if CogitoNet.roster:
-		CogitoNet.roster.kick(_target)
+	if is_instance_valid(_session_roster):
+		_session_roster.kick(_target)

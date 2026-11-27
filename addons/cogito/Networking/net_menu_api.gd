@@ -10,6 +10,7 @@ const WorldFiles := preload("../SceneManagement/cogito_world_files.gd")
 var save_dir := NetConfig.DEFAULT_SAVE_DIR
 var preferences_path := "user://net/recent_servers.cfg"
 var status := ""
+var status_is_error := false
 var pending := false
 var return_message := ""
 var _net: Node
@@ -154,7 +155,7 @@ func host(config: Dictionary, intent := "") -> Error:
 
 
 func _invalid(reason: String) -> Error:
-	_status(readable(reason))
+	_status(readable(reason), true)
 	return ERR_INVALID_PARAMETER
 
 
@@ -182,7 +183,7 @@ func _failed(reason: String) -> void:
 	if pending or _playing:
 		var was_playing := _playing
 		_reset()
-		_status(readable(reason))
+		_status(readable(reason), true)
 		if was_playing or reason == "Kicked by host":
 			return_message = status
 			_return_to_menu()
@@ -220,7 +221,8 @@ func _return_to_menu() -> void:
 	tree.change_scene_to_packed(CogitoGlobals.cogito_settings.main_menu_scene)
 
 
-func _status(message: String) -> void:
+func _status(message: String, is_error := false) -> void:
+	status_is_error = is_error
 	status = tr(message) if not message.is_empty() else ""
 	status_changed.emit(status)
 

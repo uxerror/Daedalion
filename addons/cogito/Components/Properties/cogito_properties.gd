@@ -566,7 +566,7 @@ func loose_electricity():
 
 
 func spawn_elemental_vfx(vfx_packed_scene:PackedScene, kind: StringName = &""):
-	if !vfx_packed_scene:
+	if !vfx_packed_scene or not is_inside_tree():
 		return
 	# If max spawned vfx is reached, the oldest ones are freed.
 	while spawned_effects.size() >= max(max_spawned_vfx, 1):
