@@ -137,7 +137,10 @@ on Linux can exit on SIGTERM without running the flush. Check the journal for
   user's state and config. Update clients together. The default content version
   follows the bundled Cogito plugin version. Games overriding it must pass the
   same content version to their clients. A custom content version marks a build
-  for admission. Test save migration separately on a copied world.
+  for admission. Test save migration separately on a copied world. Never
+  overwrite the PCK of a running server and then restart: `install` and `cp`
+  rewrite the file in place, the old process reads scenes from the new pack
+  during its final save, and that save fails with `File corrupt`.
 - **Cannot bind** means another process owns the port or the interface is
   unavailable. Check `ss -lunp`, the bind address and the unit's journal.
 - **World is locked** means another writer has a claim. Stop it and wait for
