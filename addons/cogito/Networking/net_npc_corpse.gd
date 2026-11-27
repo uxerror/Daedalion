@@ -33,6 +33,7 @@ static func create(scene: PackedScene) -> RigidBody3D:
 	var grips := model.find_children("*", "CogitoCarryableComponent", true, false)
 	if not grips.is_empty():
 		var grip := grips[0] as CogitoCarryableComponent
+		grip.owner = null
 		grip.reparent(body, false)
 		grip.owner = body
 		grip.carry_distance_offset = -0.6
