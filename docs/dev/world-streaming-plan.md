@@ -1,6 +1,6 @@
 # Daedalion seamless world implementation plan
 
-**Status:** Proposed implementation of the world decisions approved on 2026-11-27. Baseline is the MP9b snapshot. Stage sizes and performance targets below are estimates.
+**Status:** Approved for **Daedalion 2.0** (2026-11-27); the recommended defaults in section 10 are accepted, and the connected demo gets an early offline "World (preview)" entry after WS3. Work starts after the 1.4 release, whose MP10 delivers independent per-player level travel; WS7 adapts that coordinator instead of replacing a missing MP10. Baseline is the MP9b snapshot. Stage sizes and performance targets below are estimates.
 
 ## 0. Direction and acceptance
 
