@@ -31,6 +31,8 @@
 | Interiors (2026-11-27) | **Target 2.0.**  Honest geometry only: an interior is a sector in the same world and a door is just a door. A seamless teleport door to a distant sector may come later as a separate component. |
 | Demo world (2026-11-27) | **Target 2.0.**  The existing demo scenes (Lobby, Laboratory) are rearranged into one connected demo world (each a sector, joined by a corridor or lift). The main menu stays a separate scene. |
 | Release split (2026-11-27) | **1.4 = MP0-MP11 with separate levels.** Players travel between levels independently (the "Levels" row and "Consequences of independent travel" stay in force for 1.4; MP10 is delivered as planned, not as party travel). The seamless streamed world (rows marked "Target 2.0", design in `docs/dev/world-streaming-plan.md` with its recommended defaults accepted, including an early offline "World (preview)" after WS3) ships as **2.0**, which also removes the deprecated level transitions. |
+| Travel with held objects (2026-11-27) | A player entering a transition zone while carrying an object or occupying a seat/vehicle gets exactly the current offline behaviour (MP10 documents it). A replaceable travel policy hook can change it. |
+| Travel notifications (2026-11-27) | Other connected players get a short HUD message when someone leaves their level ("X left for <level>") or arrives in it ("X arrived from <level>"). Level names come from the level's display name; a signal lets games replace or suppress the message. Late join and reconnect show no replayed messages. |
 
 ### Consequences of independent travel
 
