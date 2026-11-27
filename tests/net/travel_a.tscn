@@ -1,0 +1,57 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://tests/player/movement_level.tscn" id="room"]
+[ext_resource type="Script" path="res://addons/cogito/SceneManagement/cogito_scene.gd" id="level"]
+[ext_resource type="Script" path="res://addons/cogito/Scripts/scene_transition_zone.gd" id="zone"]
+[ext_resource type="PackedScene" path="res://addons/cogito/PackedScenes/Pickups/pickup_lockpick.tscn" id="pickup"]
+[ext_resource type="PackedScene" path="res://addons/cogito/PackedScenes/carriable_box.tscn" id="box"]
+[ext_resource type="PackedScene" path="res://addons/cogito/DemoScenes/DemoPrefabs/cogito_vehicle.tscn" id="seat"]
+
+[ext_resource type="PackedScene" path="res://addons/cogito/CogitoNPC/cogito_npc.tscn" id="npc"]
+[ext_resource type="Script" path="res://addons/cogito/Components/Properties/cogito_element_area.gd" id="element"]
+
+[sub_resource type="BoxShape3D" id="gate"]
+size = Vector3(4, 4, 4)
+
+[node name="Room" node_paths=PackedStringArray("connectors") instance=ExtResource("room")]
+script = ExtResource("level")
+level_display_name = "West"
+connectors = [NodePath("Entry")]
+
+[node name="Player" type="Marker3D" parent="."]
+position = Vector3(0, 1, 0)
+
+[node name="Entry" type="Marker3D" parent="."]
+position = Vector3(3, 1, 0)
+
+[node name="Doorway" type="Area3D" parent="."]
+position = Vector3(13, 1, 0)
+collision_mask = 16
+script = ExtResource("zone")
+target_scene_path = "res://tests/net/travel_b.tscn"
+target_connector = "Entry"
+
+[node name="Shape" type="CollisionShape3D" parent="Doorway"]
+shape = SubResource("gate")
+
+[node name="Pickup" parent="." instance=ExtResource("pickup")]
+position = Vector3(2, 1, -4)
+
+[node name="Crate" parent="." instance=ExtResource("box")]
+position = Vector3(12, 1, -2)
+
+[node name="Cart" parent="." instance=ExtResource("seat")]
+position = Vector3(13, 1, 0)
+disable_on_jump = false
+freeze = true
+
+[node name="Guard" parent="." instance=ExtResource("npc")]
+position = Vector3(-20, 1, -20)
+
+[node name="Heat" type="Area3D" parent="."]
+position = Vector3(-20, 1, 18)
+script = ExtResource("element")
+enabled = false
+
+[node name="Shape" type="CollisionShape3D" parent="Heat"]
+shape = SubResource("gate")

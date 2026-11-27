@@ -14,11 +14,16 @@ var _bags := {}
 
 ## Bind authored bag archetypes before runtime spawns arrive.
 func bind(root: Node) -> void:
-	_live.clear()
-	_bags.clear()
+	clear()
 	for component: LootComponent in root.find_children("*", "LootComponent", true, false):
 		if component.loot_bag_scene:
 			_bags[str(root.get_path_to(component))] = component.loot_bag_scene
+
+
+## Release level-owned archetypes and runtime references when the instance unloads.
+func clear() -> void:
+	_live.clear()
+	_bags.clear()
 
 
 static func _pickup(node: Node) -> PickupComponent:
@@ -113,17 +118,7 @@ func roll_quest_drop(entry: LootDropEntry, reserved: Dictionary) -> LootDropEntr
 	if not get_parent().quests.allows_world_drop(entry):
 		return null
 	var item := entry.inventory_item
-	var count: int = get_parent().inventory.held_count(item) + reserved.get(item.name, 0)
-	for node: Node in get_parent().world.entities.objects.values():
-		if node.is_queued_for_deletion():
-			continue
-		if node is CogitoContainer:
-			for slot in node.inventory_data.find_slots(item.name):
-				count += slot.quantity
-		elif node is RigidBody3D:
-			var pickup := _pickup(node)
-			if pickup and pickup.slot_data and pickup.slot_data.inventory_item.name == item.name:
-				count += pickup.slot_data.quantity
+	var count: int = total_holdings(item) + reserved.get(item.name, 0)
 	var limit := 1 if item.is_unique else entry.quest_item_total_count
 	var amount := mini(limit - count, rng.randi_range(entry.quantity_min, entry.quantity_max))
 	if amount <= 0:
@@ -133,6 +128,73 @@ func roll_quest_drop(entry: LootDropEntry, reserved: Dictionary) -> LootDropEntr
 	rolled.quantity_min = amount
 	rolled.quantity_max = amount
 	return rolled
+
+
+## Count live and saved stacks across the world for unique and capped loot rules.
+func total_holdings(item: InventoryItemPD) -> int:
+	var players := get_parent()
+	var count: int = players.inventory.held_count(item)
+	for endpoint: Node in players.travel.levels.values():
+		count += int(endpoint.spawner.room_holdings().get(item.name, 0))
+	if players.persistence:
+		count += players.persistence.unloaded_holdings(item.name)
+	return count
+
+
+## Decode pre-MP10 room holdings from the existing MP9 object and container projections.
+static func saved_holdings(row: Dictionary) -> Dictionary:
+	var counts := {}
+	for box: Dictionary in row.containers.values():
+		for stack: Array in box.rows.values():
+			var definition := STOCK.load_definition(stack[0])
+			if definition:
+				counts[definition.name] = int(counts.get(definition.name, 0)) + int(stack[2])
+	for spec: Dictionary in row.objects.values():
+		if spec.has("item") and not spec.get("removed", false):
+			var definition := STOCK.load_definition(spec.item)
+			if definition:
+				counts[definition.name] = int(counts.get(definition.name, 0)) + int(spec.quantity)
+	for entry: Dictionary in row.scene.saved_nodes:
+		var spec: Dictionary = row.objects.get(entry.get("cogito_id", ""), {})
+		if spec.get("removed", false) or spec.has("item"):
+			continue
+		if not spec.has("quantity") and not row.get("imported", false):
+			continue
+		var stack: InventorySlotPD = entry.get("slot_data")
+		if not stack and ResourceLoader.exists(entry.filename, "PackedScene"):
+			stack = STOCK.pickup_template(load(entry.filename) as PackedScene)
+		if stack and stack.inventory_item:
+			var item := stack.inventory_item.name
+			counts[item] = int(counts.get(item, 0)) + int(spec.get("quantity", stack.quantity))
+		var inv: CogitoInventory = entry.get("inventory_data")
+		if inv and not row.containers.has(entry.get("cogito_id", "")):
+			_count_container(inv, counts)
+	return counts
+
+
+static func _count_container(inv: CogitoInventory, counts: Dictionary) -> void:
+	var seen := {}
+	for stack in inv.inventory_slots:
+		if stack and stack.inventory_item and not seen.has(stack):
+			seen[stack] = true
+			var item := stack.inventory_item.name
+			counts[item] = int(counts.get(item, 0)) + stack.quantity
+
+
+## Count each loose or container stack once for the shared quest drop limit.
+func room_holdings() -> Dictionary:
+	var counts := {}
+	for node: Node in get_parent().world.entities.objects.values():
+		if CogitoPersistentId.is_disappearing(node):
+			continue
+		if node is CogitoContainer and node.inventory_data:
+			_count_container(node.inventory_data, counts)
+		elif node is RigidBody3D:
+			var pickup := _pickup(node)
+			if pickup and pickup.slot_data:
+				var item := pickup.slot_data.inventory_item.name
+				counts[item] = int(counts.get(item, 0)) + pickup.slot_data.quantity
+	return counts
 
 
 ## Roll an independent mutable stack from a server loot table entry.

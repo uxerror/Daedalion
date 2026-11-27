@@ -24,6 +24,8 @@ func use(seat: CogitoSittable, pic: PlayerInteractionComponent) -> Dictionary:
 		actor.original_position = actor.global_transform
 		actor.original_neck_basis = actor.neck.global_basis
 	actor.displacement_position = seat.global_position - actor.global_position
+	if actor.has_meta(&"travel_seated_posture"):
+		actor.remove_meta(&"travel_seated_posture")
 	actor.current_seat = seat
 	actor.is_sitting = true
 	actor.is_ejected = false
@@ -67,6 +69,10 @@ func _blocked(seat: CogitoSittable, actor: CogitoPlayerAdvanced) -> String:
 ## Free the occupied seat exactly once, including on death or level shutdown.
 func release(actor: CogitoPlayerAdvanced, seat_exiting := false) -> void:
 	var seat := actor.current_seat
+	if not seat and actor.has_meta(&"travel_seated_posture"):
+		actor.remove_meta(&"travel_seated_posture")
+		actor._stand_up_finished()
+		return
 	if not is_instance_valid(seat) or seat.player_node != actor:
 		return
 	var id := seat.occupant_id

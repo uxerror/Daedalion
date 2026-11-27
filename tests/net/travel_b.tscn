@@ -1,0 +1,9 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://tests/net/travel_a.tscn" id="room"]
+
+[node name="Room" instance=ExtResource("room")]
+level_display_name = "East"
+
+[node name="Doorway" parent="." index="5"]
+target_scene_path = "res://tests/net/travel_a.tscn"

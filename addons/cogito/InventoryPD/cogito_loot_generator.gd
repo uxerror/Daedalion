@@ -106,16 +106,7 @@ func _sort_loot_table(loot_table: LootTable):
 func _is_unique_found(item: InventoryItemPD):
 	var root := CogitoLevel.root_of(self)
 	if root and root.has_meta(&"cogito_net_players"):
-		if root.get_meta(&"cogito_net_players").inventory.owns(item):
-			return true
-		for box in CogitoLevel.nodes_in_group(self, &"external_inventory"):
-			if not box.inventory_data.find_slots(item.name).is_empty():
-				return true
-		for body in CogitoLevel.nodes_in_group(self, &"spawned_loot_items"):
-			for pickup in body.find_children("*", "PickupComponent", true, false):
-				if pickup.slot_data.inventory_item.name == item.name:
-					return true
-		return false
+		return root.get_meta(&"cogito_net_players").spawner.total_holdings(item) > 0
 	var _loot_bags: Array[Node] = CogitoLevel.nodes_in_group(self, "loot_bag")
 	var _spawned_items: Array[Node] = CogitoLevel.nodes_in_group(self, "spawned_loot_items")
 	_loot_bags.append_array(CogitoLevel.nodes_in_group(self, "lootable_containers"))

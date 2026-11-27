@@ -52,9 +52,20 @@ func _ready() -> void:
 
 
 func _admitted_session() -> void:
-	add_child.call_deferred(preload("process_arena.tscn").instantiate())
+	if _args.has("--travel"):
+		add_child.call_deferred(preload("process_travel.gd").new())
+	elif _args["--role"] == "authority":
+		_start_dedicated_arena.call_deferred()
+	else:
+		add_child.call_deferred(preload("process_arena.tscn").instantiate())
 	_admitted = true
 	_roster_changed("")
+
+
+func _start_dedicated_arena() -> void:
+	var path := CogitoNet.starting_level("res://tests/net/process_arena.tscn")
+	if CogitoNet.player_world.travel.start(path) != OK:
+		_invariant_failed("Cannot start dedicated arena")
 
 
 func _roster_changed(_id: String) -> void:

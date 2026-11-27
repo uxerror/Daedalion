@@ -57,6 +57,8 @@ var seats := preload("net_seats.gd").new()
 var death := preload("net_death.gd").new()
 var combat := COMBAT.new()
 var projectiles := PROJECTILES.new()
+## Stable session coordinator shared by the live level endpoints.
+var travel: Node
 var _secondary := false
 var _profiles := {}
 var _bindings := {}
@@ -76,6 +78,9 @@ var _elapsed := 0.0
 
 func _ready() -> void:
 	if not _secondary:
+		travel = preload("net_travel.gd").new()
+		travel.name = "Travel"
+		add_child(travel)
 		quests.name = "Quests"
 		add_child(quests)
 	elements.name = "Elements"
@@ -107,9 +112,9 @@ func _ready() -> void:
 	_session = get_parent()
 	process_physics_priority = 100
 	if _secondary:
-		set_physics_process(false)
+		_session.left.connect(_remove)
 		return
-	_session.joined.connect(_joined)
+	_session.joined.connect(travel.admit)
 	_session.left.connect(_remove)
 	_session.ready_for_play.connect(_announce_level)
 
@@ -121,24 +126,34 @@ func active_level() -> Node:
 
 ## Binds the scene selected by the game on this branch, in level-local coordinates.
 func bind_level(root: Node, start: Transform3D, key: String) -> void:
-	if is_queued_for_deletion() or not is_inside_tree() or not root.is_inside_tree():
+	if (
+		_level == root
+		or is_queued_for_deletion()
+		or not is_inside_tree()
+		or not root.is_inside_tree()
+	):
 		return
-	if _level == root:
-		return
+	if not _secondary and travel.loading:
+		travel.adopt_key(root, key)
+	if not _secondary and travel.primary_key.is_empty():
+		travel.primary_key = key
 	if persistence and persistence.levels.has(key):
 		if persistence.levels[key].active_level() != root:
 			push_error("A live level already owns key " + key)
 		return
+	if not _secondary and key != travel.primary_key:
+		_bind_secondary(root, start, key)
+		return
 	if is_instance_valid(_level):
-		if persistence:
-			_bind_secondary(root, start, key)
 		return
 	_level = root
 	_level_key = key
 	_start = start
 	set_process(not multiplayer.is_server())
+	set_physics_process(true)
 	_owns_root = CogitoLevel.mark_network_root(root)
 	root.set_meta(&"cogito_net_players", self)
+	travel.levels[key] = self
 	if persistence:
 		persistence.rebuild(key, root)
 	spawner.bind(root)
@@ -163,28 +178,41 @@ func bind_level(root: Node, start: Transform3D, key: String) -> void:
 	if persistence:
 		persistence.restore_level(key, self)
 		if persistence.restore_error != OK:
-			multiplayer.multiplayer_peer.refuse_new_connections = true
-			_session.get_parent()._failed_world.call_deferred(key, persistence.restore_error)
+			if not _secondary and not travel.managed:
+				multiplayer.multiplayer_peer.refuse_new_connections = true
+				_session.get_parent()._failed_world.call_deferred(key, persistence.restore_error)
 			return
 		if not _secondary:
 			multiplayer.multiplayer_peer.refuse_new_connections = false
-	if _secondary:
+	if _secondary or travel.loading:
 		return
 	if multiplayer.is_server():
 		if not _session.local_id.is_empty():
 			quests.baseline(1)
 		for record in _session.records():
-			_joined(record.player_id)
+			travel.admit(record.player_id)
 	else:
 		_announce_level()
 
 
-# Additional occupied-level routing belongs to travel. An empty live instance still
-# needs its own entity, physics and spawner registries, and shares party-owned data.
+# Each room owns its simulation and observer sets. The party and private stock span rooms.
 func _bind_secondary(root: Node, start: Transform3D, key: String) -> void:
-	var endpoint: Node = get_script().new()
-	endpoint.name = "Level_" + key.sha256_text()
+	var path := "Level_" + key.sha256_text()
+	var endpoint := _session.get_node_or_null(NodePath(path))
+	if endpoint:
+		endpoint.bind_level(root, start, key)
+		return
+	endpoint = get_script().new()
+	endpoint.name = path
 	endpoint._secondary = true
+	endpoint.travel = travel
+	endpoint.spawn_policy = spawn_policy
+	endpoint.snapshot_hz = snapshot_hz
+	endpoint.npc_target_policy = npc_target_policy
+	endpoint.death.policy = death.policy
+	endpoint.death.damage_policy = death.damage_policy
+	endpoint.death.screen_scene = death.screen_scene
+	endpoint.local_changed.connect(local_changed.emit)
 	endpoint.persistence = persistence
 	endpoint.quests.free()
 	endpoint.quests = quests
@@ -202,8 +230,14 @@ func _exit_tree() -> void:
 		persistence.close()
 
 
+## Release network ownership immediately when a hosted room is queued for deletion.
+func unbind_level() -> void:
+	_level.tree_exiting.disconnect(_level_exiting)
+	_level_exiting()
+
+
 func _level_exiting() -> void:
-	if multiplayer.has_multiplayer_peer() and 1 in multiplayer.get_peers():
+	if not travel.loading and multiplayer.has_multiplayer_peer() and 1 in multiplayer.get_peers():
 		_level_left.rpc_id(1, _level_key, world.binding())
 	projectiles.clear()
 	clear()
@@ -216,10 +250,14 @@ func _level_exiting() -> void:
 	if _owns_root:
 		CogitoLevel.unmark_network_root(_level)
 		_owns_root = false
+	travel.levels.erase(_level_key)
 	if persistence:
 		persistence.levels.erase(_level_key)
+	# Keep the RPC path for late datagrams. No scene or subscriptions remain on it.
+	spawner.clear()
 	if _secondary:
-		queue_free()
+		set_physics_process(false)
+	set_process(false)
 	_level.remove_meta(&"cogito_net_players")
 	_level = null
 	_ready_levels.clear()
@@ -260,7 +298,16 @@ func _level_ready(key: String, nonce: int) -> void:
 	var peer := multiplayer.get_remote_sender_id()
 	if not multiplayer.is_server() or _session.for_peer(peer).is_empty() or key.length() > 512:
 		return
+	if travel.managed or travel.pending.has(_session.for_peer(peer).player_id):
+		return
 	if nonce <= int(_bindings.get(peer, 0)):
+		return
+	accept_ready(peer, key, nonce)
+
+
+## Install only this observer after admission or a validated travel acknowledgement.
+func accept_ready(peer: int, key: String, nonce: int) -> void:
+	if key != _level_key or not _avatars.has(_session.for_peer(peer).player_id):
 		return
 	_peer_by_id[_session.for_peer(peer).player_id] = peer
 	if _bindings.has(peer):
@@ -300,12 +347,19 @@ func _visible(peer: int, id: String) -> bool:
 	return viewer_root == CogitoLevel.root_of(_avatars[id].actor)
 
 
-func _joined(id: String) -> void:
+func _joined(id: String, placement: Variant = null, attached := {}) -> void:
 	if not multiplayer.is_server() or not is_instance_valid(_level) or _avatars.has(id):
 		return
-	_serial += 1
+	_serial = travel.next_serial()
 	var start := join_transform(id)
 	_create(id, _serial, start)
+	if placement is Transform3D:
+		var actor := _avatars[id].actor
+		actor.position = placement.origin
+		actor.body.rotation.y = placement.basis.get_euler().y
+		travel.rules().arrived(actor, attached, self)
+		mark_teleport(id)
+		actor.reset_physics_interpolation()
 	for peer: int in _ready_levels:
 		if _visible(peer, id):
 			_send_spawn(peer, id)
@@ -382,12 +436,14 @@ func _send_spawn(peer: int, id: String) -> void:
 	frame.wield = [wield.public_item, wield.light_on, wield.aiming]
 	var private := Attributes.capture(avatar.actor) if peer == _peer_by_id[id] else {}
 	frame.vitals = _vitals(id, peer, private)
-	_spawn.rpc_id(peer, _level_key, id, avatar.lifetime, frame)
+	_spawn.rpc_id(peer, _level_key, _bindings[peer], id, avatar.lifetime, frame)
 
 
 @rpc("authority", "call_remote", "reliable", 0)
-func _spawn(key: String, id: String, life: int, frame: Dictionary) -> void:
-	if not is_instance_valid(_level) or _level_key != key or _session.for_id(id).is_empty():
+func _spawn(key: String, binding: int, id: String, life: int, frame: Dictionary) -> void:
+	if binding != world.binding() or not is_instance_valid(_level):
+		return
+	if _level_key != key or _session.for_id(id).is_empty():
 		return
 	var avatar := avatar_for(id)
 	if avatar:
@@ -405,7 +461,9 @@ func _spawn(key: String, id: String, life: int, frame: Dictionary) -> void:
 
 
 func _remove(id: String) -> void:
-	if persistence and _avatars.has(id):
+	if not _avatars.has(id):
+		return
+	if persistence:
 		persistence.departing(id, _avatars[id].actor, self)
 	var peer := int(_peer_by_id.get(id, 0))
 	carry.release(peer, false)
@@ -517,7 +575,8 @@ func mark_world_dirty() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if persistence:
+	if persistence and not _secondary:
+		travel.advance()
 		persistence.poll(self, Engine.get_physics_frames())
 		if not is_inside_tree():
 			return
@@ -585,6 +644,8 @@ func _commands(life: int, revision: int, data: PackedByteArray) -> void:
 	var sender := multiplayer.get_remote_sender_id()
 	var record := _session.for_peer(sender)
 	var avatar := avatar_for(record.get("player_id", ""))
+	if not peer_in_level(sender) or travel.pending.has(record.get("player_id", "")):
+		return
 	if avatar and avatar.lifetime == life and avatar.revision == revision and avatar.source:
 		if not death.reject_dead_input(sender):
 			avatar.source.receive(data, avatar.actor.current_seat is CogitoVehicle)
@@ -625,7 +686,7 @@ func _install_life(avatar: AVATAR, life: int) -> void:
 ## Start a new incarnation in place, preserving inventory, equipment and game-owned quest state.
 func renew_life(id: String) -> void:
 	var avatar := _avatars[id]
-	_serial += 1
+	_serial = travel.next_serial()
 	_install_life(avatar, _serial)
 	mark_teleport(id)
 	avatar.health_fraction = Attributes.health_fraction(avatar.actor)

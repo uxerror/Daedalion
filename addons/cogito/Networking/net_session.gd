@@ -193,8 +193,13 @@ func _peer_disconnected(peer_id: int) -> void:
 ## The old peer leaves the roster at once; like a rejection, its transport closes after the
 ## reason has had time to arrive (an immediate ENet disconnect drops the queued RPC).
 func _replace(stale: int) -> void:
+	expire_peer(stale, "Signed in from another session")
+
+
+## Remove an admitted connection through the ordinary reconnect/takeover path.
+func expire_peer(stale: int, reason: String) -> void:
 	_peer_disconnected(stale)
-	_reject(stale, "Signed in from another session")
+	_reject(stale, reason)
 	_watchdog.start()
 
 

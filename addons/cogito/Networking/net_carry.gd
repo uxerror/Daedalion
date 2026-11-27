@@ -27,7 +27,7 @@ func grab(component: CogitoCarryableComponent, pic: PlayerInteractionComponent) 
 	if wield.stack and not component.is_carryable_while_wielding:
 		previous = wield.stack
 		wield.equip(previous)
-	_serial += 1
+	_serial = players.travel.next_serial()
 	_grants[peer] = {"component": component, "token": _serial, "tick": -1, "stack": previous}
 	component.player_interaction_component = pic
 	body.set_meta(&"net_carrier", peer)

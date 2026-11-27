@@ -142,6 +142,8 @@ func _input_device(key: String, epoch: int, token: int, action: StringName, valu
 
 func _accept(peer: int, token: int, action: StringName, value: Variant) -> void:
 	var session: Dictionary = _sessions.get(peer, {})
+	if _players.travel.pending.has(_players.get_parent().for_peer(peer).get("player_id", "")):
+		return
 	if session.get("token") != token or not value is int:
 		return
 	var target: Node = session.target

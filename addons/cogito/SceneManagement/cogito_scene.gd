@@ -1,5 +1,7 @@
 extends Node
 
+## Optional translated name for multiplayer travel messages.
+@export var level_display_name: String
 ## List of connector nodes. These are used to place the Player in the correct position when they transition to this scene from a different scene. The Node name needs to match the passed string for this to work.
 @export var connectors : Array[Node3D]
 ## Saves scene and player temp states
@@ -46,9 +48,9 @@ func bind_network_players() -> void:
 		_network_start = marker.transform
 		marker.free()
 	if is_node_ready():
-		world.bind_level(self, _network_start, scene_file_path)
+		world.travel.bind_scene(self, _network_start, scene_file_path)
 	else:
-		var bind := world.bind_level.bind(self, _network_start, scene_file_path)
+		var bind: Callable = world.travel.bind_scene.bind(self, _network_start, scene_file_path)
 		ready.connect(bind, CONNECT_DEFERRED | CONNECT_ONE_SHOT)
 
 
@@ -64,6 +66,8 @@ func move_player_to_connector(connector_name:String):
 
 
 func _enter_tree() -> void:
+	if has_meta(&"network_level_key"):
+		return
 	if CogitoNet.is_online():
 		if not CogitoNet.is_dedicated():
 			CogitoAudio.set_scene_music_state(music_state, combat_music_state)

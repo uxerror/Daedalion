@@ -19,7 +19,10 @@ func cancel(ui: CogitoInventoryInterface) -> void:
 
 ## Convert both mouse and controller inventory bindings to bounded inventory requests.
 func press(ui: CogitoInventoryInterface, data: CogitoInventory, i: int, action: String) -> void:
-	var boxes: Node = endpoint.get_parent().containers
+	var actor: CogitoPlayer = ui.get_parent().player
+	if not endpoint or not endpoint.local or endpoint.local.data.owner != actor:
+		return
+	var boxes: Node = endpoint.players_for(actor).containers
 	var model: STOCK = endpoint.local if data == endpoint.local.data else boxes.local
 	if not model or model.data != data:
 		return
@@ -68,21 +71,23 @@ func press(ui: CogitoInventoryInterface, data: CogitoInventory, i: int, action: 
 
 ## Assign the preview's actual source stack.
 func bind_slot(ui: CogitoInventoryInterface, index: int) -> void:
-	if source == endpoint.local:
+	if source and is_instance_valid(endpoint) and source == endpoint.local:
 		endpoint.submit("bind", [origin, stack_id, index])
 	cancel(ui)
 
 
 ## Drop from the player's original cell after an outside click.
 func drop(ui: CogitoInventoryInterface) -> void:
-	if source == endpoint.local:
+	if source and is_instance_valid(endpoint) and source == endpoint.local:
 		endpoint.submit("drop", [origin, stack_id, 1])
 	cancel(ui)
 
 
 ## Send viewer token and external revision for take-all and close.
-func external(op: String) -> void:
-	var boxes: Node = endpoint.get_parent().containers
+func external(op: String, actor: CogitoPlayer) -> void:
+	if not endpoint or not endpoint.local or endpoint.local.data.owner != actor:
+		return
+	var boxes: Node = endpoint.players_for(actor).containers
 	if boxes.local and boxes.token:
 		endpoint.submit(op, [boxes.token, boxes.local.revision])
 		if op == "close":

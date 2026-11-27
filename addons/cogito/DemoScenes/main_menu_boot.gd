@@ -11,6 +11,7 @@ func _enter_tree() -> void:
 	var args := OS.get_cmdline_user_args()
 	var wants_network := ("--host" in args or "--join" in args) and not _network_started
 	if CogitoNet.dedicated_boot or wants_network:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var menu := get_node("MainMenu")
 		remove_child(menu)
 		menu.free()
@@ -34,9 +35,11 @@ func _start_network_demo(args: PackedStringArray) -> void:
 	if level_index >= 0 and level_index + 1 < args.size():
 		path = args[level_index + 1]
 	var load_level := func() -> void:
-		get_tree().change_scene_to_file(CogitoNet.starting_level(path))
-	CogitoNet.session_ready.connect(load_level, CONNECT_DEFERRED | CONNECT_ONE_SHOT)
+		var err: Error = CogitoNet.player_world.travel.start(CogitoNet.starting_level(path))
+		if err != OK:
+			_failed(error_string(err))
 	if "--host" in args:
+		CogitoNet.session_ready.connect(load_level, CONNECT_DEFERRED | CONNECT_ONE_SHOT)
 		CogitoNet.host(config)
 	else:
 		var index := args.find("--join") + 1

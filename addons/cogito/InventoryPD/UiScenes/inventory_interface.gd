@@ -96,7 +96,7 @@ func close_inventory():
 		if network_cursor:
 			network_cursor.cancel(self)
 			if external_inventory_owner:
-				network_cursor.external("close")
+				network_cursor.external("close", get_parent().player)
 		elif grabbed_slot_data != null: # If the player was holding/moving items, these will be added back to the inventory.
 			# If there is space, return the item. If not, drop the item (short circuit if drop_item_on_close is false). If the item can't be dropped, reset the inventory to a previously valid state
 			var is_space = get_parent().player.inventory_data.pick_up_slot_data(grabbed_slot_data)
@@ -265,7 +265,7 @@ func get_external_inventory():
 
 func _on_take_all_pressed():
 	if network_cursor:
-		network_cursor.external("take_all")
+		network_cursor.external("take_all", get_parent().player)
 		return
 	external_inventory_owner.inventory_data.take_all_items(get_parent().player.inventory_data)
 

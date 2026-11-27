@@ -4,5 +4,9 @@ extends StateChart
 
 
 func _enter_initial_state() -> void:
-	if multiplayer.is_server():
+	if (
+		is_inside_tree()
+		and not CogitoPersistentId.is_disappearing(self)
+		and multiplayer.is_server()
+	):
 		super()

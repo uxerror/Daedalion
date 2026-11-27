@@ -1181,3 +1181,12 @@ msgstr "Cogito"
 #~| msgid "INPUT_inventory"
 #~ msgid "Inventory"
 #~ msgstr "Inventory Menu"
+
+msgid "%s left for %s"
+msgstr "%s left for %s"
+
+msgid "%s arrived from %s"
+msgstr "%s arrived from %s"
+
+msgid "Loading…"
+msgstr "Loading…"

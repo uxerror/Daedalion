@@ -101,12 +101,14 @@ respawn_delay=10.0
 | `import_slot` | Empty. A named solo slot to copy into a new world before binding its first level. | `--import-slot` |
 | `import_player` | Empty. Dedicated import requires an explicit recipient player ID. | `--import-player` |
 | `content_version` | The `version` string from `addons/cogito/plugin.cfg`. Include the plugin config in an export or supply a game release or content hash. Set the same value in client join credentials. | Config file |
-| `level` | Path to the local PackedScene loaded by the dedicated bootstrap. Clients must load the matching level. | `--level` |
+| `level` | First scene for a new world. The server sends each client its own level path. | `--level` |
+| `level_grace_seconds` | Keep an empty level live for this many seconds, default 60. Zero schedules a checkpoint immediately. | `--level-grace-seconds` |
+| `travel_timeout_seconds` | Maximum time for preparation/checkpoint and for client readiness, default 30 seconds per phase. | `--travel-timeout-seconds` |
 | `friendly_fire` | Boolean, default `true`. Allow one player to damage another. | `--friendly-fire false` or `--friendly-fire true` |
 | `respawn_delay` | Finite, nonnegative seconds, default `10.0`. Zero enables immediate requests. | `--respawn-delay 1.5` |
 | `display_name` | `Host` for the listen player. Clients supply their own name in join credentials, default `Player`. | Config file |
 
-The protocol version is 12. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
+The protocol version is 13. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
 
 The dedicated level starts empty and simulates admitted remote avatars. Their first-person cameras, HUDs and light-meter cameras are omitted. The default demo boot prevents the menu subtree from entering the tree. Dedicated startup skips solo save recovery and cleanup, the fade panel, game options, graphics and input-map setup by Cogito's menu autoload. The engine still loads project resources, Cogito settings and the existing autoload nodes, including InputHelper, DebugLine, InputRouter, audio and quest services. Full export stripping is scheduled for MP11.
 
@@ -114,9 +116,9 @@ The dedicated level starts empty and simulates admitted remote avatars. Their fi
 
 Use the same `save_dir` and world name on every launch. A new world starts in
 `--level` (the Laboratory by default). An existing world selects its committed active scene.
-Clients select the matching scene with `--join ADDRESS --level res://path/to/scene.tscn`.
-A custom bootstrap uses `CogitoNet.starting_level(fallback)` and binds the root with the
-same durable level key on each load.
+Clients use `--join ADDRESS`. Each authenticated player opens the level in their saved profile.
+A new identity enters the starting level. A custom authority bootstrap calls
+`CogitoNet.player_world.travel.start(CogitoNet.starting_level(fallback))` after session readiness.
 
 ```sh
 nice -n 19 godot --path . -- --host --world expedition
@@ -297,9 +299,43 @@ func authenticate(_claim: String, nonce: PackedByteArray, reply: Dictionary) -> 
 
 For a transport extension, assign a zero-argument `Callable` to `CogitoNet.transport_factory`. It returns an `enet_transport.gd` subclass implementing `open_server(config, listen)` and `open_client(address, port)` and exposing its resulting `MultiplayerPeer` through `peer`. The built-in adapter uses ENet. Session RPCs use reliable channel 0 at `/root/CogitoNet/Session`.
 
+## Independent level travel
+
+Walk into a `SceneTransitionZone` on the server. The zone supplies its destination scene and connector. The authority checks the actual overlap, the living actor and its level membership, and runs `CogitoNet.travel_policy`. The default moves the triggering player. Other players keep their controllers, physics worlds and level epochs.
+
+The authority loads the target resource in the background, binds its world, applies the last saved level state once and verifies the connector. It captures the outgoing profile and world together through the MP9 writer. A publication error or invalid destination leaves the source actor live and clears the transfer. Once the checkpoint succeeds, only the travelling connection receives a loading panel and the target path, level epoch and transfer token. The client replaces its own level and acknowledges its binding. The server checks the connector against the standing shape and current occupants, tries two rings of offsets and then the level's respawn marker. The authority sends that peer fresh baselines and gives the avatar a new incarnation. A player who appears inside a reverse zone must exit before it can trigger another transfer. A completely obstructed destination returns the player to the source.
+
+**Reconnect rule.** Until the authority accepts readiness and commits placement, the source is the player's recoverable level. This gives a slow or disconnected traveller a valid checkpoint with their complete inventory. A timed-out client goes through normal reconnect. After commitment a disconnect captures the destination. The arrival checkpoint uses the same writer as manual saves, autosaves and departures. As with other MP9 mutations, a process crash recovers the last published generation.
+
+**What runs where.** The server simulates every occupied level. After the last occupant leaves, a grace timer starts. Re-entry reuses the live scene, including its epoch. On expiry the writer captures the empty level and the server unloads it after successful publication. A failed write retains the scene for retry. A listen host presents only its local player's viewport. Other viewports have rendering and audio listeners disabled. Non-spatial AudioStreamPlayers in a hidden room use a muted bus and regain their authored bus on presentation. A client holds the resource for its incoming scene during loading and subscribes to a single active room. Death and respawn use the victim's own room. World objects, bodies, NPCs, devices, projectiles, avatars and their effects have room-local observers. Inventories and personal quest journals follow the identity. Shared quest progress and its live hints reach the party across rooms.
+
+**Physical attachments.** A carried crate or corpse remains in the source and loses its carry grant. A weapon holstered to carry it stays holstered. The Advanced controller preserves seated posture and resolves the saved seat ID in the destination. A matching, available seat gets a new local claim. An absent or occupied seat leaves the controller seated at its connector without a seat claim. The original vehicle stays in its source. Games that want travel to dismount everybody can return an empty attachment dictionary.
+
+Install a `CogitoTravelPolicy` resource on the authority before opening the session. Override `participants(actor, zone)` to veto a transfer or select several living players from the source. Each participant has independent readiness, placement and recovery. Override `attachments` to record additional state, `departing` to release or consume source attachments after all validation, `arrived` to apply destination state, and `placement` to choose a level-local transform (or return null). For example, a game can require host approval and all local party members at the door:
+
+```gdscript
+extends CogitoTravelPolicy
+
+var host_approved := false
+
+func participants(actor: CogitoPlayerAdvanced, zone: Area3D) -> Array[CogitoPlayerAdvanced]:
+	var party: Array[CogitoPlayerAdvanced] = []
+	if host_approved:
+		for member in CogitoLevel.nodes_in_group(actor, &"Player"):
+			if member is CogitoPlayerAdvanced and not member.is_dead:
+				if not zone.overlaps_body(member):
+					return []
+				party.append(member)
+	return party
+```
+
+A game that grants approval while its leader is still inside the zone can call the authority's `player_world.travel.enter(zone, leader)` to revalidate that overlap.
+
+**HUD.** A successful transfer sends a single departure or arrival hint to the other ready players in each affected room. The peer translates the message and the other scene's `level_display_name`. An empty display name uses the scene filename without its extension. Connect to `CogitoNet.travel_notification(event)` and edit `event.text`, or set it to an empty string to suppress the hint. `event.level` is the other level's title and `event.arrived` is the direction. Admission, reconnect, rollback and restored baselines do not generate travel messages. Subscribe to `CogitoNet.travel_failed(player_id, reason)` for current transfer errors.
+
 ## Player lifecycle and movement
 
-A `CogitoScene` opened online takes the transform of its authored `Player` before its children enter the tree. A running level can also open a session. A custom scene can call `CogitoNet.player_world.bind_level(root, start, key)` with its local root, a level-local start transform and a matching string key on every peer. One root is active on each peer. The server spawns all admitted players there, including the listen host. The default advances along the start's X axis in 1.5 m steps until it clears existing players. Games can choose another transform with `CogitoNet.spawn_policy`.
+A `CogitoScene` opened online takes the transform of its authored `Player` before its children enter the tree. A running level can also open a session. A custom scene can call `CogitoNet.player_world.bind_level(root, start, key)` with its local root, a level-local start transform and a matching string key on every peer. Each live server root has its own spawn endpoint. The client binds the root selected for its identity. The default advances along the start's X axis in 1.5 m steps until it clears existing players. Games can choose another transform with `CogitoNet.spawn_policy`.
 
 ```gdscript
 func choose_spawn(level: Node3D, player_id: String, start: Transform3D) -> Transform3D:
@@ -313,7 +349,7 @@ func open_session() -> Error:
 	return CogitoNet.host({"port": 7777})
 ```
 
-Reliable spawn RPCs use the stable session endpoint `Session/Players`. A client announces its level key after both admission and level setup. The server sends a new observer the **current** poses of existing players. This handshake lets slow loaders receive the same baseline as other observers. Spawn names derive from the durable identity. Commands and poses carry a server-issued incarnation number, so late packets from a departed avatar cannot affect its replacement. Roster removal releases held actions, carry and seat ownership and removes the avatar. Reconnect restores the departing profile into a new incarnation using the reconnect placement policy. A dead returnee respawns alive with retained holdings.
+Reliable spawn RPCs use `Session/Players` for the initial room and deterministic per-room endpoints for additional rooms. A client announces its level key after both admission and level setup. The server sends a new observer the **current** poses of existing players. This handshake lets slow loaders receive the same baseline as other observers. Spawn names derive from the durable identity. Commands and poses carry a server-issued incarnation number, so late packets from a departed avatar cannot affect its replacement. Roster removal releases held actions, carry and seat ownership and removes the avatar. Reconnect restores the departing profile into a new incarnation using the reconnect placement policy. A dead returnee respawns alive with retained holdings.
 
 | Role | Movement and view |
 | --- | --- |
@@ -324,9 +360,9 @@ Reliable spawn RPCs use the stable session endpoint `Session/Players`. A client 
 
 The project uses 60 physics ticks per second by default. Commands use unreliable ordered channel 1. A packet contains the last four MP1a frames with byte lengths. Protocol 6 includes movement, primary, secondary, reload and change-ammo actions. Each frame ends with the owner’s last observed equip generation (uint32). The receiver checks lengths, action IDs and finite values, normalizes the move vector, wraps yaw and clamps pitch for movement. A combat frame with yaw or neck yaw outside ±π, or pitch outside ±π/2, invalidates the packet. It resolves the avatar from the RPC sender. Each controller consumes at most one new sequence per physics tick. The receive queue holds up to 24 frames, starts with a two-tick jitter window, skips unrecovered gaps, and expires to neutral after 12 ticks without a fresh frame. The packet budget is four per avatar per server tick. Wire sequences are uint32 and extend to the nearest sequence around the next expected tick using signed modular distance. This assumes consecutive accepted sequences differ by less than half the number space. ENet's adaptive packet throttle is disabled on every connection (`throttle_configure(5000, PACKET_THROTTLE_SCALE, 0)`): under RTT jitter it silently discards runs of unreliable sends on the sender side, longer than the four-frame redundancy can recover. Both transport hosts also announce unlimited bandwidth explicitly (`host.bandwidth_limit(0, 0)` right after creation); without it Godot 4.7's ENet can cut a peer's throttle limit to 1/32 for whole one-second bandwidth intervals with the same effect (`tests/net/enet_transport_test.gd`).
 
-`CogitoNet.snapshot_hz` defaults to 25. After physics the server sends one batch on unreliable channel 1 per ready peer per snapshot tick. The batch contains the poses of every avatar sharing that observer’s `CogitoLevel` root. Each pose includes server tick, input acknowledgement, position, velocity, yaw, neck yaw, pitch, head height and posture/moving/seat state. The owner keeps local aim during ordinary updates. Remote playback uses a 100 ms buffer and extrapolates velocity for at most 50 ms. A position discontinuity over 4 m clears the history. After forcing a server teleport or look, call `CogitoNet.player_world.mark_teleport(player_id)`. The next pose revision resets local look and invalidates buffered input from before the change. A new incarnation starts with empty history.
+`CogitoNet.snapshot_hz` defaults to 25. After physics the server sends one batch on unreliable channel 1 per ready peer per snapshot tick. The batch contains the poses of every avatar sharing that observer’s `CogitoLevel` root. Each pose includes server tick, input acknowledgement, position, velocity, yaw, neck yaw, pitch, head height and posture/moving/seat state. The owner keeps local aim during ordinary updates. Remote playback uses a 100 ms buffer and extrapolates velocity for at most 50 ms. A position discontinuity over 4 m clears the history. After forcing a server teleport or look, call `CogitoNet.player_world.travel.endpoint_for(player_id).mark_teleport(player_id)`. The next pose revision resets local look and invalidates buffered input from before the change. A new incarnation starts with empty history.
 
-Use `CogitoNet.player_world.avatar_for(player_id)` to look up a live binding. Its `actor` is the Advanced node. On a replica, `timeline.latest()` exposes the last received pose including `tick` and `ack`. On the server, `actor.last_consumed_sequence` records the last applied command.
+Use `CogitoNet.player_world.travel.endpoint_for(player_id)` to find the room hosting a live identity, then call its `avatar_for(player_id)`. Its `actor` is the Advanced node. On a replica, `timeline.latest()` exposes the last received pose including `tick` and `ack`. On the server, `actor.last_consumed_sequence` records the last applied command.
 
 ## World interactions
 
@@ -909,16 +945,27 @@ Baselines only install state. Award gameplay rewards from the server-only
 
 ## Current limitations
 
-- Players share one active level. Additional bound instances have their own saved state. Routing players between occupied instances, prediction and rollback remain future work.
+- Scenes and controllers attach on the Godot main thread. Cold room activation and synchronous capture can exceed a 60 Hz frame budget. Client movement prediction, lag compensation and transport tuning are separate from independent travel.
 - There is no lag compensation. The server tests targets where they are when the command is consumed. A moving target may have left the crosshair by then. Ballistic replicas can briefly overshoot until the authoritative impact arrives.
 - Recovered projectiles become independent rigid pickups. Attachment to moving hit targets and procedural debris need their own lifecycle. Online corpses use the single-torso approximation described above.
-- Living NPCs are bound from the shared level scene. A game that creates new living NPCs at runtime needs an archetype and spawn adapter. Authored mannequin corpses and loot already have runtime records.
+- Living NPCs are bound from each level scene. A game that creates new living NPCs at runtime needs an archetype and spawn adapter. Authored mannequin corpses and loot already have runtime records.
 - Custom debris and fragment spawns still need a network archetype. Authored elemental burnout has a level-scoped removal record.
-- Per-player travel must freeze outgoing state before releasing the level and share the existing writer and completion barrier. The synchronous save API can block for a full generation. Normal autosave, leave checkpoints, operator requests and pause-menu saves stage and verify on a worker. A running rebind checks both identities again before the main thread seals the move.
+- The synchronous save API can block for a full generation. Normal autosave, leave checkpoints, operator requests and pause-menu saves stage and verify on a worker. A running rebind checks both identities again before the main thread seals the move.
 - A linked custom object needs its own state adapter to appear on observers. Use level-authored motion/visual tracks for replica animations. Method, nested-animation and audio tracks on door/switch replica players are removed at bind.
 - The sender repeats four frames. A burst that loses every copy of an edge can still lose the action. Artificial loss in the process test covers individual packet loss. LAN feel under jitter and mannequin animation need a visual playtest.
 
 ## Verification
+
+The `travel_dedicated` and `travel_listen` process scenarios use the real Lobby and Laboratory. A player stays behind operating the Lobby switch, and the travelling player returns after the rooms diverge. The dedicated scenario also sends both players to the Lab and restarts the world with one saved identity in each room. The authority is pinned to one available CPU on Linux. The harness prints five Godot physics-process monitor samples in milliseconds with both rooms occupied.
+
+Measured on the headless Godot 4.7.2 authority pinned to one logical CPU, with file transport, one player in each demo level and a 60 Hz target. Five samples at 1.05-second intervals followed a 3.1-second warm-up. The gap column measures the longest wall-clock interval between authority physics callbacks while the first player travelled.
+
+| Authority | Occupied-room physics, median (range) | Longest callback gap during the first crossing |
+| --- | --- | --- |
+| Dedicated | 4.73 ms (4.42–5.56 ms) | 69.19 ms |
+| Listen | 4.52 ms (4.19–4.71 ms) | 69.88 ms |
+
+The two live rooms fit the 16.7 ms physics budget in these steady samples. The cold crossing exceeded it. Resource reads and disk publication run in the background. Constructing and attaching the PackedScene, binding its gameplay nodes and capturing a consistent tick still use the main thread. The headless run measures simulation and callback latency; it does not measure GPU frame time.
 
 The persistence process scenarios check manual saves, dirty autosave and restoration of both owners' inventories and poses. Dedicated receives SIGKILL during the next staged generation, then tests a departing client, orderly stop and live rebind. Listen closes through the pause-menu Quit action with a final wallet change. Each remote connection gets a new peer ID.
 Use `python tools/check_multiplayer.py --scenario persistent_dedicated` or

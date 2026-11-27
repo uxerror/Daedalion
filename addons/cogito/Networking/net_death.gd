@@ -210,12 +210,14 @@ func _request_for(peer: int, life: int) -> void:
 		if peer == 1:
 			respawn_rejected.emit(reason)
 		else:
-			_rejected.rpc_id(peer, reason)
+			_rejected.rpc_id(peer, players.avatar_for(id).lifetime, reason)
 
 
 @rpc("authority", "call_remote", "reliable", 0)
-func _rejected(reason: String) -> void:
-	respawn_rejected.emit(reason)
+func _rejected(life: int, reason: String) -> void:
+	var actor: CogitoPlayer = get_parent().local_actor
+	if actor and actor.get_meta(&"inventory_life") == life:
+		respawn_rejected.emit(reason)
 
 
 ## Server entry point for requests and automatic policies. Empty string means accepted.

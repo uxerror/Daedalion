@@ -11,6 +11,7 @@ const Import := preload("net_solo_import.gd")
 const ProfileTools := preload("net_profile_tools.gd")
 const Profiles := preload("net_profiles.gd")
 const WorldWrite := preload("net_world_write.gd")
+const Spawner := preload("net_spawner.gd")
 const Reconnect := preload("net_reconnect_policy.gd")
 
 var files := Files.new()
@@ -36,6 +37,8 @@ var failure_message := ""
 var capture_usec := 0
 var commit_usec := 0
 var shutdown_wait_msec := 3000
+## Sequence of the most recently started capture, including an in-flight publication.
+var capture_serial := 0
 var _job: WorldWrite
 var _saved_retained := {}
 var _saved_unloaded := {}
@@ -53,6 +56,7 @@ var _active_key := ""
 var _active_unloaded := false
 var _prepared := {}
 var _unpublished_levels := {}
+var _legacy_holdings := {}
 
 
 ## Install global state once before the first admission baseline.
@@ -138,6 +142,30 @@ func restore_level(key: String, players: Node) -> void:
 			players.world.restore({id: npc.net_state()})
 
 
+## A failed destination was never admitted. Resume publishing the surviving live rooms.
+func discard_restore(key: String) -> void:
+	_prepared.erase(key)
+	evicted(key)
+	restore_error = OK
+
+
+## Last captured loose and container holdings for visited rooms without a live simulation.
+func unloaded_holdings(item: String) -> int:
+	var count := 0
+	var saved := files.scenes.duplicate()
+	saved.merge(_unpublished_levels, true)
+	for key: String in saved:
+		if not levels.has(key):
+			var row: Dictionary = saved[key]
+			if row.has("holdings"):
+				count += int(row.holdings.get(item, 0))
+			else:
+				if not _legacy_holdings.has(key):
+					_legacy_holdings[key] = Spawner.saved_holdings(row)
+				count += int(_legacy_holdings[key].get(item, 0))
+	return count
+
+
 ## Notify the writer about an authoritative mutation, including game-owned shared data.
 func mark_dirty() -> void:
 	dirty = true
@@ -163,6 +191,12 @@ func before_unload(players: Node) -> void:
 		row.import_alias = previous.id
 	_unpublished_levels[key] = row
 	checkpoint()
+
+
+## The exact empty-room snapshot has been accepted by the writer.
+func evicted(key: String) -> void:
+	if key == _active_key:
+		_active_unloaded = true
 
 
 ## Capture before detach. pending supplies the next incarnation even after a successful write.
@@ -201,6 +235,7 @@ func _save(players: Node, tick: int, move: PackedStringArray, background: bool) 
 		if not _active_unloaded:
 			return ERR_UNCONFIGURED
 	busy = true
+	capture_serial += 1
 	dirty = false
 	_manual = false
 	_checkpoint_at = -1
@@ -333,9 +368,10 @@ func _capture(players: Node, tick: int, retained: Dictionary, unloaded: Dictiona
 			scenes[key].erase("import_alias")
 	var profiles := retained.duplicate()
 	for member: Dictionary in players.get_parent().records():
-		var avatar: Variant = players.avatar_for(member.player_id)
+		var endpoint: Node = players.travel.endpoint_for(member.player_id)
+		var avatar: Variant = endpoint.avatar_for(member.player_id) if endpoint else null
 		if avatar:
-			profiles[member.player_id] = lives.capture(member.player_id, avatar.actor, players)
+			profiles[member.player_id] = lives.capture(member.player_id, avatar.actor, endpoint)
 	var shared: Dictionary = files.manifest.get("shared", {})
 	if capture_shared.is_valid():
 		shared = capture_shared.call()
@@ -370,8 +406,9 @@ func _record_result(players: Node, err: Error) -> void:
 			reason = error_string(err)
 		failure_message = "World save failed (%s)" % reason
 		printerr("NET SAVE ", failure_message)
-		if players.local_actor:
-			players.local_actor.player_interaction_component.hint_prompt.emit(null, failure_message)
+		var local: CogitoPlayer = players.travel.local_actor()
+		if local:
+			local.player_interaction_component.hint_prompt.emit(null, failure_message)
 	save_finished.emit(err, files.manifest.get("generation", 0))
 
 
@@ -390,6 +427,7 @@ func _capture_level(key: String, players: Node) -> Dictionary:
 		"flights": players.projectiles.capture(),
 		"bodies": players.bodies.capture(),
 		"containers": players.containers.capture(),
+		"holdings": players.spawner.room_holdings(),
 	}
 	return row.duplicate_deep(Resource.DEEP_DUPLICATE_INTERNAL)
 
@@ -403,7 +441,8 @@ func _offline_root(row: Dictionary) -> bool:
 func _players_changed(players: Node) -> bool:
 	for record in players.get_parent().records():
 		var id: String = record.player_id
-		var avatar: Variant = players.avatar_for(id)
+		var endpoint: Node = players.travel.endpoint_for(id)
+		var avatar: Variant = endpoint.avatar_for(id) if endpoint else null
 		var saved: Dictionary = files.profiles.get(id, {})
 		if avatar and (saved.is_empty() or _life_changed(avatar.actor, saved)):
 			return true
@@ -490,9 +529,10 @@ func _profile_request(players: Node, tick: int) -> bool:
 		var records := files.profiles.duplicate()
 		records.merge(lives.retained, true)
 		for member in players.get_parent().records():
-			var avatar: Variant = players.avatar_for(member.player_id)
+			var endpoint: Node = players.travel.endpoint_for(member.player_id)
+			var avatar: Variant = endpoint.avatar_for(member.player_id) if endpoint else null
 			if avatar:
-				records[member.player_id] = lives.capture(member.player_id, avatar.actor, players)
+				records[member.player_id] = lives.capture(member.player_id, avatar.actor, endpoint)
 		ProfileTools.list_profiles(records)
 	var path := files.directory.path_join("rebind.request")
 	if not _move.is_empty() or not FileAccess.file_exists(path):

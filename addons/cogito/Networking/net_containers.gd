@@ -51,7 +51,7 @@ func open(box: CogitoContainer, component: InteractionComponent, actor: CogitoPl
 		model.data.inventory_updated.connect(_changed.bind(box))
 		box.tree_exiting.connect(_removed.bind(box), CONNECT_ONE_SHOT)
 	model.refresh()
-	_serial += 1
+	_serial = get_parent().travel.next_serial()
 	_views[peer] = {"box": box, "component": component, "token": _serial}
 	resync(peer)
 	return {"ok": true, "view": "container"}
@@ -60,12 +60,13 @@ func open(box: CogitoContainer, component: InteractionComponent, actor: CogitoPl
 func _removed(box: CogitoContainer) -> void:
 	for peer: int in _views.keys():
 		if _views[peer].box == box:
+			var grant: int = _views[peer].token
 			forget(peer)
 			if get_parent().peer_in_level(peer):
 				if peer == 1:
-					_closed()
+					_closed(grant)
 				else:
-					_closed.rpc_id(peer)
+					_closed.rpc_id(peer, grant)
 	_models.erase(box)
 
 
@@ -82,7 +83,9 @@ func forget(peer: int) -> void:
 
 
 @rpc("authority", "call_remote", "reliable", 2)
-func _closed() -> void:
+func _closed(grant: int) -> void:
+	if token != grant:
+		return
 	token = 0
 	local = null
 	var actor: CogitoPlayer = get_parent().local_actor

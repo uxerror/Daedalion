@@ -52,6 +52,10 @@ func capture(id: String, actor: CogitoPlayerAdvanced, players: Node) -> Dictiona
 		"progression": actor.saved_quest_progression.duplicate(true),
 		"elements": {},
 	}
+	var transfer: Dictionary = players.travel.pending.get(id, {})
+	var zone: String = transfer.get("zone", actor.get_meta(&"travel_spawn_zone", ""))
+	if not zone.is_empty():
+		row.travel_zone = zone
 	if actor.cogito_properties:
 		row.elements.properties = actor.cogito_properties.get_element_save_data()
 	if actor.actor_elements:
@@ -78,6 +82,8 @@ func attach(id: String, actor: CogitoPlayerAdvanced, players: Node, policy: Reso
 		return
 	var row: Dictionary = pending[id]
 	pending.erase(id)
+	if row.has("travel_zone"):
+		actor.set_meta(&"travel_spawn_zone", row.travel_zone)
 	Attributes.apply(actor, row.attributes)
 	actor.saved_quest_progression = row.get("progression", {}).duplicate(true)
 	var start: Transform3D = policy.select(actor, row, players)

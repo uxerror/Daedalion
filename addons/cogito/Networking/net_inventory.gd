@@ -103,7 +103,9 @@ func capture(id: String, actor: CogitoPlayer) -> Dictionary:
 	fields.money = _values(actor.player_currencies)
 	var equipped: InventorySlotPD = actor.get_meta(&"net_wield").stack
 	if not equipped:
-		equipped = get_parent().carry.holstered_stack(get_parent().peer_for_actor(actor))
+		equipped = players_for(actor).carry.holstered_stack(
+			players_for(actor).peer_for_actor(actor)
+		)
 	fields.equipped = model.id_of(equipped)
 	return fields
 
@@ -134,6 +136,11 @@ func detach(peer: int, actor: CogitoPlayer) -> void:
 	_live.erase(peer)
 	_results.erase(peer)
 	_last_request.erase(peer)
+
+
+## Resolve the level that owns the actor, including while attaching its inventory.
+func players_for(actor: CogitoPlayer) -> Node:
+	return actor.player_interaction_component.network_interactions.get_parent()
 
 
 ## Count retained holdings for world-unique and capped quest drops, including absent owners.
@@ -189,7 +196,8 @@ func _refresh(peer: int, publish := true) -> void:
 	if peer == 1 and actor.player_hud is CogitoPlayerHudManager:
 		actor.player_interaction_component.wieldables.update_equipped()
 		_refresh_hud(actor, model)
-	if peer != 1 and get_parent().world.ready_for_events(peer) and get_parent().peer_in_level(peer):
+	var players := players_for(actor)
+	if peer != 1 and players.world.ready_for_events(peer) and players.peer_in_level(peer):
 		_state.rpc_id(peer, actor.get_meta(&"inventory_life"), model.revision, delta, false)
 
 
@@ -203,7 +211,7 @@ func _refresh_hud(actor: CogitoPlayer, model: STOCK) -> void:
 
 ## Publish a synchronous MP2 transaction before the interaction result.
 func flush_actor(actor: CogitoPlayer) -> void:
-	_refresh(get_parent().peer_for_actor(actor))
+	_refresh(players_for(actor).peer_for_actor(actor))
 
 
 ## Join baseline sent after the MP2 level AND local avatar acknowledgement.
@@ -211,7 +219,7 @@ func baseline(peer: int) -> void:
 	var model: STOCK = _live.get(peer)
 	if model and peer == 1 and model.data.owner.player_hud is CogitoPlayerHudManager:
 		_refresh_hud(model.data.owner, model)
-	elif model and get_parent().peer_in_level(peer):
+	elif model and players_for(model.data.owner).peer_in_level(peer):
 		_refresh(peer, false)
 		var fields := model.snapshot.duplicate()
 		_state.rpc_id(
@@ -237,7 +245,7 @@ func _state(life: int, revision: int, fields: Dictionary, full: bool) -> void:
 func use_item(actor: CogitoPlayer, item: InventoryItemPD) -> String:
 	var peer := 0
 	if is_instance_valid(actor) and multiplayer.is_server():
-		peer = get_parent().peer_for_actor(actor)
+		peer = players_for(actor).peer_for_actor(actor)
 	if not peer:
 		return "No avatar in level"
 	if item is WieldableItemPD:
@@ -246,7 +254,7 @@ func use_item(actor: CogitoPlayer, item: InventoryItemPD) -> String:
 		return "Item cannot be used"
 	if not item.use(actor):
 		return "Item could not be used"
-	get_parent().flush_attributes(actor.get_meta(&"net_player_id"))
+	players_for(actor).flush_attributes(actor.get_meta(&"net_player_id"))
 	return ""
 
 
@@ -309,7 +317,7 @@ func _receive(peer: int, request: Dictionary) -> void:
 
 func _process_request(peer: int, req: Dictionary) -> void:
 	var model: STOCK = _live.get(peer)
-	if not model or not get_parent().peer_in_level(peer):
+	if not model or not players_for(model.data.owner).peer_in_level(peer):
 		return
 	_refresh(peer)
 	var id: int = req.request_id if req.get("request_id") is int else 0
@@ -329,7 +337,7 @@ func _process_request(peer: int, req: Dictionary) -> void:
 				cache.erase(cache.keys()[0])
 	if reason != "":
 		baseline(peer)
-		get_parent().containers.resync(peer)
+		players_for(model.data.owner).containers.resync(peer)
 	var result := {"request_id": id, "life": life, "ok": reason == "", "reason": reason}
 	if peer == 1:
 		_result(result)
@@ -364,7 +372,7 @@ func _evaluate(peer: int, model: STOCK, req: Dictionary) -> String:
 func _operate(peer: int, model: STOCK, op: String, args: Array) -> String:
 	var inv := model.data
 	if op in ["put", "take", "external_move", "take_all", "close"]:
-		return get_parent().containers.transaction(peer, model, op, args)
+		return players_for(model.data.owner).containers.transaction(peer, model, op, args)
 	if op == "unbind":
 		if args[0] >= inv.assigned_quickslots.size():
 			return "Invalid payload"
@@ -415,7 +423,7 @@ func _stack_op(model: STOCK, op: String, args: Array) -> String:
 				ok = GRID.move(inv, stack, inv, args[2], args[3], bool(args[4]))
 		"drop":
 			if stack.inventory_item.is_droppable and args[2] > 0 and args[2] <= stack.quantity:
-				ok = get_parent().spawner.drop(inv.owner, stack, args[2])
+				ok = players_for(inv.owner).spawner.drop(inv.owner, stack, args[2])
 				if ok:
 					GRID.spend(inv, stack, args[2])
 	return "" if ok else "Item cannot be moved"

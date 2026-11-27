@@ -52,7 +52,8 @@ func evaluation_context(scope: CogitoQuest.Scope, subject_id: String) -> CogitoQ
 	if multiplayer.is_server():
 		var players := get_parent()
 		for member in players.get_parent().records():
-			var avatar: Variant = players.avatar_for(member.player_id)
+			var room: Node = players.travel.endpoint_for(member.player_id)
+			var avatar: Variant = room.avatar_for(member.player_id) if room else null
 			if avatar:
 				context.party[member.player_id] = avatar.actor
 	return context

@@ -59,6 +59,11 @@ class Role:
             os.getenv("GODOT_BIN", "godot"), "--headless", "--path", str(ROOT),
             "--max-fps", "60", *args,
         ]
+        if "--travel" in args and args[args.index("--role") + 1] in ("authority", "host"):
+            if hasattr(os, "sched_getaffinity") and shutil.which("taskset"):
+                cpu = min(os.sched_getaffinity(0))
+                cmd = ["taskset", "-c", str(cpu), *cmd]
+                print(f"Travel authority pinned to CPU {cpu}")
         extra_env = {}
         if bus:
             extra_env = {"COGITO_FILE_BUS": str(bus),
@@ -147,7 +152,15 @@ class Scenario:
             return
         role.tail.append(line)
         if "SCRIPT ERROR" in line or "Parse Error" in line:
-            raise CheckFailed(line)
+            detail = [line]
+            for _ in range(10):
+                try:
+                    owner, entry = self.output.get(timeout=0.1)
+                except queue.Empty:
+                    break
+                if owner is role and entry and entry.startswith(" "):
+                    detail.append(entry)
+            raise CheckFailed("\n".join(detail))
         if "Cannot bind 127.0.0.1:" in line and role is self.server:
             role.bind_failed = True
         if line.startswith("NET FAILED "):
@@ -929,11 +942,77 @@ class Scenario:
                 self.next_line()
         print("PASS world restart and offline profile", "dedicated" if dedicated else "listen")
 
+    def travel_dedicated(self):
+        self.travel(True)
+
+    def travel_listen(self):
+        self.travel(False)
+
+    def travel(self, dedicated):
+        lobby = "res://addons/cogito/DemoScenes/COGITO_3_Lobby.tscn"
+        lab = "res://addons/cogito/DemoScenes/COGITO_4_Laboratory.tscn"
+        self.port = 17777 if self.file_transport else available_port()
+        extra = ("--travel", "demo")
+
+        def start(previous=None):
+            if self.file_transport:
+                self.bus = self.directory / f"bus-{len(self.roles)}"
+                self.bus.mkdir()
+            role = "authority" if dedicated else "host"
+            self.server = self.fixture("Host", role, previous, extra=extra)
+            self.wait_line(self.server, lambda line: line.startswith("NET READY"))
+
+        def at(role, room, count):
+            return self.sample(role, lambda s: s["local"] == room and len(s["actors"]) == count
+                               and (role is self.server or s["levels"] == 1))
+
+        start()
+        name = "Ada" if dedicated else "Host"
+        a = self.fixture(name, "client", extra=extra) if dedicated else self.server
+        b = self.fixture("Ben", "client", extra=extra)
+        at(a, lobby, 2)
+        at(b, lobby, 2)
+        self.order(self.server, op="stage", who="Ben")
+        self.order(self.server, op="cross", who=name)
+        self.order(b, op="interact")
+        self.sample(b, lambda s: not s["switch"])
+        at(a, lab, 1 if dedicated else 2)
+        at(b, lobby, 1)
+        self.order(self.server, op="measure")
+        print("Two occupied rooms (ms):", self.wait_line(
+            self.server, lambda line: line.startswith("NET TICK ")).removeprefix("NET TICK "))
+        if dedicated:
+            self.order(self.server, op="cross", who="Ben")
+            at(b, lab, 2)
+        self.order(self.server, op="cross", who=name)
+        at(a, lobby, 1 if dedicated else 2)
+        if dedicated:
+            at(b, lab, 1)
+        world = self.directory / "world" / "worlds" / "default"
+        (world / "save.request").touch()
+        self.wait_line(self.server, lambda line: line.startswith("NET SAVE OK"))
+        if dedicated:
+            poses = self.sample(self.server, lambda s: len(s["actors"]) == 2)["actors"]
+            self.stop(a)
+            self.stop(b)
+            self.stop(self.server)
+            start()
+            a = self.fixture(name, "client", a, extra=extra)
+            b = self.fixture("Ben", "client", b, extra=extra)
+            at(a, lobby, 1)
+            at(b, lab, 1)
+            restored = self.sample(self.server, lambda s: len(s["actors"]) == 2)["actors"]
+            for identity, pose in poses.items():
+                other = restored[identity]
+                if other[0] != pose[0] or math.dist(other[1:], pose[1:]) > 0.25:
+                    raise CheckFailed(f"travel restart placement: {pose} -> {other}")
+        print("PASS independent real demo travel", "dedicated + restart" if dedicated else "listen")
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     scenarios = ("dedicated", "listen", "friendly_fire_off", "npc_dedicated", "npc_listen",
-                 "persistent_dedicated", "persistent_listen")
+                 "persistent_dedicated", "persistent_listen", "travel_dedicated", "travel_listen")
     parser.add_argument("--scenario", choices=scenarios)
     parser.add_argument("--file-transport", action="store_true", help="use a socket-free packet bus")
     parser.add_argument("--survival-only", action="store_true", help="run only MP5 scenarios")

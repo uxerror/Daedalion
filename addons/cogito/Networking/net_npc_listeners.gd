@@ -50,6 +50,10 @@ func _forget_npc(npc: CogitoNPC) -> void:
 ## Clear a departed observer's interest history.
 func forget(peer: int) -> void:
 	_seen.erase(peer)
+	if peer == 1:
+		for npc in tracked:
+			if npc.network_state:
+				npc.network_state.present_listener(Vector3i.ZERO)
 
 
 ## Called by the authoritative footstep clock, including on a server with no audio nodes.

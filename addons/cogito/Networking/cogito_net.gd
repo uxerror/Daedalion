@@ -14,6 +14,11 @@ signal local_player_changed(actor: CogitoPlayer)
 ## The authority refused this connection.
 signal peer_rejected(peer_id: int, reason: String)
 
+## Live local travel hint. A listener can change event.text or clear it to suppress the HUD.
+signal travel_notification(event: Dictionary)
+## The authority or the travelling client could not complete a transfer.
+signal travel_failed(player_id: String, reason: String)
+
 enum Mode { OFFLINE, LISTEN_HOST, CLIENT, DEDICATED }
 
 const Persistence := preload("net_persistence.gd")
@@ -40,6 +45,8 @@ var spawn_policy: Callable:
 			player_world.spawn_policy = value
 ## Set before opening a session. Defaults to the level-scoped CogitoRespawnPolicy.
 var respawn_policy: CogitoRespawnPolicy
+## Authority rules for validating a party and transferring held or seated state.
+var travel_policy: CogitoTravelPolicy
 ## Optional placement policy for the first admission of a saved life.
 var reconnect_policy: ReconnectPolicy
 ## Optional legacy solo importer (saved_row, matching_authored_nodes) -> selected node or null.
@@ -271,6 +278,8 @@ func _attach(
 		_session.joined.connect(_quest_baseline)
 	_session.joined.connect(player_joined.emit)
 	_session.add_child(player_world)
+	player_world.travel.notice_received.connect(travel_notification.emit)
+	player_world.travel.failed.connect(travel_failed.emit)
 	_session.left.connect(player_left.emit)
 	_session.attach(api)
 	api.server_relay = false
@@ -336,6 +345,7 @@ func disconnect_session() -> Error:
 		err = persistence.flush(player_world, Engine.get_physics_frames())
 		if err != OK:
 			printerr("NET FINAL SAVE ", error_string(err))
+	player_world.travel.shutdown()
 	player_world.persistence = null
 	var api := multiplayer as SceneMultiplayer
 	var peer := api.multiplayer_peer
@@ -405,4 +415,4 @@ func local_player_id() -> String:
 
 ## The admitted local network avatar, or null before spawn, offline and on dedicated.
 func local_player() -> CogitoPlayer:
-	return player_world.local_actor if player_world else null
+	return player_world.travel.local_actor() if player_world else null

@@ -25,18 +25,9 @@ func _ready() -> void:
 
 
 func _load_level(path: String, port: int) -> void:
-	var tree := get_tree()
-	var err := tree.change_scene_to_file(path)
-	if err != OK:
+	var err: Error = CogitoNet.player_world.travel.start(path)
+	if err == OK:
+		print("NET READY port=%d" % port)
+	else:
 		push_error("Cannot load dedicated level %s (%s)" % [path, error_string(err)])
-		tree.quit(1)
-		return
-	tree.scene_changed.connect(_level_ready.bind(tree, port), CONNECT_ONE_SHOT | CONNECT_DEFERRED)
-
-
-static func _level_ready(tree: SceneTree, port: int) -> void:
-	if not CogitoNet.player_world or not CogitoNet.player_world.active_level():
-		push_error("Dedicated scene did not bind its multiplayer level")
-		tree.quit(1)
-		return
-	print("NET READY port=%d" % port)
+		get_tree().quit(1)

@@ -1477,6 +1477,8 @@ func _on_sitting_state_physics_processing(delta: float) -> void:
 
 
 func _process_on_sittable(delta):
+	if network_movement_only and not current_seat:
+		return
 	var sittable = current_seat
 	#avoids instantly moving to seat before tween is finished
 	if not currently_tweening:

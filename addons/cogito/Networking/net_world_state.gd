@@ -63,8 +63,8 @@ func restore(records: Dictionary) -> Error:
 
 ## Bind once per live instance. The client learns the authority epoch from its baseline.
 func bind(root: Node, key: String) -> void:
-	_generation += 1
-	_client_binding += 1
+	_generation = get_parent().travel.next_serial()
+	_client_binding = _generation
 	entities.registered.connect(_runtime_registered)
 	entities.bind(root, key, _generation if multiplayer.is_server() else 0)
 	for id in entities.objects:
@@ -182,7 +182,9 @@ func activate_link(target: Node, actor: PlayerInteractionComponent) -> void:
 
 ## Private area events may start once this observer has installed its baseline.
 func ready_for_events(peer: int) -> bool:
-	return peer == 1 or (_subscribers.has(peer) and not _pending.has(peer))
+	if peer == 1:
+		return get_parent().peer_in_level(peer)
+	return _subscribers.has(peer) and not _pending.has(peer)
 
 
 ## Remove a departed observer and any deltas waiting for its baseline acknowledgement.

@@ -2,7 +2,7 @@ extends RefCounted
 ## Session configuration shared by programmatic startup and the dedicated CLI.
 
 const WorldFiles := preload("../SceneManagement/cogito_world_files.gd")
-const PROTOCOL_VERSION := 12
+const PROTOCOL_VERSION := 13
 const DEMO_LEVEL := "res://addons/cogito/DemoScenes/COGITO_4_Laboratory.tscn"
 const ENET_CEILING := 4095
 const DEFAULT_PORT := 7777
@@ -15,6 +15,8 @@ const CLI_FLAGS := [
 	"--save-dir",
 	"--world",
 	"--autosave-seconds",
+	"--level-grace-seconds",
+	"--travel-timeout-seconds",
 	"--profile-command",
 	"--import-slot",
 	"--import-player",
@@ -54,6 +56,8 @@ static func server_config(input: Dictionary, listen: bool) -> Dictionary:
 		"level": DEMO_LEVEL,
 		"world": "default",
 		"autosave_seconds": 60,
+		"level_grace_seconds": 60,
+		"travel_timeout_seconds": 30,
 		"import_slot": "",
 		"profile_command": "",
 		"import_player": "",
@@ -91,6 +95,8 @@ static func _validate_persistence(config: Dictionary) -> String:
 		return "Expected finite nonnegative respawn_delay"
 	if not WorldFiles.valid_name(config.world):
 		return "Invalid world directory name"
+	if config.level_grace_seconds < 0 or config.travel_timeout_seconds < 1:
+		return "Invalid travel grace or readiness timeout"
 	if config.autosave_seconds < 0:
 		return "Expected nonnegative autosave_seconds"
 	return ""
@@ -141,7 +147,7 @@ static func _cli_value(key: String, value: String) -> Variant:
 		"respawn_delay":
 			if value.is_valid_float():
 				return value.to_float()
-		"port", "max_players", "autosave_seconds":
+		"port", "max_players", "autosave_seconds", "level_grace_seconds", "travel_timeout_seconds":
 			if value.is_valid_int():
 				return value.to_int()
 		_:

@@ -1204,3 +1204,12 @@ msgstr "Cogito"
 
 #~ msgid "Bindings"
 #~ msgstr "Tastenbelegung"
+
+msgid "%s left for %s"
+msgstr "%s reist nach %s"
+
+msgid "%s arrived from %s"
+msgstr "%s kommt aus %s"
+
+msgid "Loading…"
+msgstr "Laden…"
