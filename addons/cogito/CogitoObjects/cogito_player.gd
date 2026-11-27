@@ -126,7 +126,7 @@ func setup_attributes_and_currencies() -> void:
 		visibility_attribute.attribute_changed.connect(sanity_attribute.on_visibility_changed)
 	if network_movement_only and visibility_attribute and not visibility_attribute.network_frozen:
 		var meter: CogitoAttribute = player_attributes.get("lightmeter")
-		if meter:
+		if meter and not meter.has_meta(&"net_local_meter"):
 			visibility_attribute.attribute_changed.connect(
 				func(_key: String, current: float, maximum: float, _up: bool):
 					meter.value_current = meter.value_max * current / maxf(maximum, 0.001)

@@ -59,17 +59,26 @@ func spawn(
 	actor.set_meta(&"net_player_id", id)
 	var meter := actor.get_node_or_null("LightMeterAttribute")
 	if meter is CogitoLightmeter:
-		if meter.has_node("SubViewport"):
+		# A rendering owner samples real light for its own HUD, as offline. The meter is
+		# presentation only; headless peers keep the server's light-zone value.
+		if local and DisplayServer.get_name() != "headless":
+			meter.set_meta(&"net_local_meter", true)
+		elif meter.has_node("SubViewport"):
 			meter.get_node("SubViewport").free()
 		if actor.find_children("*", "CogitoVisibilityAttribute", false, false).is_empty():
 			var visibility := (
 				preload("../Components/Attributes/VisibilityAttribute.tscn").instantiate()
+				as CogitoAttribute
 			)
+			# Internal stand-in: the offline prefab has no visibility meter on its HUD.
+			visibility.attribute_visibility = CogitoAttribute.AttributeVisibility.Hidden
 			actor.add_child(visibility)
 			visibility.owner = actor
 			actor.set_meta(&"net_fallback_visibility", true)
 	if not server:
 		for attr: CogitoAttribute in actor.find_children("*", "CogitoAttribute", false, false):
+			if attr.has_meta(&"net_local_meter"):
+				continue
 			attr.network_frozen = true
 			attr.set_block_signals(true)
 			attr.process_mode = Node.PROCESS_MODE_DISABLED
@@ -101,6 +110,8 @@ func spawn(
 	if not server:
 		for attr: CogitoAttribute in actor.player_attributes.values():
 			attr.set_block_signals(false)
+			if attr.has_meta(&"net_local_meter"):
+				continue
 			for child in attr.find_children("*", "", true, false):
 				child.process_mode = Node.PROCESS_MODE_DISABLED
 	if server and template and template != actor.inventory_data:

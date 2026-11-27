@@ -19,7 +19,7 @@ static func capture(actor: CogitoPlayer) -> Dictionary:
 static func apply(actor: CogitoPlayer, values: Dictionary) -> void:
 	for key: String in values:
 		var attr: CogitoAttribute = actor.player_attributes.get(key)
-		if attr:
+		if attr and not attr.has_meta(&"net_local_meter"):
 			attr.apply_replica_value(values[key][0], values[key][1])
 
 

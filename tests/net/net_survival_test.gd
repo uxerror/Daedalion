@@ -102,6 +102,15 @@ func test_private_meters_public_fraction_and_silent_replica() -> void:
 	var hud := replica.player_hud as CogitoPlayerHudManager
 	assert_float(hud.fixed_stamina_bar.attribute_bar.value_current).is_equal(5.0)
 	assert_float(hud.fixed_stamina_bar.attribute_bar.max_value).is_equal(60.0)
+	# A replicated drain shows the bar, as an offline sprint does.
+	assert_that(hud.fixed_stamina_bar.modulate).is_equal(Color.WHITE)
+	# The server's stand-in visibility meter is not a HUD attribute on any peer.
+	for actor: CogitoPlayer in [replica, _victim]:
+		var meter: CogitoAttribute = actor.player_attributes.get("visibility")
+		if meter:
+			assert_int(meter.attribute_visibility).is_equal(
+				CogitoAttribute.AttributeVisibility.Hidden
+			)
 	assert_array(deaths).is_empty()
 	assert_bool(replica.is_dead).is_false()
 	assert_bool(server.avatar_for(_id).actor.is_dead).is_false()
