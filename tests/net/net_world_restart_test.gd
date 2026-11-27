@@ -551,3 +551,23 @@ func test_timed_out_shutdown_keeps_claim_until_worker_releases_it() -> void:
 		claimed = other.open(_dir, "default")
 	assert_int(claimed).is_equal(OK)
 	other.close()
+
+
+func test_stop_request_from_previous_run_is_ignored() -> void:
+	var writer := _server.player_world.persistence
+	var stops := [0]
+	writer.stop_requested.connect(func(): stops[0] += 1)
+	writer.started_unix = int(Time.get_unix_time_from_system()) + 100
+	_request("stop", "")
+	await get_tree().process_frame
+	assert_int(stops[0]).is_equal(0)
+	var path := writer.files.directory.path_join("probe.request")
+	FileAccess.open(path, FileAccess.WRITE).close()
+	assert_bool(Facade.Persistence.stale_request(path, writer.started_unix)).is_true()
+	(
+		assert_bool(
+			Facade.Persistence.stale_request(path, int(Time.get_unix_time_from_system()) - 5)
+		)
+		. is_false()
+	)
+	DirAccess.remove_absolute(path)

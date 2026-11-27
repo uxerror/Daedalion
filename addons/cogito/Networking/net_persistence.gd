@@ -37,6 +37,8 @@ var failure_message := ""
 var capture_usec := 0
 var commit_usec := 0
 var shutdown_wait_msec := 3000
+## Unix second this process started; older stop requests are leftovers of a previous run.
+var started_unix := int(Time.get_unix_time_from_system() - Time.get_ticks_msec() / 1000.0)
 ## Sequence of the most recently started capture, including an in-flight publication.
 var capture_serial := 0
 var _job: WorldWrite
@@ -532,13 +534,23 @@ func poll(players: Node, tick: int) -> void:
 func _consume_stop(players: Node) -> bool:
 	var stop := files.directory.path_join("stop.request")
 	if players.get_parent().local_id.is_empty() and FileAccess.file_exists(stop):
+		var stale := stale_request(stop, started_unix)
 		var removed := DirAccess.remove_absolute(stop)
+		if removed == OK and stale:
+			print("NET STOP stale request from a previous run ignored")
+			return false
 		if removed == OK:
 			stop_requested.emit()
 		else:
 			_inbox_error("STOP", removed)
 		return true
 	return false
+
+
+## A request file written before this process started (e.g. by a service manager's stop
+## while a crashing server restarted) must not stop the next run at once.
+static func stale_request(path: String, started: int) -> bool:
+	return FileAccess.get_modified_time(path) < started
 
 
 func _operator_request(players: Node, tick: int) -> bool:
