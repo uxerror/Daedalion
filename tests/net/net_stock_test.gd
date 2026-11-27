@@ -16,8 +16,17 @@ func test_scene_embedded_definition_resolves() -> void:
 	var item := STOCK.pickup_template(load(PICKUP) as PackedScene).inventory_item
 	assert_str(item.resource_path).contains("::")
 	assert_object(STOCK.load_definition(item.resource_path)).is_same(item)
-	assert_object(STOCK.load_definition(PICKUP + "::Missing")).is_null()
 	assert_object(STOCK.load_definition("res://missing_item.tres")).is_null()
+	assert_object(STOCK.load_definition("res://missing_pickup.tscn::Resource_x")).is_null()
+
+
+# Exported builds regenerate sub-resource ids, so the id an editor-built world saved differs
+# from the one an exported server loads (and vice versa for its peers).
+func test_scene_embedded_definition_ignores_repacked_id() -> void:
+	var item := STOCK.pickup_template(load(PICKUP) as PackedScene).inventory_item
+	assert_object(STOCK.load_definition(PICKUP + "::Resource_exported")).is_same(item)
+	var other := "res://addons/cogito/EasyMenus/Scenes/MultiplayerRoster.tscn"
+	assert_object(STOCK.load_definition(other + "::Resource_x")).is_null()
 
 
 func test_projection_round_trips_scene_embedded_item() -> void:

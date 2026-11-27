@@ -22,6 +22,8 @@ static func definition(item: InventoryItemPD) -> InventoryItemPD:
 
 ## Load a definition by the path a server sent. Definitions embedded in a pickup scene have a
 ## `scene.tscn::id` path that `load()` cannot resolve; read those through the pickup template.
+## Only the scene part identifies the definition: a pickup scene authors one item, and
+## exported builds regenerate sub-resource ids, so editor and exported worlds/peers differ.
 static func load_definition(path: String) -> InventoryItemPD:
 	var split := path.find("::")
 	if split < 0:
@@ -30,8 +32,10 @@ static func load_definition(path: String) -> InventoryItemPD:
 	if not ResourceLoader.exists(scene, "PackedScene"):
 		return null
 	var template := pickup_template(load(scene) as PackedScene)
-	if template and template.inventory_item and template.inventory_item.resource_path == path:
-		return template.inventory_item
+	if template and template.inventory_item:
+		var own_path := template.inventory_item.resource_path
+		if own_path.contains("::") and own_path.get_slice("::", 0) == scene:
+			return template.inventory_item
 	return null
 
 
