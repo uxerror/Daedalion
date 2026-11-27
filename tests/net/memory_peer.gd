@@ -1,11 +1,15 @@
 extends MultiplayerPeerExtension
-## A lossless reliable queue for exercising real SceneMultiplayer RPCs without OS sockets.
+## An in-process packet queue for exercising real SceneMultiplayer RPCs without OS sockets.
+
+const Schedule := preload("packet_schedule.gd")
 
 var network: Dictionary
 var id: int
 var arrivals: Array[int] = []
 var departures: Array[int] = []
-var packets: Array[Dictionary] = []
+var packets: Array = []
+var schedule: Schedule
+
 var drop_every_tenth_command := false
 var pose_packets := {}
 ## Opt-in capture of actual serialized outbound RPC packets for privacy assertions.
@@ -32,6 +36,8 @@ func _is_server() -> bool:
 
 
 func _poll() -> void:
+	if schedule:
+		schedule.poll(Engine.get_physics_frames(), packets)
 	for other: int in arrivals:
 		peer_connected.emit(other)
 	arrivals.clear()
@@ -58,12 +64,25 @@ func _put_packet_script(buffer: PackedByteArray) -> Error:
 		pose_packets[_target] = pose_packets.get(_target, 0) + 1
 	for other: int in network:
 		if other != id and (_target == other or (_target <= 0 and other != -_target)):
-			network[other].packets.append({"source": id, "data": buffer.duplicate()})
+			network[other]._receive([id, _channel, _transfer, buffer.duplicate()])
 	return OK
 
 
+func configure(source: int, channel: int, options: Dictionary) -> void:
+	if not schedule:
+		schedule = Schedule.new(id, 1000.0 / Engine.physics_ticks_per_second)
+	schedule.configure(source, channel, options)
+
+
+func _receive(packet: Array) -> void:
+	if schedule:
+		schedule.enqueue(packet, Engine.get_physics_frames(), packets)
+	else:
+		packets.append(packet)
+
+
 func _get_packet_script() -> PackedByteArray:
-	return packets.pop_front().data
+	return packets.pop_front()[3]
 
 
 func _get_available_packet_count() -> int:
@@ -71,7 +90,7 @@ func _get_available_packet_count() -> int:
 
 
 func _get_packet_peer() -> int:
-	return packets[0].source
+	return packets[0][0]
 
 
 func _get_max_packet_size() -> int:
@@ -79,11 +98,11 @@ func _get_max_packet_size() -> int:
 
 
 func _get_packet_channel() -> int:
-	return 0
+	return packets[0][1]
 
 
 func _get_packet_mode() -> TransferMode:
-	return TRANSFER_MODE_RELIABLE
+	return packets[0][2]
 
 
 func _set_transfer_channel(channel: int) -> void:
@@ -109,9 +128,11 @@ func _close() -> void:
 	network.erase(id)
 	for other: int in network:
 		if id == 1 or other == 1:
-			var queue: Array[Dictionary] = network[other].packets
+			if network[other].schedule:
+				network[other].schedule.forget(id)
+			var queue: Array = network[other].packets
 			for index in range(queue.size() - 1, -1, -1):
-				if queue[index].source == id:
+				if queue[index][0] == id:
 					queue.remove_at(index)
 			network[other].departures.append(id)
 	packets.clear()

@@ -100,6 +100,42 @@ and crouching adds the server's head-height lerp before the client lerp.
 | Inventory | Opening the inventory and dragging a preview are local. Stack changes, purchases, equip generation and container contents are confirmed by authority. `CogitoObjects/cogito_player_advanced.gd:739–751`, `docs/networking.md:594–610,677–686`. |
 | Carry | The owner collects rotation input and can request a grab, drop or throw. The grant, wall-clamped anchor, impulse and visible body motion follow the server. Body playback has its own delayed timeline. `Networking/net_carry.gd:15–44,57–71,119–152,168–203`, `Networking/net_body_timeline.gd:32–47`. |
 
+### Measured (PR0)
+
+Headless Godot 4.7.2/Jolt, one dedicated authority and one owner, 60 Hz physics,
+60 fps render cap, 25 Hz poses. Each cell is one observed **command sample to first
+owner render** in milliseconds. Both endpoints were at rest before walk. The probe
+injects commands through the actor's input source and observes the ordinary command,
+capture, receive and presentation paths. Timing starts inside `sample()`, so the
+device-to-sample wait in the estimates is outside this measurement. Headless presentation
+ends at the actor or eye transform update. A monitor would add its own display latency.
+
+| Nominal RTT | Transport | Walk from rest | Jump | Crouch | Delivered delay ↑ / ↓ (ms) |
+|---:|---|---:|---:|---:|---:|
+| 0 ms | Memory | 67.6 | 67.4 | 67.5 | 0.2 / 0.0 |
+| 16 ms | Memory | 84.0 | 67.3 | 67.0 | 16.7 / 16.7 |
+| 100 ms | Memory | 184.0 | 167.4 | 200.4 | 57.7 / 57.9 |
+| 150 ms | Memory | 200.6 | 216.9 | 233.9 | 82.7 / 82.8 |
+| 0 ms | File | 133.7 | 117.2 | 117.1 | 0.1 / 0.1 |
+| 16 ms | File | 117.2 | 133.8 | 117.2 | 16.7 / 16.7 |
+| 100 ms | File | 184.3 | 200.7 | 200.7 | 57.7 / 58.7 |
+| 150 ms | File | 250.7 | 250.6 | 233.9 | 84.2 / 83.2 |
+
+The last column gives the mean measured residence time at delivery on channel 1,
+commands upstream and poses downstream, through the last trial for each profile. Memory
+starts the clock at enqueue, rounds deadlines up to physics ticks and includes waiting for a
+poll. File starts at the receiver's first read of the batch. Its flush and filesystem
+pickup waits also contribute to the input-to-render columns. The 100 and 150 ms profiles
+use seeded uniform ±10 ms one way. Pose publication phase, input queue depth and process
+scheduling vary across trials. These observations are baselines for comparison.
+
+For example, in the memory 150 ms walk the owner sampled sequence 84 on owner tick
+1043. The authority consumed it on server tick 91 and first translated and published on
+tick 92. The owner accepted pose 92 at 19,870,869 µs and moved on render 1029 at
+19,870,986 µs on its local clock. The probe joins by sequence and pose tick across
+processes. Only client-local timestamps are subtracted. Run the ENet scenario to collect
+the same fields on a machine with UDP loopback. See [Testing](../testing.md#prediction-pr0).
+
 ## 2. What a movement tick depends on
 
 A rollback snapshot must let the **next** command produce the right step. The existing

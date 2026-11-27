@@ -2,10 +2,14 @@
 """Exercise CogitoNet over loopback ENet in fresh Godot processes, after project import."""
 
 import argparse
+import contextlib
+import heapq
 import json
 import math
 import os
 import queue
+import random
+import select
 import shlex
 import shutil
 import signal
@@ -35,6 +39,56 @@ def available_port():
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
         probe.bind(("127.0.0.1", 0))
         return probe.getsockname()[1]
+
+
+class DelayRelay:
+    """One loopback owner. Delay real ENet datagrams without changing their contents."""
+
+    def __init__(self, server_port):
+        self.server = ("127.0.0.1", server_port)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind(("127.0.0.1", 0))
+        self.port = self.sock.getsockname()[1]
+        self.running = threading.Event()
+        self.running.set()
+        self.profile(0)
+        self.thread = threading.Thread(target=self.forward, daemon=True)
+        self.thread.start()
+
+    def profile(self, rtt):
+        # Queue entries retain their old statistics across a profile boundary.
+        self.link = (rtt / 2000, 0.010 if rtt >= 100 else 0.0,
+                     [random.Random(140), random.Random(141)], [[0.0, 0], [0.0, 0]])
+
+    def forward(self):
+        pending = []
+        serial = 0
+        owner = None
+        while self.running.is_set():
+            now = time.monotonic()
+            while pending and pending[0][0] <= now:
+                _, _, dest, data, started, stats = heapq.heappop(pending)
+                self.sock.sendto(data, dest)
+                stats[0] += (time.monotonic() - started) * 1000
+                stats[1] += 1
+            timeout = min(0.02, max(0, pending[0][0] - now)) if pending else 0.02
+            if select.select([self.sock], [], [], timeout)[0]:
+                data, source = self.sock.recvfrom(65535)
+                if source != self.server:
+                    owner = source
+                down = int(source == self.server)
+                dest = owner if down else self.server
+                if dest:
+                    delay, jitter, rng, stats = self.link
+                    started = time.monotonic()
+                    due = started + delay + rng[down].uniform(-jitter, jitter)
+                    serial += 1
+                    heapq.heappush(pending, (due, serial, dest, data, started, stats[down]))
+
+    def close(self):
+        self.running.clear()
+        self.thread.join()
+        self.sock.close()
 
 
 class Role:
@@ -104,7 +158,8 @@ class Scenario:
         self.directory = directory
         self.roles = []
         self.output = queue.Queue()
-        self.deadline = time.monotonic() + SCENARIO_SECONDS
+        self.timeout_seconds = SCENARIO_SECONDS
+        self.deadline = time.monotonic() + self.timeout_seconds
         self.port = None
         self.server = None
 
@@ -134,17 +189,17 @@ class Scenario:
     def next_line(self):
         remaining = self.deadline - time.monotonic()
         if remaining <= 0:
-            raise CheckFailed(f"{SCENARIO_SECONDS} s scenario deadline exceeded")
+            raise CheckFailed(f"{self.timeout_seconds} s scenario deadline exceeded")
         try:
             role, line = self.output.get(timeout=remaining)
         except queue.Empty:
-            raise CheckFailed(f"{SCENARIO_SECONDS} s scenario deadline exceeded") from None
+            raise CheckFailed(f"{self.timeout_seconds} s scenario deadline exceeded") from None
         if line is None:
             role.exited = True
             try:
                 rc = role.process.wait(timeout=max(0, self.deadline - time.monotonic()))
             except subprocess.TimeoutExpired:
-                raise CheckFailed(f"{SCENARIO_SECONDS} s scenario deadline exceeded during exit") from None
+                raise CheckFailed(f"{self.timeout_seconds} s scenario deadline exceeded during exit") from None
             if role.bind_failed and role is self.server:
                 raise BindFailed(f"could not bind UDP {self.port}")
             if not role.stopping or (rc != role.expected_exit and not role.killed):
@@ -1040,6 +1095,56 @@ class Scenario:
         self.stop(client)
         print("PASS menu rejoin, live roster, host kick, host restart, solo, tree shutdown and dedicated kick")
 
+    def latency(self):
+        self.timeout_seconds = 60
+        self.deadline = time.monotonic() + self.timeout_seconds
+        self.port = 17777 if self.file_transport else available_port()
+        if self.file_transport:
+            self.bus = self.directory / "bus"
+            self.bus.mkdir()
+        extra = ("--latency", "true")
+        self.server = self.fixture("Authority", "authority", extra=extra)
+        self.wait_line(self.server, lambda line: line.startswith("NET READY"))
+        relay = None if self.file_transport else DelayRelay(self.port)
+        with contextlib.ExitStack() as cleanup:
+            if relay:
+                cleanup.callback(relay.close)
+                self.port = relay.port
+            owner = self.fixture("Owner", "client", extra=extra)
+            self.state(owner, ["Owner"])
+            for rtt in (0, 16, 100, 150):
+                if relay:
+                    relay.profile(rtt)
+                for action in ("walk", "jump", "crouch"):
+                    trial = {"rtt": rtt, "action": action}
+                    for role in (self.server, owner):
+                        role.order += 1
+                        path = role.directory / f"trial-{role.order}"
+                        tmp = path.with_suffix(".tmp")
+                        tmp.write_text(json.dumps(trial))
+                        tmp.replace(path)
+                        self.wait_line(role, lambda line: line == f"NET ARMED {role.order}")
+                    phases = []
+                    for role in (self.server, owner):
+                        event = self.wait_line(role, lambda line: line.startswith("NET LATENCY "))
+                        phases.append(json.loads(event.removeprefix("NET LATENCY ")))
+                    authority, client = phases
+                    if (authority["action"] != action or client["action"] != action
+                            or authority["seq"] != client["seq"] or client["pose_ack"] < client["seq"]
+                            or not authority["consume_tick"] <= authority["effect_tick"]
+                            <= authority["capture_tick"] <= client["pose_tick"]
+                            or not client["sample_us"] <= client["arrival_us"] <= client["render_us"]):
+                        raise CheckFailed(f"invalid latency phases {phases}")
+                    up, down = ([total / count for total, count in relay.link[3]] if relay
+                                else [phase["delivered_ms"] for phase in phases])
+                    minimum = rtt * 0.5 - (10 if rtt >= 100 else 0)
+                    if min(up, down) + 0.001 < minimum:
+                        raise CheckFailed(f"early delivery at {rtt} ms RTT: {up=}, {down=}")
+                    row = {**trial, **authority, **client, "up_ms": up, "down_ms": down}
+                    print("PR0", "enet" if relay else "file", json.dumps(row), flush=True)
+            self.stop(owner)
+            self.stop(self.server)
+
     def travel_dedicated(self):
         self.travel(True)
 
@@ -1125,7 +1230,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     scenarios = ("dedicated", "listen", "friendly_fire_off", "npc_dedicated", "npc_listen",
                  "persistent_dedicated", "persistent_listen", "travel_dedicated", "travel_listen",
-                 "residency_dedicated", "menus")
+                 "residency_dedicated", "menus", "latency")
     parser.add_argument("--scenario", choices=scenarios)
     parser.add_argument("--file-transport", action="store_true", help="use a socket-free packet bus")
     parser.add_argument("--survival-only", action="store_true", help="run only MP5 scenarios")

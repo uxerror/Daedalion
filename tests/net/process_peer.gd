@@ -33,6 +33,8 @@ func _ready() -> void:
 			"friendly_fire": _args.get("--friendly-fire", "true") == "true",
 			"respawn_delay": 1.5,
 		}
+		if _args.has("--latency"):
+			config.bind = "127.0.0.1"
 		if _args.get("--travel") == "preload":
 			config.level_residency = "preload_all"
 			config.level = ProcessTravel.LOBBY
@@ -65,7 +67,9 @@ func _ready() -> void:
 
 
 func _admitted_session() -> void:
-	if _args.has("--travel"):
+	if _args.has("--latency"):
+		add_child.call_deferred(preload("process_latency.gd").new())
+	elif _args.has("--travel"):
 		add_child.call_deferred(ProcessTravel.new())
 	elif _args["--role"] == "authority":
 		_start_dedicated_arena.call_deferred()

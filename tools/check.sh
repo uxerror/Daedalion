@@ -78,7 +78,8 @@ step_smoke() {
 
 step_multiplayer() {
 	echo "== multiplayer: headless ENet processes"
-	NICE="$NICE" python3 tools/check_multiplayer.py
+	NICE="$NICE" python3 tools/check_multiplayer.py || return $?
+	NICE="$NICE" python3 tools/check_multiplayer.py --file-transport --scenario latency
 }
 
 step_import
