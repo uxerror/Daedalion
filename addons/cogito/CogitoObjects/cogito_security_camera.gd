@@ -7,6 +7,8 @@ signal object_detected
 signal send_detected_object(object: Node3D)
 signal object_no_longer_detected
 signal turned_off
+## Online: the server detects and replicates the state; clients only show it.
+signal net_changed(event: StringName)
 
 @export var audio_stream_player_3d: AudioStreamPlayer3D
 
@@ -76,6 +78,8 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if CogitoProperties.is_client_copy(self):
+		return
 	match current_state:
 		DetectorState.OFFLINE:
 			return
@@ -239,7 +243,12 @@ func stop_alarm_light():
 
 
 func update_indicator_mesh():
+	if has_meta(&"cogito_net_world") and not CogitoProperties.is_client_copy(self):
+		net_changed.emit(&"")
 	var indicator_material = indicator_mesh.get_active_material(0)
+	# Dedicated exports replace visual resources with placeholders.
+	if not indicator_material is BaseMaterial3D:
+		return
 	
 	match current_state:
 		DetectorState.OFFLINE:
@@ -254,3 +263,27 @@ func update_indicator_mesh():
 		DetectorState.DETECTED:
 			indicator_material.set_albedo(color_detected)
 			indicator_light.light_color = color_detected
+
+
+func net_state() -> Dictionary:
+	return {"state": current_state}
+
+
+## Show the server's detector state without detecting, emitting signals or sending alarms.
+func apply_net_state(state: Dictionary, silent: bool) -> void:
+	var previous := current_state
+	current_state = state.state
+	if current_state == previous:
+		return
+	detection_time = 0
+	if current_state == DetectorState.DETECTED:
+		if not silent and audio_stream_player_3d and not audio_stream_player_3d.playing:
+			audio_stream_player_3d.play()
+		start_alarm_light()
+	elif audio_stream_player_3d and audio_stream_player_3d.playing:
+		audio_stream_player_3d.stop()
+	update_indicator_mesh()
+	if current_state == DetectorState.OFFLINE:
+		indicator_light.light_energy = 0
+	elif previous == DetectorState.OFFLINE or previous == DetectorState.DETECTED:
+		stop_alarm_light()

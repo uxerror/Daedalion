@@ -53,3 +53,26 @@ func test_laboratory_stand_switches_show_elements_on_client(_timeout := 60000) -
 	assert_bool(c_freezer.enabled).is_not_equal(frost_before)
 	for node in c_freezer.visuals:
 		assert_bool(node.visible).is_equal(c_freezer.enabled)
+
+
+# The GUI report: the stands' RESET buttons do nothing online.
+func test_laboratory_stand_reset_restores_burnt_grass_on_client(_timeout := 60000) -> void:
+	var server := _branch(1)
+	server.start_server({"save_dir": "user://net/lab-reset"})
+	var s_level := _lab(server)
+	var client := _branch(2)
+	assert_int(client.join("memory", 1902)).is_equal(OK)
+	var c_level := _lab(client)
+	_pump()
+	await _ticks(10)
+	var results: Array[Dictionary] = []
+	client.player_world.interactions.result_received.connect(func(r: Dictionary): results.append(r))
+	var s_grass := s_level.get_node(STANDS + "StandFire/Grass1")
+	s_grass.queue_free()
+	await _ticks(10)
+	await _press(client, c_level, "StandFire/Console/ResetButton")
+	print("RESULTS ", results)
+	assert_bool(results.is_empty()).is_false()
+	assert_bool(results.back().ok).is_true()
+	assert_object(s_level.get_node_or_null(STANDS + "StandFire/Grass1")).is_not_null()
+	assert_object(c_level.get_node_or_null(STANDS + "StandFire/Grass1")).is_not_null()
