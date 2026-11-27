@@ -420,10 +420,12 @@ func save():
 	if patrol_path:
 		patrol_path_nodepath = patrol_path.get_path()
 		patrol_path_id = CogitoPersistentId.of(patrol_path)
-	attention_target_uid = attention_target.uid if attention_target and "uid" in attention_target else 0
-	attention_target_id = CogitoPersistentId.of(attention_target) if attention_target else ""
-	if perception and attention_target is CogitoPlayer:
-		attention_target_id = "player:" + str(attention_target.get_meta(&"net_player_id", ""))
+	# A target can be freed between perception ticks (a player leaving or travelling).
+	var target: Node = attention_target if is_instance_valid(attention_target) else null
+	attention_target_uid = target.uid if target and "uid" in target else 0
+	attention_target_id = CogitoPersistentId.of(target) if target else ""
+	if perception and target is CogitoPlayer:
+		attention_target_id = "player:" + str(target.get_meta(&"net_player_id", ""))
 	
 	var node_data = {
 		"filename" : get_scene_file_path(),

@@ -56,6 +56,20 @@ func forget(peer: int) -> void:
 				npc.network_state.present_listener(Vector3i.ZERO)
 
 
+## Drop references to a player actor before it is freed (leave, travel, takeover).
+## A hunting NPC keeps searching at the last known point instead of a dead reference.
+func release_actor(actor: Node, id: String) -> void:
+	for npc in tracked:
+		if npc.perception:
+			npc.perception.candidates.erase(id)
+		if npc.attention_target != actor:
+			continue
+		if npc.perception:
+			npc.perception.attention_point(npc.perception.last_known)
+		else:
+			npc.attention_target = null
+
+
 ## Called by the authoritative footstep clock, including on a server with no audio nodes.
 func noise(actor: CogitoPlayer, magnitude: float) -> void:
 	if not multiplayer.is_server():

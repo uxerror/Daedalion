@@ -228,6 +228,28 @@ func test_listen_quorum_veto_seat_carry_and_private_respawn() -> void:
 	assert_object(CogitoLevel.root_of(rider)).is_same(target.active_level())
 
 
+# A guard hunting the listen host must not keep the freed host actor after it travels.
+func test_npc_target_released_when_host_travels() -> void:
+	_boot(true)
+	var b := _join(2, 2826)
+	assert_bool(await _arrive(b, A)).is_true()
+	var source := _room(_server)
+	var host := _server.local_player() as CogitoPlayerAdvanced
+	var guard: CogitoNPC = source.active_level().get_node("Guard")
+	guard.attention_target = host
+	_enter(_server)
+	assert_bool(await _arrive(_server, B)).is_true()
+	await _ticks(2)
+	assert_bool(guard.attention_target == host).is_false()
+	(
+		assert_bool(is_instance_valid(guard.attention_target) or guard.attention_target == null)
+		. is_true()
+	)
+	var data: Dictionary = guard.save()
+	assert_bool(String(data.attention_target_id).begins_with("player:")).is_false()
+	assert_int(_server.save_world()).is_equal(OK)
+
+
 func test_failed_preparation_and_checkpoint_keep_source_and_release_guard() -> void:
 	_boot()
 	var a := _join(2, 2832)

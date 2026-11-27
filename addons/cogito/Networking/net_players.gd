@@ -480,6 +480,7 @@ func _remove(id: String) -> void:
 	carry.release(peer, false)
 	if multiplayer.is_server() and _avatars.has(id):
 		seats.release(_avatars[id].actor)
+		npcs.release_actor(_avatars[id].actor, id)
 	npcs.forget(peer)
 	bodies.forget(peer)
 	elements.forget(peer)
