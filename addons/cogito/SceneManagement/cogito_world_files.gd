@@ -214,7 +214,12 @@ static func _valid_objects(records: Variant) -> bool:
 
 static func _valid_spawn(row: Dictionary) -> bool:
 	if row.has("corpse"):
-		return row.corpse is String and row.get("index") is int and row.index >= 0
+		return (
+			row.corpse is String
+			and row.get("index") is int
+			and row.index >= 0
+			and row.get("scene", "") is String
+		)
 	if row.has("bag"):
 		return row.bag is String and not row.bag.is_empty()
 	if not row.get("item") is String or not row.get("quantity") is int:

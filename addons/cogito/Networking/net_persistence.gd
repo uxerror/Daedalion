@@ -82,8 +82,18 @@ func rebuild(key: String, root: Node) -> void:
 			restore_error = Import.identify_legacy(state, root, match_legacy_object)
 			if restore_error != OK:
 				return
+		_cache_remains(root)
 		CogitoSceneManager._scene_persistence.restore_world_nodes(state, root)
 		_prepared[key] = state
+
+
+# Saved corpses written before MP10 name only their NPC; keep its archetypes past removal.
+func _cache_remains(root: Node) -> void:
+	var remains := {}
+	for npc: CogitoNPC in root.find_children("*", "CogitoNPC", true, false):
+		if npc.health:
+			remains[CogitoPersistentId.of(npc)] = npc.health.spawn_on_death.duplicate()
+	root.set_meta(Spawner.REMAINS_META, remains)
 
 
 func _saved_scene(key: String, root: Node) -> Dictionary:

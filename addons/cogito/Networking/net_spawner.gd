@@ -2,6 +2,8 @@ extends Node
 ## Server-owned runtime pickups and loot bags. Lifecycle records share MP2's late-join barrier.
 
 const Corpse := preload("net_npc_corpse.gd")
+## Level-root meta: NPC id -> spawn_on_death archetypes, cached before saved removals apply.
+const REMAINS_META := &"cogito_npc_remains"
 const STOCK := preload("net_stock.gd")
 const GRID := preload("net_grid.gd")
 
@@ -97,7 +99,8 @@ func import_object(source: Node3D) -> Node3D:
 			if npc:
 				var index := npc.health.spawn_on_death.find(scene)
 				if index >= 0:
-					target = _spawn({"corpse": id, "index": index}, source.global_position)
+					var spec := {"corpse": id, "index": index, "scene": scene.resource_path}
+					target = _spawn(spec, source.global_position)
 					break
 	if target:
 		target.global_transform = source.global_transform
@@ -253,7 +256,12 @@ func spawn_npc_remains(npc: CogitoNPC) -> void:
 		if stack:
 			spawn_item(stack, stack.quantity, npc.global_position + Vector3.UP * 0.4)
 		elif Corpse.is_ragdoll(scene):
-			var spec := {"corpse": entity, "index": index, "basis": npc.global_basis}
+			var spec := {
+				"corpse": entity,
+				"index": index,
+				"basis": npc.global_basis,
+				"scene": scene.resource_path,
+			}
 			_spawn(spec, npc.global_position + Vector3.UP * 0.4)
 
 
@@ -268,13 +276,35 @@ func _spawn(spec: Dictionary, pos: Vector3) -> Node3D:
 	return node
 
 
+# A restored corpse outlives its NPC, whose tombstone frees the source before registration.
+# Prefer the saved archetype, then the live NPC, then archetypes cached before node removal.
+func _corpse_scene(spec: Dictionary) -> PackedScene:
+	var path: String = spec.get("scene", "")
+	if not path.is_empty() and ResourceLoader.exists(path, "PackedScene"):
+		var saved := load(path) as PackedScene
+		return saved if saved and Corpse.is_ragdoll(saved) else null
+	var options: Array = []
+	var npc := get_parent().world.entities.live_object(spec.corpse) as CogitoNPC
+	if npc:
+		options = npc.health.spawn_on_death
+	else:
+		var root: Node = get_parent().active_level()
+		if root:
+			options = root.get_meta(REMAINS_META, {}).get(spec.corpse, [])
+	if spec.index >= 0 and spec.index < options.size():
+		var scene: PackedScene = options[spec.index]
+		# Replicas have no cached source. The upgraded row carries the archetype to them.
+		if scene and multiplayer.is_server():
+			spec.scene = scene.resource_path
+		return scene
+	return null
+
+
 func _instantiate(id: String, spec: Dictionary) -> Node3D:
 	var scene: PackedScene
 	var item: InventoryItemPD
 	if spec.has("corpse"):
-		var npc := get_parent().world.entities.live_object(spec.corpse) as CogitoNPC
-		if npc and spec.index >= 0 and spec.index < npc.health.spawn_on_death.size():
-			scene = npc.health.spawn_on_death[spec.index]
+		scene = _corpse_scene(spec)
 	elif spec.has("bag"):
 		scene = _bags.get(spec.bag)
 	else:

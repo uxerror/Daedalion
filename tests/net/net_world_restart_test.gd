@@ -225,6 +225,36 @@ func test_corpse_loot_and_container_restored_once() -> void:
 	assert_object(_server.player_world.world.entities.live_object("runtime:3")).is_same(extra)
 
 
+# A removed NPC frees its archetype source before restore. Pre-MP10 rows lack "scene".
+@warning_ignore("unused_parameter")
+func test_corpse_of_removed_npc_restored(
+	legacy: bool, _test_parameters := [[false], [true]]
+) -> void:
+	var a := _join(2, 1901)
+	await _ticks(5)
+	var actor := _server.player_world.avatar_for(a.local_player_id()).actor
+	var guard := _root.get_node("Guard") as CogitoNPC
+	for i in 2:
+		guard.damage_received.emit(25.0, actor, Vector3.FORWARD, guard.position)
+	await _ticks(5)
+	var world := _server.player_world.world
+	assert_object(world.entities.live_object("runtime:1")).is_instanceof(CogitoBodyDrag)
+	assert_str(world._states["runtime:1"].get("scene", "")).is_not_empty()
+	if legacy:
+		world._states["runtime:1"].erase("scene")
+	world.publish(world.entities.id_for(guard), {"removed": true})
+	guard.queue_free()
+	await _ticks(2)
+	assert_int(_server.save_world()).is_equal(OK)
+	_restart()
+	a = _join(8, 1901)
+	await _ticks(4)
+	for branch in [_server, a]:
+		var entities: Variant = branch.player_world.world.entities
+		assert_object(branch.player_world.active_level().get_node_or_null("Guard")).is_null()
+		assert_object(entities.live_object("runtime:1")).is_instanceof(CogitoBodyDrag)
+
+
 func test_first_visit_unloaded_before_first_commit() -> void:
 	var host := CogitoLevelHost.new()
 	_server.add_child(host)
