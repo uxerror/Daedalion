@@ -151,6 +151,9 @@ func bind_level(root: Node, start: Transform3D, key: String) -> void:
 	_start = start
 	set_process(not multiplayer.is_server())
 	set_physics_process(true)
+	# An endpoint reused after its level was evicted keeps ballistics paused otherwise.
+	projectiles.set_physics_process(true)
+	projectiles.process_mode = Node.PROCESS_MODE_INHERIT
 	_owns_root = CogitoLevel.mark_network_root(root)
 	root.set_meta(&"cogito_net_players", self)
 	travel.levels[key] = self

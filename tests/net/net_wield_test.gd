@@ -203,9 +203,18 @@ func test_projectiles_are_cosmetic_on_replica_and_pickups_are_unique(_timeout :=
 	assert_int(ids.size()).is_equal(2)
 	assert_int(ids[0]).is_not_equal(ids[1])
 	_equip(pistol)
+	var forward: Array[float] = []
+	shots.launched.connect(
+		func(id: int, visual: Node3D):
+			var heading: Vector3 = shots._flights[id].row.velocity.normalized()
+			forward.append(-visual.global_basis.z.normalized().dot(heading))
+	)
 	_tick(ACTION.PRIMARY, 5.0)
 	await _ticks(12)
 	assert_array(hits).contains_exactly([_actor, _actor, _actor])
+	# Offline the foam bullet takes Bullet_Point's basis: its length points along the shot.
+	assert_int(forward.size()).is_equal(1)
+	assert_float(forward[0]).is_greater(0.95)
 	assert_int(ids.size()).is_equal(3)
 	assert_float(pistol.inventory_item.charge_current).is_equal(9.0)
 

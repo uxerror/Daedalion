@@ -36,6 +36,8 @@ func launch(
 		"index": index,
 		"pos": aim.origin,
 		"velocity": -aim.basis.z.normalized() * profile.speed,
+		"muzzle": aim.basis.orthonormalized() * profile.muzzle_basis,
+		"carry_template": profile.kind == &"throw",
 	}
 	var recoverable := stack if profile.kind == &"throw" else STOCK.pickup_template(scene)
 	return _launch(row, scene, item.wieldable_damage, recoverable)
@@ -51,6 +53,10 @@ func launch_npc(npc: CogitoNPC, start: Vector3, direction: Vector3) -> bool:
 		"pos": start,
 		"velocity": direction * npc.weapon.projectile_velocity,
 	}
+	# Offline NPC shots take the Bullet_Point basis as the projectile's whole orientation.
+	var point := npc.weapon.get_node_or_null("%Bullet_Point") as Node3D
+	if point and point.is_inside_tree():
+		row.basis = point.global_basis.orthonormalized()
 	return _launch(row, scene, npc.weapon.npc_wieldable_damage, STOCK.pickup_template(scene))
 
 
@@ -60,6 +66,13 @@ func _launch(row: Dictionary, scene: PackedScene, damage: float, pickup: Invento
 	if not template:
 		instance.free()
 		return false
+	# Offline: pistols replace the root basis with Bullet_Point's; throwables are parented
+	# under Bullet_Point and keep their own root rotation on top of it.
+	if row.has("muzzle"):
+		var muzzle: Basis = row.muzzle
+		row.basis = muzzle * template.basis if row.carry_template else muzzle
+		row.erase("muzzle")
+		row.erase("carry_template")
 	var lifespan := template.get_node_or_null("Lifespan") as Timer
 	var gravity: Vector3 = ProjectSettings.get_setting("physics/3d/default_gravity_vector")
 	gravity *= float(ProjectSettings.get_setting("physics/3d/default_gravity"))
@@ -118,7 +131,9 @@ func _visual(row: Dictionary, template: Node3D) -> Node3D:
 	get_parent().active_level().add_child(visual)
 	visual.global_position = row.pos
 	var direction: Vector3 = row.velocity.normalized()
-	if not direction.is_zero_approx():
+	if row.get("basis") is Basis:
+		visual.global_basis = row.basis
+	elif not direction.is_zero_approx():
 		var up := Vector3.RIGHT if absf(direction.y) > 0.99 else Vector3.UP
 		visual.global_basis = Basis.looking_at(direction, up) * template.basis
 	return visual

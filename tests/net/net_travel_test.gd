@@ -161,6 +161,9 @@ func test_concurrent_entries_grace_restore_and_old_packets() -> void:
 	assert_float(restored.active_level().get_node("Crate").position.x).is_equal_approx(-6, 0.1)
 	assert_bool(restored.world.is_removed("level:Pickup")).is_true()
 	assert_object(restored.world.entities.live_object(runtime_id)).is_not_null()
+	# Eviction paused ballistics on the endpoint. A reloaded room must fly projectiles again.
+	assert_bool(restored.projectiles.is_physics_processing()).is_true()
+	assert_bool(restored.projectiles.can_process()).is_true()
 	var drops := 0
 	for id: String in restored.world.entities.objects:
 		if id.begins_with("runtime:"):

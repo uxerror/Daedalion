@@ -17,6 +17,9 @@ var reload_seconds := 1.0
 var drain := 0.0
 var stamina := 0.0
 var speed := 0.0
+## Offline spawn orientation of a projectile relative to the aim: the authored Bullet_Point
+## basis through the wieldable root (the root's parent follows the camera).
+var muzzle_basis := Basis.IDENTITY
 var ads_fov := 65.0
 var projectiles: Array[PackedScene] = []
 var effects: Array[ConsumableEffect] = []
@@ -91,10 +94,12 @@ func read_authored(node: Node) -> void:
 		ads_fov = node.ads_fov
 		projectiles.assign(node.projectile_prefab)
 		speed = node.projectile_velocity
+		muzzle_basis = _muzzle_basis(node)
 	elif derives_from(authored, THROW):
 		kind = &"throw"
 		projectiles.append(node.projectile_override)
 		speed = node.projectile_velocity
+		muzzle_basis = _muzzle_basis(node)
 	elif derives_from(authored, LIGHT):
 		kind = &"light"
 		drain = node.drain_rate
@@ -107,6 +112,18 @@ func read_authored(node: Node) -> void:
 		fire_sound = node.get("sound_primary_use")
 	if "sound_reload" in node:
 		reload_sound = node.get("sound_reload")
+
+
+static func _muzzle_basis(node: Node3D) -> Basis:
+	var point := node.get_node_or_null("%Bullet_Point") as Node3D
+	if not point:
+		return Basis.IDENTITY
+	var basis := point.transform.basis
+	var ancestor := point.get_parent()
+	while ancestor is Node3D and ancestor != node:
+		basis = ancestor.transform.basis * basis
+		ancestor = ancestor.get_parent()
+	return (node.transform.basis * basis).orthonormalized()
 
 
 ## Editor export uses placeholder instances for game scripts. Inspect the script hierarchy.
