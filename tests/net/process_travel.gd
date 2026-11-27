@@ -2,6 +2,7 @@ extends Node
 ## Drives real demo doors using test-only files. All travel and gameplay use normal endpoints.
 
 const LOBBY := "res://addons/cogito/DemoScenes/COGITO_3_Lobby.tscn"
+const LAB := "res://addons/cogito/DemoScenes/COGITO_4_Laboratory.tscn"
 const TO_LAB := "MAIN_LOBBY/LAB_CONNECTOR/TransitionZone_LAB"
 const TO_LOBBY := "CONNECTOR_TO_LOBBY/TransitionZone_LOBBY"
 
@@ -12,6 +13,10 @@ var _baseline_time := 0
 var _measurements: Array[float] = []
 var _previous_tick := 0
 var _max_gap := 0
+var _watch_snapshots := false
+var _last_snapshot := 0
+var _snapshot_gap := 0
+var _snapshot_count := 0
 
 
 func _ready() -> void:
@@ -26,6 +31,14 @@ func _physics_process(_delta: float) -> void:
 	if not CogitoNet.is_online():
 		return
 	var travel: Node = CogitoNet.player_world.travel
+	if _watch_snapshots:
+		var endpoint: Node = travel.endpoint_for(CogitoNet.local_player_id())
+		var arrival: int = endpoint.avatar_for(CogitoNet.local_player_id()).timeline._arrival_usec
+		if arrival > _last_snapshot:
+			if _last_snapshot:
+				_snapshot_gap = maxi(_snapshot_gap, arrival - _last_snapshot)
+			_snapshot_count += 1
+			_last_snapshot = arrival
 	if _previous_tick:
 		var tick := Time.get_ticks_usec()
 		_max_gap = maxi(_max_gap, tick - _previous_tick)
@@ -48,7 +61,12 @@ func _physics_process(_delta: float) -> void:
 
 
 func _apply(cmd: Dictionary, travel: Node) -> void:
-	if cmd.op == "measure":
+	if cmd.op == "watch":
+		_watch_snapshots = true
+	elif cmd.op == "report":
+		_watch_snapshots = false
+		print("NET SNAPSHOTS ", _snapshot_count, " gap_ms=", _snapshot_gap / 1000.0)
+	elif cmd.op == "measure":
 		_measurements.clear()
 		_previous_tick = 0
 		_baseline_time = Time.get_ticks_msec() + 3100
@@ -95,6 +113,7 @@ func _sample(travel: Node) -> void:
 		"actors": actors,
 		"local": surface,
 		"levels": travel.levels.size(),
+		"lab_frozen": travel.residency.frozen(LAB),
 		"order": _order,
 		"switch": switch_on,
 	}

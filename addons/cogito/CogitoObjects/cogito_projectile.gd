@@ -58,7 +58,7 @@ func _pick_up_timer() -> void:
 	if lifespan and (lifespan as Timer).wait_time < pick_up_delay:
 		# The projectile cannot be picked up before it dies, so don't create the timer
 		return
-	await get_tree().create_timer(pick_up_delay).timeout
+	await CogitoLevel.delay(self, pick_up_delay)
 	can_pick_up = true
 
 

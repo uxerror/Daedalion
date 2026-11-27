@@ -3,6 +3,11 @@ extends Resource
 ## Authority hooks for independent travel. The coordinator verifies every participant.
 
 
+## Override to pin individual durable level keys in stream mode.
+func should_unload(_key: String) -> bool:
+	return true
+
+
 ## Return the actors to move through this zone. An empty array declines the request.
 func participants(actor: CogitoPlayerAdvanced, _zone: Area3D) -> Array[CogitoPlayerAdvanced]:
 	return [actor]

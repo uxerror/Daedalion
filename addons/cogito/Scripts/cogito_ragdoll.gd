@@ -18,7 +18,7 @@ func _ready() -> void:
 		self.add_to_group("Persist") #Adding object to group for persistence
 	
 	find_ragdoll_nodes()
-	await get_tree().create_timer(0.05, false).timeout
+	await CogitoLevel.delay(self, 0.05, false)
 	start_simulation()
 
 

@@ -102,3 +102,14 @@ func test_damage_and_respawn_configuration() -> void:
 			. is_true()
 		)
 	assert_bool(NetConfig.parse_cli(["--friendly-fire", "sometimes"]).has("reason")).is_true()
+
+
+func test_preload_levels_cli() -> void:
+	var lab := "res://addons/cogito/DemoScenes/COGITO_4_Laboratory.tscn"
+	var lobby := "res://addons/cogito/DemoScenes/COGITO_3_Lobby.tscn"
+	var cli := NetConfig.parse_cli(["--level-residency", "preload_all", "--preload-levels", "auto"])
+	assert_str(cli.level_residency).is_equal("preload_all")
+	assert_array(cli.preload_levels).is_equal(["auto"])
+	cli = NetConfig.parse_cli(["--preload-levels", lab + ", " + lobby])
+	assert_array(cli.preload_levels).is_equal([lab, lobby])
+	assert_bool(NetConfig.parse_cli(["--preload-levels", "nowhere"]).has("reason")).is_true()

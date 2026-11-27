@@ -15,7 +15,9 @@ const CLI_FLAGS := [
 	"--save-dir",
 	"--world",
 	"--autosave-seconds",
+	"--level-residency",
 	"--level-grace-seconds",
+	"--preload-levels",
 	"--travel-timeout-seconds",
 	"--profile-command",
 	"--import-slot",
@@ -56,6 +58,8 @@ static func server_config(input: Dictionary, listen: bool) -> Dictionary:
 		"level": DEMO_LEVEL,
 		"world": "default",
 		"autosave_seconds": 60,
+		"level_residency": "stream",
+		"preload_levels": [],
 		"level_grace_seconds": 60,
 		"travel_timeout_seconds": 30,
 		"import_slot": "",
@@ -75,7 +79,9 @@ static func server_config(input: Dictionary, listen: bool) -> Dictionary:
 
 
 static func _validate(config: Dictionary, limit: int) -> Dictionary:
-	var persistence_error := _validate_persistence(config)
+	var persistence_error := _validate_residency(config)
+	if persistence_error.is_empty():
+		persistence_error = _validate_persistence(config)
 	if not persistence_error.is_empty():
 		return {"reason": persistence_error}
 	if config.bind != "*" and not String(config.bind).is_valid_ip_address():
@@ -88,6 +94,17 @@ static func _validate(config: Dictionary, limit: int) -> Dictionary:
 	if save_dir.strip_edges().is_empty() or String(config.content_version).is_empty():
 		return {"reason": "Missing save_dir or content_version"}
 	return config
+
+
+static func _validate_residency(config: Dictionary) -> String:
+	if config.level_residency not in ["stream", "keep_visited", "preload_all"]:
+		return "Expected level_residency stream, keep_visited or preload_all"
+	for path: Variant in config.preload_levels:
+		if not path is String:
+			return "Expected scene paths in preload_levels"
+		if path != "auto" and not path.begins_with("res://") and not path.begins_with("uid://"):
+			return "Invalid preload_levels entry: " + path
+	return ""
 
 
 static func _validate_persistence(config: Dictionary) -> String:
@@ -150,6 +167,12 @@ static func _cli_value(key: String, value: String) -> Variant:
 		"port", "max_players", "autosave_seconds", "level_grace_seconds", "travel_timeout_seconds":
 			if value.is_valid_int():
 				return value.to_int()
+		"preload_levels":
+			# Comma-separated scene paths or UIDs; "auto" follows transition zones.
+			var paths: Array = []
+			for entry in value.split(",", false):
+				paths.append(entry.strip_edges())
+			return paths
 		_:
 			return value
 	return null

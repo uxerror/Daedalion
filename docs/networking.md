@@ -102,7 +102,9 @@ respawn_delay=10.0
 | `import_player` | Empty. Dedicated import requires an explicit recipient player ID. | `--import-player` |
 | `content_version` | The `version` string from `addons/cogito/plugin.cfg`. Include the plugin config in an export or supply a game release or content hash. Set the same value in client join credentials. | Config file |
 | `level` | First scene for a new world. The server sends each client its own level path. | `--level` |
-| `level_grace_seconds` | Keep an empty level live for this many seconds, default 60. Zero schedules a checkpoint immediately. | `--level-grace-seconds` |
+| `level_residency` | `stream` (default), `keep_visited` or `preload_all`. Applies to both server roles. | `--level-residency` |
+| `preload_levels` | Array of scene paths or UIDs, default `[]`. In `preload_all`, add `"auto"` to follow transition zones transitively. | `--preload-levels` (comma-separated, e.g. `auto` or `res://a.tscn,res://b.tscn`) |
+| `level_grace_seconds` | Keep an empty level live for this many seconds, default 60. Zero processes an empty room on the next authority tick. | `--level-grace-seconds` |
 | `travel_timeout_seconds` | Maximum time for preparation/checkpoint and for client readiness, default 30 seconds per phase. | `--travel-timeout-seconds` |
 | `friendly_fire` | Boolean, default `true`. Allow one player to damage another. | `--friendly-fire false` or `--friendly-fire true` |
 | `respawn_delay` | Finite, nonnegative seconds, default `10.0`. Zero enables immediate requests. | `--respawn-delay 1.5` |
@@ -119,6 +121,7 @@ Use the same `save_dir` and world name on every launch. A new world starts in
 Clients use `--join ADDRESS`. Each authenticated player opens the level in their saved profile.
 A new identity enters the starting level. A custom authority bootstrap calls
 `CogitoNet.player_world.travel.start(CogitoNet.starting_level(fallback))` after session readiness.
+With `preload_all` the opening call has already bound the starting room.
 
 ```sh
 nice -n 19 godot --path . -- --host --world expedition
@@ -189,7 +192,7 @@ stopped before removing it manually. Run worlds on a local filesystem in one PID
 Keep the separate server verifier registry and client credential store when moving a world.
 A lost client secret starts a new profile. The original player record stays in the world.
 
-All bound levels and connected actors are captured synchronously at one server physics
+The writer captures live rooms, dirty frozen rooms and connected actors on one server physics
 tick. A player who left contributes their last private state. The transaction copies
 unloaded visited levels and previously committed offline profiles into the next
 generation. A level host retains its latest snapshot when it unloads an instance
@@ -307,7 +310,49 @@ The authority loads the target resource in the background, binds its world, appl
 
 **Reconnect rule.** Until the authority accepts readiness and commits placement, the source is the player's recoverable level. This gives a slow or disconnected traveller a valid checkpoint with their complete inventory. A timed-out client goes through normal reconnect. After commitment a disconnect captures the destination. The arrival checkpoint uses the same writer as manual saves, autosaves and departures. As with other MP9 mutations, a process crash recovers the last published generation.
 
-**What runs where.** The server simulates every occupied level. After the last occupant leaves, a grace timer starts. Re-entry reuses the live scene, including its epoch. On expiry the writer captures the empty level and the server unloads it after successful publication. A failed write retains the scene for retry. A listen host presents only its local player's viewport. Other viewports have rendering and audio listeners disabled. Non-spatial AudioStreamPlayers in a hidden room use a muted bus and regain their authored bus on presentation. A client holds the resource for its incoming scene during loading and subscribes to a single active room. Death and respawn use the victim's own room. World objects, bodies, NPCs, devices, projectiles, avatars and their effects have room-local observers. Inventories and personal quest journals follow the identity. Shared quest progress and its live hints reach the party across rooms.
+**What runs where.** The server simulates every occupied level. After the last occupant leaves, a grace timer starts. Re-entry reuses the live scene, including its epoch. In the default `stream` mode the writer captures the empty level at expiry. The server unloads it after successful publication and retains it for retry on failure. A listen host presents only its local player's viewport. Other viewports have rendering and audio listeners disabled. Non-spatial AudioStreamPlayers in a hidden room use a muted bus and regain their authored bus on presentation. A client holds the resource for its incoming scene during loading and subscribes to a single active room. Death and respawn use the victim's own room. World objects, bodies, NPCs, devices, projectiles, avatars and their effects have room-local observers. Inventories and personal quest journals follow the identity. Shared quest progress and its live hints reach the party across rooms.
+
+### Server level residency
+
+| Mode | Opening the session | After the last player leaves and grace expires |
+| --- | --- | --- |
+| `stream` | Load the starting room through the usual bootstrap. | Checkpoint and unload. A return outside grace pays for instantiation and restore. |
+| `keep_visited` | Load rooms on their first visit. | Freeze and retain every visited instance until shutdown. |
+| `preload_all` | Load and restore the start and configured destinations before opening remote admission or reporting ready. | Freeze and retain each room, including rooms discovered later through gameplay. |
+
+For a small connected world where players frequently revisit rooms, use `preload_all`. For a branching campaign where only a few destinations are likely on each run, `keep_visited` pays the first crossing cost and retains those rooms. Use `stream` for a large map on a memory-limited server. A custom policy can keep a busy hub warm in that mode.
+
+```ini
+[server]
+level_residency="preload_all"
+level="res://addons/cogito/DemoScenes/COGITO_3_Lobby.tscn"
+preload_levels=["auto"]
+level_grace_seconds=60
+```
+
+An explicit list can include rooms reachable only by script. With `"auto"`, the server follows `SceneTransitionZone.target_scene_path` from the start and from explicit seeds. UID and path references to the same scene and cycles share one mounted instance. An empty list preloads just the start. A missing scene or failed restore aborts startup with the destination in the error and preserves the last committed generation. Each client still loads only its current room behind its own loading screen.
+
+**Room time.** Occupants and pending transfers protect a live room from grace expiry. A waiting traveller reserves an already frozen room. The authority wakes it at commitment, before checking placement, using the same root, physics bodies, registrations and epoch. The room's own World3D physics space and navigation map are inactive while frozen. The server disables the root and descendants with explicit processing overrides, and suspends the room's external projectile and device endpoints. Bodies keep their contacts, velocities and sleep state in Jolt. In a 30-tick probe a falling `RigidBody3D` with `DISABLE_MODE_KEEP_ACTIVE` moved from Y = −0.122 to −2.079 with the root disabled. Deactivating its space held Y = −2.079 for the next 30 ticks.
+
+| Clock | Behaviour in an empty retained room |
+| --- | --- |
+| Element reaction and burn timers, duration, fuel and damage ticks | Timer nodes and delta accumulators keep their remainder. |
+| NPC search, reacquisition, attack, animation and perception | Charts, timers and movement resume at their previous phase. Frozen frames are excluded from the reported swing age. |
+| Chest respawn and bag despawn | Child timers retain their remaining seconds. The resident-room save includes that remainder for restart. |
+| Projectiles, devices and linked actions | Ballistic position, velocity and lifetime stop advancing. Node-bound tweens and delayed links resume once. For an authored delay use `await CogitoLevel.delay(self, seconds)`. |
+| Player respawn | A dead connected player still occupies the room. Its private deadline runs normally. Departure captures the profile and clears the connection's deadline under the existing reconnect rule. |
+| Grace, travel readiness, autosave, departure checkpoint, writer retry | Session deadlines continue while any or all rooms sleep, including the starting room. |
+
+Freezing marks the final simulated interval dirty, including ambient motion and timers during grace. The writer captures that state on its next save. Later generations copy the committed file until a mutation or another live interval. Failed publication leaves the row eligible for retry. For a game-owned change in a frozen room call that room endpoint's `mark_world_dirty()`. Use `mark_world_dirty(true)` for shared-only data. On restart MP9 rebuilds each configured room once before its first baseline.
+
+To pin the start hub in `stream`, install a `CogitoTravelPolicy` on `CogitoNet.travel_policy` before opening the authority. The hook receives the durable room key at grace expiry.
+
+```gdscript
+extends CogitoTravelPolicy
+
+func should_unload(key: String) -> bool:
+	return key != "res://addons/cogito/DemoScenes/COGITO_3_Lobby.tscn"
+```
 
 **Physical attachments.** A carried crate or corpse remains in the source and loses its carry grant. A weapon holstered to carry it stays holstered. The Advanced controller preserves seated posture and resolves the saved seat ID in the destination. A matching, available seat gets a new local claim. An absent or occupied seat leaves the controller seated at its connector without a seat claim. The original vehicle stays in its source. Games that want travel to dismount everybody can return an empty attachment dictionary.
 
@@ -945,6 +990,7 @@ Baselines only install state. Award gameplay rewards from the server-only
 
 ## Current limitations
 
+- Resident levels consume memory until shutdown. Auto-discovery sees targets present on mounted zones at startup. List procedural or script-only routes explicitly. Game code using an autoload, a raw SceneTreeTimer or a wall-clock deadline must bind that work to room time.
 - Scenes and controllers attach on the Godot main thread. Cold room activation and synchronous capture can exceed a 60 Hz frame budget. Client movement prediction, lag compensation and transport tuning are separate from independent travel.
 - There is no lag compensation. The server tests targets where they are when the command is consumed. A moving target may have left the crosshair by then. Ballistic replicas can briefly overshoot until the authoritative impact arrives.
 - Recovered projectiles become independent rigid pickups. Attachment to moving hit targets and procedural debris need their own lifecycle. Online corpses use the single-torso approximation described above.
@@ -966,6 +1012,36 @@ Measured on the headless Godot 4.7.2 authority pinned to one logical CPU, with f
 | Listen | 4.52 ms (4.19–4.71 ms) | 69.88 ms |
 
 The two live rooms fit the 16.7 ms physics budget in these steady samples. The cold crossing exceeded it. Resource reads and disk publication run in the background. Constructing and attaching the PackedScene, binding its gameplay nodes and capturing a consistent tick still use the main thread. The headless run measures simulation and callback latency; it does not measure GPU frame time.
+
+### Resident rooms on one CPU
+
+Headless Godot 4.7.2 with Jolt on one logical CPU (AMD Ryzen 7 5800X3D, `nice -n 19`, 60 Hz). The dedicated memory-transport benchmark added Lobby, Laboratory and the small MP10 West fixture in that order to one empty authority. Each row uses five `Performance.TIME_PHYSICS_PROCESS` readings spaced 1.05 s apart after 3.1 s of warm-up. The two timing columns show median / maximum of these samples in ms. Memory deltas compare consecutive **live** configurations using `OS.get_static_memory_usage()` and Linux `VmRSS` from `/proc/self/status`. The empty authority used 172.05 MiB static and 275.64 MiB RSS. Subsequent rooms can share resources already loaded by earlier rooms.
+
+| Resident rooms | Added room | Δ static MiB | Δ RSS MiB | Empty, during grace (ms) | All frozen (ms) |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 1 | Lobby | 35.42 | 33.83 | 1.128 / 1.531 | 0.023 / 0.059 |
+| 2 | Laboratory | 48.43 | 59.57 | 3.914 / 4.339 | 0.030 / 0.037 |
+| 3 | West (`travel_a`) | 1.22 | 3.11 | 3.881 / 4.511 | 0.032 / 0.080 |
+
+With both demo rooms live, process RSS was 369.05 MiB. After both froze it was 369.26 MiB.
+
+In separate file-transport runs, client 1 stayed in the Lobby and operated the switch while client 2 crossed to the Laboratory. The fixture sampled the staying avatar's most recent received snapshot timestamp across the crossing. The original MP10 table recorded authority callback intervals only.
+
+| Dedicated Lobby → Laboratory | Longest authority physics callback interval | Longest observed snapshot interval on client 1 |
+| --- | ---: | ---: |
+| MP10 cold, historical | 69.19 ms | — |
+| `stream`, cold, same harness | 65.043 ms | 150.300 ms |
+| `preload_all`, frozen destination | 17.868 ms | 50.283 ms |
+
+Preloading removed the cold main-thread scene construction from this crossing. Avatar creation, checkpoint capture and scheduling still cost time. The measurements cover headless simulation and local file transport. GPU frames and LAN latency need separate measurements.
+
+For the empty-room benchmark, supply a fresh data directory and replace CPU 0 with an available CPU on the test machine.
+
+```sh
+XDG_DATA_HOME="$(mktemp -d)" taskset -c 0 nice -n 19 godot --headless --path . --max-fps 60 -s res://tests/net/residency_benchmark.gd
+python tools/check_multiplayer.py --scenario travel_dedicated --file-transport
+python tools/check_multiplayer.py --scenario residency_dedicated --file-transport
+```
 
 The persistence process scenarios check manual saves, dirty autosave and restoration of both owners' inventories and poses. Dedicated receives SIGKILL during the next staged generation, then tests a departing client, orderly stop and live rebind. Listen closes through the pause-menu Quit action with a final wallet change. Each remote connection gets a new peer ID.
 Use `python tools/check_multiplayer.py --scenario persistent_dedicated` or

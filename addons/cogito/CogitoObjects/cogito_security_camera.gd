@@ -222,11 +222,13 @@ func on_body_left_detection(body: Node3D):
 
 
 func start_alarm_light():
-	var light_tween = get_tree().create_tween()
+	var light_tween = (
+		create_tween() if CogitoLevel.uses_room_clock(self) else get_tree().create_tween()
+	)
 	light_tween.tween_property(indicator_light,"light_energy", 6, 1).set_trans(Tween.TRANS_CUBIC)
 	light_tween.tween_property(indicator_light,"light_energy", .1, 1).set_trans(Tween.TRANS_CUBIC)
 	if current_state == DetectorState.DETECTED:
-		await get_tree().create_timer(2).timeout
+		await CogitoLevel.delay(self, 2)
 		start_alarm_light()
 	else:
 		stop_alarm_light()

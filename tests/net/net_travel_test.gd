@@ -30,6 +30,13 @@ class PartyPolicy:
 		return members
 
 
+class PinWest:
+	extends CogitoTravelPolicy
+
+	func should_unload(key: String) -> bool:
+		return key != A
+
+
 func before_test() -> void:
 	_now = 0
 	_dir = create_temp_dir("mp10-%d" % Time.get_ticks_usec())
@@ -41,6 +48,9 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	if _server.player_world and _server.player_world.persistence:
+		var writer := _server.player_world.persistence
+		assert_bool(writer.reap(_server.player_world, Time.get_ticks_msec() + 3000)).is_true()
 	super.after_test()
 	get_tree().current_scene = _previous
 	_root.free()
@@ -48,13 +58,14 @@ func after_test() -> void:
 	await get_tree().process_frame
 
 
-func _boot(listen := false) -> void:
+func _boot(listen := false, options := {}) -> void:
 	var cfg := {
 		"save_dir": _dir,
 		"autosave_seconds": 1,
 		"level_grace_seconds": 3,
 		"respawn_delay": 0,
 	}
+	cfg.merge(options, true)
 	var err := _server.host(cfg) if listen else _server.start_server(cfg)
 	assert_int(err).is_equal(OK)
 	_server.player_world.persistence.clock = func() -> int: return _now
@@ -466,3 +477,175 @@ func test_connector_inside_return_zone_requires_leaving_and_entering_again() -> 
 	await _ticks(4)
 	_enter(b)
 	assert_bool(await _arrive(b, A)).is_true()
+
+
+func test_residency_config_and_invalid_preload() -> void:
+	assert_str(NetConfig.parse_cli([]).level_residency).is_equal("stream")
+	var cli := NetConfig.parse_cli(["--level-residency", "keep_visited"])
+	assert_str(cli.level_residency).is_equal("keep_visited")
+	assert_bool(NetConfig.parse_cli(["--level-residency", "all"]).has("reason")).is_true()
+	var bad := NetConfig.server_config({"preload_levels": [123]}, false)
+	assert_bool(bad.has("reason")).is_true()
+	var config := {
+		"save_dir": _dir,
+		"level": A,
+		"level_residency": "preload_all",
+		"preload_levels": ["res://missing-preload.tscn"],
+	}
+	var reasons: Array[String] = []
+	_server.session_failed.connect(func(reason: String): reasons.append(reason))
+	assert_int(_server.start_server(config)).is_not_equal(OK)
+	assert_bool(_server.is_online()).is_false()
+	assert_str(reasons[0]).contains("missing-preload.tscn")
+	var directory := _dir.path_join("worlds/default")
+	assert_bool(DirAccess.dir_exists_absolute(directory.path_join("current"))).is_false()
+
+
+func test_preload_completes_before_ready(
+	listen: bool, seeds: Array, _test_parameters := [[false, [B, B]], [true, ["auto"]]]
+) -> void:
+	var ready_rooms: Array[int] = []
+	var at_ready := func(): ready_rooms.append(_server.player_world.travel.levels.size())
+	_server.session_ready.connect(at_ready)
+	_boot(listen, {"level": A, "level_residency": "preload_all", "preload_levels": seeds})
+	assert_array(ready_rooms).contains_exactly([2])
+	var room: Node = _server.player_world.travel.levels[B]
+	assert_str(room.active_level().scene_file_path).is_equal(B)
+	assert_int(_server.player_world.travel.host.levels().size()).is_equal(2)
+
+
+func test_empty_resident_freezes_and_resumes(
+	mode: String, _test_parameters := [["keep_visited"], ["stream"]]
+) -> void:
+	if mode == "stream":
+		_server.travel_policy = PinWest.new()
+	_boot(false, {"level_residency": mode})
+	var travel: Node = _server.player_world.travel
+	var root: Node3D = travel.host.level(A)
+	var body: RigidBody3D = root.get_node("Crate")
+	var guard: CogitoNPC = root.get_node("Guard")
+	var timer := Timer.new()
+	timer.process_mode = Node.PROCESS_MODE_ALWAYS
+	guard.add_child(timer)
+	timer.one_shot = true
+	timer.start(2)
+	var props: CogitoProperties = body.get_node("CogitoProperties")
+	var pulses: Array[int] = []
+	props.damage_timer.one_shot = true
+	props.damage_timer.timeout.connect(func(): pulses.append(1))
+	props.damage_timer.start(0.7)
+	var links: Array[int] = []
+	CogitoLevel.delay(root, 0.7).connect(func(): links.append(1))
+	body.position.y = 100
+	body.sleeping = false
+	await _ticks(4)
+	_now = 2999
+	travel.advance()
+	assert_bool(travel.residency.frozen(A)).is_false()
+	_now = 3000
+	travel.advance()
+	assert_bool(travel.residency.frozen(A)).is_true()
+	var pose := body.global_transform
+	var rid := body.get_rid()
+	var transform_state := PhysicsServer3D.BODY_STATE_TRANSFORM
+	var server_pose: Transform3D = PhysicsServer3D.body_get_state(rid, transform_state)
+	var npc_pose := guard.global_transform
+	var remaining := timer.time_left
+	var burn_left := props.damage_timer.time_left
+	_now += 300000
+	await _ticks(60)
+	var held_pose: Transform3D = PhysicsServer3D.body_get_state(rid, transform_state)
+	assert_that(held_pose).is_equal(server_pose)
+	assert_that(body.global_transform).is_equal(pose)
+	assert_that(guard.global_transform).is_equal(npc_pose)
+	assert_float(timer.time_left).is_equal(remaining)
+	assert_float(props.damage_timer.time_left).is_equal(burn_left)
+	assert_array(links).is_empty()
+	assert_array(pulses).is_empty()
+	assert_bool(guard.can_process()).is_false()
+	var epoch: int = travel.levels[A].world.entities.epoch
+	var client := _join(2, 2982)
+	assert_bool(await _arrive(client, A)).is_true()
+	assert_object(travel.host.level(A)).is_same(root)
+	assert_int(travel.levels[A].world.entities.epoch).is_equal(epoch)
+	assert_bool(travel.residency.frozen(A)).is_false()
+	await _ticks(6)
+	assert_float(body.position.y).is_less(pose.origin.y)
+	assert_float(timer.time_left).is_between(0.0, remaining)
+	assert_bool(timer.is_stopped()).is_false()
+	var deadline := Time.get_ticks_msec() + 2000
+	while (pulses.is_empty() or links.is_empty()) and Time.get_ticks_msec() < deadline:
+		await _ticks(1)
+	assert_array(pulses).contains_exactly([1])
+	assert_array(links).contains_exactly([1])
+
+
+func test_frozen_rows_copied_until_dirty_and_rebuilt_once() -> void:
+	var options := {"level": A, "level_residency": "preload_all", "preload_levels": ["auto", B]}
+	_boot(false, options)
+	var travel: Node = _server.player_world.travel
+	var east: Node = travel.levels[B]
+	var root: Node = east.active_level()
+	var component: PickupComponent = root.find_children("*", "PickupComponent", true, false)[0]
+	var drop: Node3D = east.spawner.spawn_item(component.slot_data, 1, Vector3.UP * 3)
+	var id: String = east.world.entities.id_for(drop)
+	_now = Time.get_ticks_msec() + 4000
+	travel.advance()
+	assert_bool(travel.residency.frozen(B)).is_true()
+	assert_int(_server.save_world()).is_equal(OK)
+	var writer: Facade.Persistence = east.persistence
+	var saved: Dictionary = writer.files.scenes[B]
+	assert_int(_server.save_world()).is_equal(OK)
+	assert_bool(is_same(saved, writer.files.scenes[B])).is_true()
+	var guard: CogitoNPC = east.active_level().get_node("Guard")
+	guard.health.value_current = 9
+	east.mark_world_dirty()
+	writer.files.storage.fail_before = func(op: String) -> bool: return op == "write world_scene"
+	assert_int(_server.save_world()).is_not_equal(OK)
+	writer.files.storage.fail_before = Callable()
+	assert_int(_server.save_world()).is_equal(OK)
+	assert_bool(is_same(saved, writer.files.scenes[B])).is_false()
+	assert_int(_server.disconnect_session()).is_equal(OK)
+	await get_tree().process_frame
+	_boot(false, options)
+	east = _server.player_world.travel.levels[B]
+	var restored: CogitoNPC = east.active_level().get_node("Guard")
+	assert_float(restored.health.value_current).is_equal(9.0)
+	assert_object(east.world.entities.live_object(id)).is_not_null()
+	var ids: Array = east.world.entities.objects.keys().filter(
+		func(key: String) -> bool: return key.begins_with("runtime:")
+	)
+	assert_array(ids).contains_exactly([id])
+
+
+func test_lab_loot_deadline_and_ballistic_step_survive_frozen_restart(_timeout := 60000) -> void:
+	var path := "res://addons/cogito/DemoScenes/COGITO_4_Laboratory.tscn"
+	var fridge_path := "NavigationRegion3D/BASE_FLOOR/kitchenFridgeContainer2"
+	var options := {"level": A, "level_residency": "preload_all", "preload_levels": [path]}
+	_boot(false, options)
+	await _ticks(3)
+	var room: Node = _server.player_world.travel.levels[path]
+	var fridge: LootableContainer = room.active_level().get_node(fridge_path)
+	fridge.timer.start(12.5)
+	var npc: CogitoNPC = room.active_level().get_node("CogitoNPC")
+	assert_bool(room.projectiles.launch_npc(npc, Vector3.UP * 30, Vector3.RIGHT)).is_true()
+	_now = Time.get_ticks_msec() + 4000
+	room.travel.advance()
+	var flights: Array = room.projectiles.capture()
+	var left := fridge.timer.time_left
+	await _ticks(45)
+	assert_array(room.projectiles.capture()).contains_exactly(flights)
+	assert_float(fridge.timer.time_left).is_equal(left)
+	assert_int(_server.disconnect_session()).is_equal(OK)
+	await get_tree().process_frame
+	_boot(false, options)
+	room = _server.player_world.travel.levels[path]
+	fridge = room.active_level().get_node(fridge_path)
+	assert_float(fridge.timer.time_left).is_equal_approx(left, 0.001)
+	assert_array(room.projectiles.capture()).contains_exactly(flights)
+	await _ticks(3)
+	var moved: Array = room.projectiles.capture()
+	assert_int(moved.size()).is_equal(1)
+	assert_float(moved[0].row.pos.x).is_greater(flights[0].row.pos.x)
+	assert_float(fridge.timer.time_left).is_less(left)
+	assert_int(_server.disconnect_session()).is_equal(OK)

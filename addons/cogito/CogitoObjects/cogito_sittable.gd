@@ -409,7 +409,7 @@ func _interact_local(player_interaction_component, actor: CogitoPlayer) -> void:
 	if !objects_call_interact or not actor.is_local_presentation:
 		return
 	for nodepath in objects_call_interact:
-		await get_tree().create_timer(objects_call_delay).timeout
+		await CogitoLevel.delay(self, objects_call_delay)
 		if nodepath != null:
 			var object = get_node(nodepath)
 			object.interact(player_interaction_component)

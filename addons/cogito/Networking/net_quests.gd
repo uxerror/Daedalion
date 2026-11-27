@@ -201,7 +201,7 @@ func _publish(
 ) -> void:
 	var data := {"revision": ledger.revision + 1, "quests": rows, "flags": changes}
 	ledger.apply(data, false)
-	get_parent().mark_world_dirty()
+	get_parent().mark_world_dirty(true)
 	var session := get_parent().get_parent()
 	# Finish remote sends before a synchronous listen HUD can start another event.
 	for member in session.records():

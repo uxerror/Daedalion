@@ -149,7 +149,7 @@ func call_interact_on_objects():
 	var online := has_meta(&"cogito_net_world")
 	var world: Node = get_meta(&"cogito_net_world") if online else null
 	for nodepath in objects_call_interact:
-		await get_tree().create_timer(objects_call_delay).timeout
+		await CogitoLevel.delay(self, objects_call_delay)
 		if nodepath != null:
 			var object = get_node(nodepath)
 			if not online:

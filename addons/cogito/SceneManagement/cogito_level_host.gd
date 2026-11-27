@@ -2,6 +2,8 @@ class_name CogitoLevelHost
 extends Node
 ## Owns independently simulated levels. Offline gameplay does not create a host.
 
+## Use node-bound gameplay delays in server rooms eligible for suspension.
+var room_clock := false
 var _surfaces: Dictionary[StringName, SubViewportContainer] = {}
 var _levels: Dictionary[StringName, Node] = {}
 var _silent_bus: StringName
@@ -65,6 +67,8 @@ func adopt_level(root: Node, key: StringName) -> void:
 
 ## Attach a previously prepared room to its isolated physics and presentation world.
 func mount_level(root: Node, key: StringName, network: bool) -> Node:
+	if room_clock:
+		root.set_meta(&"cogito_room_clock", true)
 	root.add_to_group(CogitoLevel.HOSTED_ROOT)
 	if not root.is_node_ready():
 		root.ready.connect(CogitoPersistentId.stamp_level.bind(root), CONNECT_ONE_SHOT)

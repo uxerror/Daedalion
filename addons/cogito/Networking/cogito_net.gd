@@ -146,24 +146,49 @@ func _serve_world(
 	if err != OK:
 		persistence.close()
 		return _report("Cannot bind %s:%d" % [config.bind, config.port], err)
+	if config.level_residency == "preload_all" or not persistence.files.manifest.is_empty():
+		adapter.peer.refuse_new_connections = true
 	_attach(role, adapter.peer, provider, config, scope, profile)
 	player_world.persistence = persistence
 	persistence.stop_requested.connect(_stop_requested.bind(_session), CONNECT_DEFERRED)
 	persistence.install(player_world)
-	if not persistence.files.manifest.is_empty():
-		adapter.peer.refuse_new_connections = true
 	if listen:
 		err = _session.admit_host()
 	if err == OK and not config.import_slot.is_empty():
 		var owner_id: String = _session.local_id if listen else config.import_player
 		err = import_solo(config.import_slot, owner_id)
+	var reason := "Cannot initialize host or import slot"
+	if err == OK and config.level_residency == "preload_all":
+		err = _preload_world(config.level)
+		reason = player_world.travel.residency.failure
+		if reason.is_empty():
+			reason = "Cannot restore starting level " + starting_level(config.level)
 	if err == OK:
 		var message := "Listening on %s:%d" % [config.bind, config.port]
 		CogitoGlobals.debug_log(true, "CogitoNet", message)
 		session_ready.emit()
 	else:
 		disconnect_session()
-		_report("Cannot initialize host or import slot", err)
+		_report(reason, err)
+	return err
+
+
+# Opening a listen session from a running CogitoScene adopts its live room as in MP10.
+func _preload_world(fallback: String) -> Error:
+	var scene := get_tree().current_scene
+	var path := starting_level(fallback)
+	var running := (
+		scene != null
+		and scene.multiplayer == multiplayer
+		and scene.has_method("bind_network_players")
+	)
+	if running and scene.is_node_ready() and scene.scene_file_path == path:
+		scene.bind_network_players()
+		if player_world.active_level() == scene:
+			return player_world.persistence.restore_error
+	var err: Error = player_world.travel.start(path)
+	if running and err == OK:
+		scene.queue_free()
 	return err
 
 
@@ -285,8 +310,10 @@ func _attach(
 	api.server_relay = false
 	api.multiplayer_peer = peer
 	var scene := get_tree().current_scene
-	if scene and scene.multiplayer == api and scene.has_method("bind_network_players"):
-		scene.call_deferred("bind_network_players")
+	var preload_boot: bool = role != Mode.CLIENT and config.level_residency == "preload_all"
+	if not preload_boot and scene and scene.multiplayer == api:
+		if scene.has_method("bind_network_players"):
+			scene.call_deferred("bind_network_players")
 
 
 func _quest_baseline(id: String) -> void:

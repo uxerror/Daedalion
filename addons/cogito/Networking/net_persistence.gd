@@ -57,6 +57,9 @@ var _active_unloaded := false
 var _prepared := {}
 var _unpublished_levels := {}
 var _legacy_holdings := {}
+# Zero means the stationary room needs a snapshot. Positive serials identify the
+# publication containing it, so failure or a concurrent mutation cannot lose a change.
+var _frozen_capture := {}
 
 
 ## Install global state once before the first admission baseline.
@@ -141,7 +144,7 @@ func restore_level(key: String, players: Node) -> void:
 	if restore_error != OK:
 		return
 	players.bodies.restore(data.bodies)
-	players.containers.restore(data.containers)
+	players.containers.restore(data.containers, data.get("loot_timers", {}))
 	players.npcs.restore(data.get("perception", {}))
 	CogitoSceneManager._scene_persistence.restore_world_components(scene, root)
 	if data.get("imported", false):
@@ -177,8 +180,21 @@ func unloaded_holdings(item: String) -> int:
 
 
 ## Notify the writer about an authoritative mutation, including game-owned shared data.
-func mark_dirty() -> void:
+func mark_dirty(key := "") -> void:
 	dirty = true
+	if _frozen_capture.has(key):
+		_frozen_capture[key] = 0
+
+
+## The live interval may have advanced bodies or timers since the last durable tick.
+func freeze_level(key: String) -> void:
+	_frozen_capture[key] = 0
+	mark_dirty(key)
+
+
+## Resume ordinary live capture before an actor enters this room.
+func wake_level(key: String) -> void:
+	_frozen_capture.erase(key)
 
 
 ## Bound the time from the FIRST departure, even under a continuous stream of leaves.
@@ -286,6 +302,10 @@ func _finish(players: Node, batch: Dictionary, err: Error) -> void:
 		for id: String in _saved_unloaded:
 			if is_same(_unpublished_levels.get(id), _saved_unloaded[id]):
 				_unpublished_levels.erase(id)
+	else:
+		for key: String in _frozen_capture:
+			if _frozen_capture[key] == capture_serial:
+				_frozen_capture[key] = 0
 	_saved_retained.clear()
 	_saved_unloaded.clear()
 	if _operator_save:
@@ -365,6 +385,10 @@ func _capture(players: Node, tick: int, retained: Dictionary, unloaded: Dictiona
 		if row.has("import_alias"):
 			aliases.append(row.import_alias)
 	for level_key: String in levels:
+		if _frozen_capture.get(level_key, 0) > 0:
+			continue
+		if _frozen_capture.has(level_key):
+			_frozen_capture[level_key] = capture_serial
 		var endpoint: Node = levels[level_key]
 		if CogitoPersistentId.is_disappearing(endpoint.active_level()):
 			continue
@@ -439,6 +463,8 @@ func _capture_level(key: String, players: Node) -> Dictionary:
 		"containers": players.containers.capture(),
 		"holdings": players.spawner.room_holdings(),
 	}
+	if CogitoLevel.uses_room_clock(level):
+		row.loot_timers = players.containers.capture_timers()
 	return row.duplicate_deep(Resource.DEEP_DUPLICATE_INTERNAL)
 
 

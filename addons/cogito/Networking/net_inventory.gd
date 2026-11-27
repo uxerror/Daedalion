@@ -190,7 +190,7 @@ func _refresh(peer: int, publish := true) -> void:
 	extra.money = _values(actor.player_currencies)
 	var delta := model.refresh(extra)
 	if not delta.is_empty():
-		get_parent().mark_world_dirty()
+		get_parent().mark_world_dirty(true)
 	if delta.is_empty() or not publish:
 		return
 	if peer == 1 and actor.player_hud is CogitoPlayerHudManager:

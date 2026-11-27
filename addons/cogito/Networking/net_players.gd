@@ -175,15 +175,8 @@ func bind_level(root: Node, start: Transform3D, key: String) -> void:
 				bodies.track(CogitoPersistentId.of(target), target)
 	spawner.track_authored()
 	root.tree_exiting.connect(_level_exiting, CONNECT_ONE_SHOT)
-	if persistence:
-		persistence.restore_level(key, self)
-		if persistence.restore_error != OK:
-			if not _secondary and not travel.managed:
-				multiplayer.multiplayer_peer.refuse_new_connections = true
-				_session.get_parent()._failed_world.call_deferred(key, persistence.restore_error)
-			return
-		if not _secondary:
-			multiplayer.multiplayer_peer.refuse_new_connections = false
+	if persistence and not _restore_bound(root, key):
+		return
 	if _secondary or travel.loading:
 		return
 	if multiplayer.is_server():
@@ -196,6 +189,24 @@ func bind_level(root: Node, start: Transform3D, key: String) -> void:
 
 
 # Each room owns its simulation and observer sets. The party and private stock span rooms.
+
+
+# Restore saved state into a freshly bound room. False stops the remaining admission.
+func _restore_bound(root: Node, key: String) -> bool:
+	persistence.restore_level(key, self)
+	if persistence.restore_error != OK:
+		if not _secondary and not travel.managed:
+			multiplayer.multiplayer_peer.refuse_new_connections = true
+			_session.get_parent()._failed_world.call_deferred(key, persistence.restore_error)
+		return false
+	if not _secondary and not travel.loading:
+		if travel.finish_preload(root) != OK:
+			return false
+		if travel.managed and _session.config.level_residency != "stream":
+			travel._track_empty(key)
+	return true
+
+
 func _bind_secondary(root: Node, start: Transform3D, key: String) -> void:
 	var path := "Level_" + key.sha256_text()
 	var endpoint := _session.get_node_or_null(NodePath(path))
@@ -413,7 +424,7 @@ func _create(id: String, life: int, start: Transform3D, initial_pose: Dictionary
 	avatar.actor.set_meta(&"net_wield", avatar.wield)
 	if persistence:
 		avatar.actor.set_meta(&"profile_name", _session.for_id(id).display_name)
-		persistence.mark_dirty()
+		persistence.mark_dirty(_level_key)
 	inventory.attach(avatar.actor, id, _peer_by_id[id], life)
 	if not initial_pose.is_empty():
 		avatar.receive(initial_pose)
@@ -569,9 +580,9 @@ func save_world() -> Error:
 
 
 ## Signal a durable change to the authority writer when this level belongs to a world.
-func mark_world_dirty() -> void:
+func mark_world_dirty(shared_only := false) -> void:
 	if persistence:
-		persistence.mark_dirty()
+		persistence.mark_dirty("" if shared_only else _level_key)
 
 
 func _physics_process(delta: float) -> void:

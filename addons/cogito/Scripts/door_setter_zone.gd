@@ -49,5 +49,5 @@ func _on_body_exited(body: Node3D):
 	
 	if door_to_set!= null and close_door_on_exit:
 		var door = get_node(door_to_set)
-		await get_tree().create_timer(close_delay).timeout
+		await CogitoLevel.delay(self, close_delay)
 		door.close_door()

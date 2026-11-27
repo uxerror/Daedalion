@@ -176,6 +176,7 @@ static func _valid_member(fields: Dictionary, level: bool) -> bool:
 			and fields.get("flights", []) is Array
 			and fields.get("perception", {}) is Dictionary
 			and fields.get("bodies") is Dictionary
+			and _valid_loot_timers(fields.get("loot_timers", {}))
 			and fields.get("containers") is Dictionary
 			and fields.containers.values().all(Stock.valid_projection)
 		)
@@ -209,6 +210,16 @@ static func _valid_objects(records: Variant) -> bool:
 				return false
 			if not _valid_spawn(row):
 				return false
+	return true
+
+
+static func _valid_loot_timers(value: Variant) -> bool:
+	if not value is Dictionary:
+		return false
+	for id: Variant in value:
+		var seconds: Variant = value[id]
+		if not id is String or not seconds is float or not is_finite(seconds) or seconds <= 0:
+			return false
 	return true
 
 

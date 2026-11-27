@@ -44,5 +44,5 @@ func _on_parent_node_collision(_collided_node):
 
 func impact_time_delay():
 	is_delaying = true
-	await get_tree().create_timer(next_impact_time).timeout
+	await CogitoLevel.delay(self, next_impact_time)
 	is_delaying = false

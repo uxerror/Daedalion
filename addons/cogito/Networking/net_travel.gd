@@ -6,6 +6,7 @@ signal notice_received(event: Dictionary)
 ## Authority or owner receives the current transfer failure.
 signal failed(player_id: String, reason: String)
 
+const Residency := preload("net_level_residency.gd")
 const Zone := preload("../Scripts/scene_transition_zone.gd")
 
 var primary_key := ""
@@ -13,6 +14,7 @@ var levels := {}
 var pending := {}
 var managed := false
 var loading := false
+var residency := Residency.new()
 var host := CogitoLevelHost.new()
 var _serial := 0
 var _grace := {}
@@ -25,6 +27,9 @@ var _policy := CogitoTravelPolicy.new()
 
 
 func _ready() -> void:
+	var config: Dictionary = _session().config
+	if config.has("level_residency"):
+		host.room_clock = config.level_residency != "stream" or _facade().travel_policy != null
 	add_child(host)
 	set_process(false)
 	get_parent().get_parent().left.connect(_left)
@@ -65,6 +70,8 @@ func bind_scene(root: Node, marker: Transform3D, key: String) -> void:
 	if root == get_tree().current_scene and root.get_parent() == get_tree().root:
 		root.set_meta(&"network_start", marker)
 		managed = multiplayer.is_server()
+		if managed and _session().config.level_residency == "preload_all":
+			key = get_parent().persistence.files.manifest.get("active", key)
 		host.adopt_level(root, key)
 	get_parent().bind_level(root, marker, key)
 	if not multiplayer.is_server() and host.level(key):
@@ -73,16 +80,35 @@ func bind_scene(root: Node, marker: Transform3D, key: String) -> void:
 
 ## Bootstrap the persistent server's first room. Clients receive their path on admission.
 func start(path: String) -> Error:
+	if levels.has(primary_key) and levels[primary_key].active_level().scene_file_path == path:
+		return get_parent().persistence.restore_error
 	managed = true
 	var files: Variant = get_parent().persistence.files
 	primary_key = files.manifest.get("active", path)
 	loading = true
 	var root := host.load_level(path, primary_key, true)
 	if not _bind_installed(primary_key, root, true):
+		residency.failure = "Cannot load starting level " + path
 		return ERR_CANT_CREATE
+	var err := finish_preload(root)
+	if err != OK:
+		return err
 	for record: Dictionary in _session().records():
 		admit(record.player_id)
 	_track_empty(primary_key)
+	return OK
+
+
+## Open admission only after every configured room has bound its saved state.
+func finish_preload(root: Node) -> Error:
+	var config: Dictionary = _session().config
+	if config.level_residency == "preload_all":
+		var err: Error = residency.preload_rooms(self, root, config.preload_levels)
+		if err != OK:
+			get_parent().persistence.restore_error = err
+			push_error(residency.failure)
+			return err
+	multiplayer.multiplayer_peer.refuse_new_connections = false
 	return OK
 
 
@@ -177,9 +203,7 @@ func enter(zone: Area3D, actor: CogitoPlayerAdvanced) -> void:
 	var endpoint: Node = source.get_meta(&"cogito_net_players")
 	if endpoint.travel != self or actor.is_dead or not endpoint.peer_for_actor(actor):
 		return
-	var path: String = zone.target_scene_path
-	if path.begins_with("uid://"):
-		path = ResourceUID.get_id_path(ResourceUID.text_to_id(path))
+	var path := Residency.scene_path(zone.target_scene_path)
 	if path == source.scene_file_path:
 		return
 	var key := _key_for_path(path)
@@ -429,6 +453,7 @@ func _commit(id: String, req: Dictionary, binding: int) -> void:
 	var peer: int = _session().for_id(id).peer_id
 	var source: Node = levels.get(req.source)
 	var pose: Variant
+	residency.wake(req.key, target)
 	if source:
 		var actor: CogitoPlayerAdvanced = source.avatar_for(id).actor
 		pose = rules().placement(actor, _connector(req), target)
@@ -624,7 +649,7 @@ func _track_empty(key: String) -> void:
 				return
 		_prepared[key].root.free()
 		_prepared.erase(key)
-	if host.level(key) and not _occupied(key):
+	if host.level(key) and not residency.frozen(key) and not _occupied(key):
 		_grace[key] = _now() + _session().config.level_grace_seconds * 1000
 
 
@@ -647,6 +672,10 @@ func _grace_tick() -> void:
 		if not levels.has(key) or _occupied(key):
 			_grace.erase(key)
 		elif _now() >= _grace[key] and not _evicting.has(key):
+			if _session().config.level_residency != "stream" or not rules().should_unload(key):
+				_grace.erase(key)
+				residency.freeze(key, levels[key])
+				continue
 			var writer: Variant = get_parent().persistence
 			_pause_empty(key, true)
 			_evicting[key] = writer.capture_serial + 1

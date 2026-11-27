@@ -101,3 +101,18 @@ static func spawn_parent(context: Node, tree_root_offline: bool = false) -> Node
 		return hosted
 	var tree := tree_of(context)
 	return tree.root if tree_root_offline else tree.current_scene
+
+
+## True for a level whose delayed operations follow the authority's simulation clock.
+static func uses_room_clock(node: Node) -> bool:
+	var root := hosted_root(node)
+	return root != null and root.has_meta(&"cogito_room_clock")
+
+
+## Wait in the simulation time of a resident room. Other roles keep SceneTreeTimer timing.
+static func delay(node: Node, seconds: float, always := true) -> Signal:
+	if uses_room_clock(node):
+		var tween := node.create_tween()
+		tween.tween_interval(seconds)
+		return tween.finished
+	return node.get_tree().create_timer(seconds, always).timeout

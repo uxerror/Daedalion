@@ -70,7 +70,7 @@ func _ready() -> void:
 	
 	if multiplayer.is_server():
 		call_deferred("_set_up_references")
-		call_deferred("_handle_inventory")
+		call_deferred("_initial_inventory")
 		call_deferred("_handle_respawning")
 	
 	interaction_nodes = find_children("","InteractionComponent",true)
@@ -97,6 +97,12 @@ func _calculate_timer_value():
 	CogitoGlobals.debug_log(debug_prints, "Loot Component/Lootable Container", "Calculated respawn timer is: " + str(calculated_respawn_timer))
 	
 	
+func _initial_inventory() -> void:
+	if LootGenerator.server_spawner(self) and is_filled_with_starter_items:
+		return
+	_handle_inventory()
+
+
 ## Handle Inventory
 func _handle_inventory():
 	

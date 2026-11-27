@@ -1,6 +1,8 @@
 extends Node
 ## Process fixture. Python coordinates peers using stdout records and a graceful stop file.
 
+const ProcessTravel := preload("process_travel.gd")
+
 var _args := {}
 var _admitted := false
 
@@ -25,6 +27,11 @@ func _ready() -> void:
 			"friendly_fire": _args.get("--friendly-fire", "true") == "true",
 			"respawn_delay": 1.5,
 		}
+		if _args.get("--travel") == "preload":
+			config.level_residency = "preload_all"
+			config.level = ProcessTravel.LOBBY
+			config.preload_levels = ["auto"]
+			config.level_grace_seconds = 0
 		if CogitoNet.start_server(config) == OK:
 			print("NET READY port=%d" % port)
 		else:
@@ -53,7 +60,7 @@ func _ready() -> void:
 
 func _admitted_session() -> void:
 	if _args.has("--travel"):
-		add_child.call_deferred(preload("process_travel.gd").new())
+		add_child.call_deferred(ProcessTravel.new())
 	elif _args["--role"] == "authority":
 		_start_dedicated_arena.call_deferred()
 	else:

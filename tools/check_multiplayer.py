@@ -948,11 +948,14 @@ class Scenario:
     def travel_listen(self):
         self.travel(False)
 
-    def travel(self, dedicated):
+    def residency_dedicated(self):
+        self.travel(True, preload=True)
+
+    def travel(self, dedicated, preload=False):
         lobby = "res://addons/cogito/DemoScenes/COGITO_3_Lobby.tscn"
         lab = "res://addons/cogito/DemoScenes/COGITO_4_Laboratory.tscn"
         self.port = 17777 if self.file_transport else available_port()
-        extra = ("--travel", "demo")
+        extra = ("--travel", "preload" if preload else "demo")
 
         def start(previous=None):
             if self.file_transport:
@@ -968,19 +971,30 @@ class Scenario:
 
         start()
         name = "Ada" if dedicated else "Host"
-        a = self.fixture(name, "client", extra=extra) if dedicated else self.server
         b = self.fixture("Ben", "client", extra=extra)
+        a = self.fixture(name, "client", extra=extra) if dedicated else self.server
         at(a, lobby, 2)
         at(b, lobby, 2)
+        if preload:
+            self.sample(self.server, lambda s: s["levels"] == 2 and s["lab_frozen"])
+        self.order(b, op="watch")
         self.order(self.server, op="stage", who="Ben")
         self.order(self.server, op="cross", who=name)
         self.order(b, op="interact")
         self.sample(b, lambda s: not s["switch"])
         at(a, lab, 1 if dedicated else 2)
         at(b, lobby, 1)
+        self.order(b, op="report")
+        report = self.wait_line(b, lambda line: line.startswith("NET SNAPSHOTS "))
+        if int(report.split()[2]) < 2:
+            raise CheckFailed("No continuous snapshot stream in the staying client")
+        print(report)
         self.order(self.server, op="measure")
         print("Two occupied rooms (ms):", self.wait_line(
             self.server, lambda line: line.startswith("NET TICK ")).removeprefix("NET TICK "))
+        if preload:
+            print("PASS preloaded dedicated crossing, staying client in Lobby")
+            return
         if dedicated:
             self.order(self.server, op="cross", who="Ben")
             at(b, lab, 2)
@@ -1012,7 +1026,8 @@ class Scenario:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     scenarios = ("dedicated", "listen", "friendly_fire_off", "npc_dedicated", "npc_listen",
-                 "persistent_dedicated", "persistent_listen", "travel_dedicated", "travel_listen")
+                 "persistent_dedicated", "persistent_listen", "travel_dedicated", "travel_listen",
+                 "residency_dedicated")
     parser.add_argument("--scenario", choices=scenarios)
     parser.add_argument("--file-transport", action="store_true", help="use a socket-free packet bus")
     parser.add_argument("--survival-only", action="store_true", help="run only MP5 scenarios")

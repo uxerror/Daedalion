@@ -26,8 +26,20 @@ func capture() -> Dictionary:
 	return result
 
 
+## Persist remaining room time for timed chests and bags suspended across a restart.
+func capture_timers() -> Dictionary:
+	var timers := {}
+	var entities: Variant = get_parent().world.entities
+	for id: String in entities.objects:
+		var box: Node = entities.live_object(id)
+		if box is LootableContainer or box is LootDropContainer:
+			if box.timer and box.timer.time_left > 0:
+				timers[id] = box.timer.time_left
+	return timers
+
+
 ## Restore quantities and aliases into the private server resource before any view opens.
-func restore(records: Dictionary) -> void:
+func restore(records: Dictionary, timers := {}) -> void:
 	for id: String in records:
 		var box := get_parent().world.entities.live_object(id) as CogitoContainer
 		if box:
@@ -35,6 +47,12 @@ func restore(records: Dictionary) -> void:
 			model.data = box.inventory_data
 			model.apply(records[id], 0, true)
 			box.is_filled_with_starter_items = true
+			if timers.has(id) and (box is LootableContainer or box is LootDropContainer):
+				box.time_left = timers[id]
+				box.end_time = Time.get_unix_time_from_system() + box.time_left
+				if not box.timer:
+					box._set_up_timer()
+				box.timer.start(timers[id])
 			_models[box] = model
 			model.data.inventory_updated.connect(_changed.bind(box))
 			box.tree_exiting.connect(_removed.bind(box), CONNECT_ONE_SHOT)
