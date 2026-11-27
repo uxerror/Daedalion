@@ -1,6 +1,6 @@
 # Daedalion 1.4 owner movement prediction and reconciliation
 
-**Status — proposed before the 1.4 release.**
+**Status — accepted for 1.4 (decisions in section 0).**
 
 An owning client should move on the physics tick that samples its input. The server should
 simulate the same command, send the resulting state with its acknowledgement, and correct
@@ -19,6 +19,15 @@ Independent travel between Lobby and Laboratory remains part of 1.4.
 Paths beginning with `CogitoObjects/`, `Components/`, `Networking/`, `PackedScenes/`,
 `SceneManagement/`, `Scripts/` or `Assets/` are relative to `addons/cogito/`.
 Other paths are relative to the repository root.
+
+## 0. Maintainer decisions
+
+| Topic | Decision |
+|---|---|
+| Release (2026-11-27) | Owner movement prediction with reconciliation is a 1.4 release requirement. The test server is not redeployed for playtests until it lands. |
+| Architecture (2026-11-27) | Option 2: a shared fixed-tick movement step with explicit state, run by the authority, the owner's live prediction and its replay. Offline single-player stays byte-identical (PR1a gate). |
+| Predicted modes (2026-11-27) | **All on-foot movement**, superseding the bounded scope in sections 3 and 8: walk, stop, sprint, sneak, hold/toggle crouch, jump and landing, static stairs, slide and slide-jump, ladders, swimming and diving, ledge climb, hard-landing roll, and standing on or being carried by moving supports (platforms, lifts, doors). Seats and vehicles stay server-driven with immediate limited look (default, not asked). The carried physical object keeps following the server anchor. Stages PR6-PR8 are added for the extra modes. |
+| Defaults (2026-11-27, not asked) | Section 8 recommendations: 2 cm / 0.10 m/s / 1 cm thresholds, exact discrete fields, 128-command ring, 24 replays per correction, 50 ms visual half-life, 0.25 m visual offset cap, snap over 1 m, 25 Hz poses, 100 ms remote interpolation. Impairment knobs only in test transports and a development launch path, never in production config or saves. |
 
 ## 1. Where the delay comes from
 
@@ -472,7 +481,10 @@ include tests and are relative engineering estimates. The dependency order is to
 | **PR2 — owner baseline and protocol 15 · M** | `Networking/{net_config,net_snapshot,net_players,net_input_source,net_command_channel}.gd`, `tests/net/{net_core_test,net_movement_test,net_session_test}.gd`. Pack full supported state with tick/ack alignment. | Checkpoint round-trip reproduces subsequent ticks. Spawn and ordinary frames carry private data only to their owner. Old protocol is rejected. Same-ack, stale, skipped and wrapped sequences pass. | Join, late join, disconnect and reconnect with two peers. Check owner and observer views. |
 | **PR3 — owner prediction and replay · XL** | Proposed `Networking/net_prediction.gd`, `Networking/{net_avatar,net_players,net_snapshot}.gd`, simulation/render eye adapters and prediction tests. Enable ordinary ground/air movement in the fixture first. | Same-tick displacement from rest with delivery held. Forced push/rejected jump converge. Corrections preserve future input and unsent look. No replay effects, weapon calls or trigger events. | Dedicated LAN walk/stop/turn/jump/crouch. Repeat at 150 ms and inspect a forced correction beside a wall. |
 | **PR4 — slide, boundaries and lifecycle · L** | Movement step and `Networking/{net_seats,net_death,net_travel,net_carry,net_wield,net_elements}.gd` integration points. Complete static stairs/slide and authority handoffs. | Slide-jump, fallback entry/exit, stamina gate, freeze, carry throw, driver swap, death, respawn, failed/successful travel and stale old-room frames pass. Remote clocks and host authority pass regression tests. | Complete the GUI checklist below with two players, including an unmatched destination seat. |
-| **PR5 — release gate and defaults · M** | `tests/net/process_arena.gd/.tscn`, `tools/check_multiplayer.py`, `docs/networking.md`, `docs/player-controller.md`, `docs/dev/multiplayer-plan.md`. Enable the verified mode set by default. | Both topologies pass the impairment and offline gates. Record payload B/s, correction distribution, replay depth, p95/p99 replay CPU and worst physics frame alongside hardware and scene. | Maintainer signs off at 16 ms and 100–150 ms, including a long walking/turning run. |
+| **PR6 — ladders and swimming · L** | Movement step modes for ladder climb/jump-off and water (surface, dive, rise, exit clearance), `Scripts/ladder_area.gd`, water volumes as observed contacts, oxygen staying authoritative. | Entry/exit both ways at matched ticks, ladder cooldown and jump-off, dive/rise/surface replay, exit onto a ledge, no duplicate splash/footstep effects on replay. | Ladder up/down/jump off, swim surface, dive and climb out at 16 and 150 ms. |
+| **PR7 — ledge climb and roll · L** | Ledge capture/stages as tick-driven state (no animation clock), roll duration as ticks instead of `animation_finished` on the online path, offline unchanged. | Ledge capture, middle/final stage and crouch exit replay identically; hard landing into roll and roll completion at the same tick on both peers; offline animation timing unchanged. | Climb onto crates and ledges, roll after a fall, while observed. |
+| **PR8 — moving supports · XL** | Timestamped support motion shared by `Networking/{net_bodies,net_door_motion}.gd`, platform/lift authoring contract, support identity in the owner checkpoint, support velocity sampled at the replayed tick. | Ride a platform and a lift, step on/off at speed, jump from a moving platform, be pushed by a closing door; corrections stay under thresholds without rubber-banding. | Demo platform and lift at 16 and 150 ms with an observer. |
+| **PR9 — release gate and defaults · M** | `tests/net/process_arena.gd/.tscn`, `tools/check_multiplayer.py`, `docs/networking.md`, `docs/player-controller.md`, `docs/dev/multiplayer-plan.md`. Enable the verified mode set by default. | Both topologies pass the impairment and offline gates. Record payload B/s, correction distribution, replay depth, p95/p99 replay CPU and worst physics frame alongside hardware and scene. | Maintainer signs off at 16 ms and 100–150 ms, including a long walking/turning run. |
 
 ### Manual GUI checklist
 
