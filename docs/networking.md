@@ -454,6 +454,29 @@ The project uses 60 physics ticks per second by default. Commands use unreliable
 
 Use `CogitoNet.player_world.travel.endpoint_for(player_id)` to find the room hosting a live identity, then call its `avatar_for(player_id)`. Its `actor` is the Advanced node. On a replica, `timeline.latest()` exposes the last received pose including `tick` and `ack`. On the server, `actor.last_consumed_sequence` records the last applied command.
 
+### Movement sounds
+
+Each client plays movement sounds for its own avatar and for other players in its room.
+`NetAvatar` feeds each accepted pose to `net_movement_audio.gd`. The difference in server
+ticks advances the walking, sprinting, sneaking or swimming wiggle clock. A rising
+crossing of 0.9 triggers a step or swim stroke. The footstep detector casts at the
+pose's feet and selects the surface profile at the gait's authored volume.
+
+Entering Jumping from the ground plays the jump cue. A ladder jump-off also plays it.
+Ground contact after an airborne pose uses that pose's vertical velocity and Advanced's
+landing threshold, volume and pitch settings. Sliding starts and stops the avatar's loop.
+The owner hears its player-centric jump. Other players' sounds are spatial. A fresh
+timeline, forced pose, seat change or new life starts the audio clock silently.
+
+A listen host keeps simulation audio for its own player and feeds captured poses to the
+same presenter for remote players in its audible viewport. Dedicated avatars have no
+movement audio players. NPC hearing on both authorities still uses `_network_footstep()`
+and the room's NPC listeners. Playing a sound on a replica creates no hearing areas.
+
+For PR3, feed the owner's forward predicted poses to `movement_audio.observe(frame)` in
+place of its snapshot feed. Reset the presenter at a timeline discontinuity. Reconciliation
+replay must never emit sounds. Observers continue to use authoritative snapshots.
+
 ### Fixed-tick authority movement (PR1b)
 
 The development switch defaults to OFF. Launch the authority with the environment variable
@@ -477,8 +500,8 @@ a collision-disabled avatar can supply the original mask to the constructor.
 The actor commits the resulting transform, velocities, posture, eye, shape and contacts.
 The chart receives state events for existing animation and gameplay listeners. Its physics
 callbacks sleep through the entire commit. Jump and slide cooldowns, run exhaustion and
-regeneration use physics time on these ticks. Jump sounds, landing, slide playback, footstep
-noise and attribute updates run once on authority. Interaction checks use
+regeneration use physics time on these ticks. The listen player’s own movement audio, NPC footstep
+stimuli and attribute updates run once on authority. Interaction checks use
 `movement_grounded()` and slope exhaustion uses `movement_floor_normal()`.
 
 Water and ladder movement, ledge climbs, hard-landing rolls, free fall, dynamic contacts,

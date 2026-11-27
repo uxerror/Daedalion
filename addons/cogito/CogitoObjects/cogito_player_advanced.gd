@@ -514,11 +514,15 @@ func create_new_state() -> CogitoPlayerState:
 
 
 func slide_audio_init():
-	#setup sound effect for sliding
-	slide_audio_player = AudioStreamPlayer3D.new()
-	slide_audio_player.stream = slide_sound
-	slide_audio_player.bus = OptionsConstants.sfx_bus_name
-	add_child(slide_audio_player)
+	slide_audio_player = create_slide_audio_player()
+
+
+func create_slide_audio_player() -> AudioStreamPlayer3D:
+	var player := AudioStreamPlayer3D.new()
+	player.stream = slide_sound
+	player.bus = OptionsConstants.sfx_bus_name
+	add_child(player)
+	return player
 
 
 func swim_audio_init():
@@ -1311,15 +1315,20 @@ func _on_grounded_on_pause_taken() -> void:
 		was_sliding = false
 
 
+func set_landing_audio(vertical_velocity: float) -> void:
+	var ratio: float = clamp(
+		(vertical_velocity - min_landing_velocity) / (max_landing_velocity - min_landing_velocity),
+		0.0, 1.0
+	)
+	landing_volume = lerp(min_volume_db, max_volume_db, ratio)
+	landing_pitch = lerp(max_pitch, min_pitch, ratio)
+
+
 func _on_grounded_state_entered() -> void:
 	current_lerp_speed = LERP_SPEED
 	# Only trigger landing sound if the player was airborne and the velocity exceeds the threshold
 	if was_in_air and last_velocity.y < landing_threshold:
-		# Calculate the volume and pitch based on the landing velocity
-		var velocity_ratio = clamp((last_velocity.y - min_landing_velocity) / (max_landing_velocity - min_landing_velocity), 0.0, 1.0)
-		# Set the volume and pitch of the landing sound
-		landing_volume = lerp(min_volume_db, max_volume_db, velocity_ratio)
-		landing_pitch = lerp(max_pitch, min_pitch, velocity_ratio)
+		set_landing_audio(last_velocity.y)
 		# Play the landing sound
 		_network_footstep(current_lerp_speed)
 		if footstep_surface_detector and (not network_movement_only or is_local_presentation):
@@ -2210,7 +2219,8 @@ func _handle_water_physics(delta) -> void:
 	
 	if is_moving and main_velocity.length() >= 0.2:
 		if can_play_swim_movement && wiggle_vector.y > 0.9:
-			CogitoAudio.play_sound_3d_attached(swim_movement_sound, self)
+			if not network_movement_only or is_local_presentation:
+				CogitoAudio.play_sound_3d_attached(swim_movement_sound, self)
 			can_play_swim_movement = false
 		
 		if !can_play_swim_movement && wiggle_vector.y < 0.9:

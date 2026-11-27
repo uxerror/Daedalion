@@ -34,6 +34,15 @@ static func capture(actor: CogitoPlayerAdvanced, tick: int, revision: int) -> Di
 	return frame
 
 
+static func discontinuous(last: Dictionary, frame: Dictionary) -> bool:
+	var previous: Vector3 = last.position
+	return (
+		last.revision != frame.revision
+		or previous.distance_to(frame.position) > TELEPORT_DISTANCE
+		or last.sitting != frame.sitting
+	)
+
+
 ## Returns true when the renderer must reset position and local look immediately.
 func push(frame: Dictionary) -> bool:
 	var reset := _frames.is_empty()
@@ -41,12 +50,7 @@ func push(frame: Dictionary) -> bool:
 		var last := _frames.back() as Dictionary
 		if frame.tick <= last.tick:
 			return false
-		var previous: Vector3 = last.position
-		reset = (
-			last.revision != frame.revision
-			or previous.distance_to(frame.position) > TELEPORT_DISTANCE
-			or last.sitting != frame.sitting
-		)
+		reset = discontinuous(last, frame)
 	if reset:
 		_frames.clear()
 		_render_tick = -1.0

@@ -416,7 +416,7 @@ func _create(id: String, life: int, start: Transform3D, initial_pose: Dictionary
 	var local := id == _session.local_id
 	if not _prefab:
 		_prefab = load(AVATAR.PREFAB)
-	avatar.spawn(_prefab, _level, id, start, local, multiplayer.is_server())
+	avatar.spawn(_prefab, _level, id, start, local, multiplayer.is_server(), travel.host.dedicated)
 	elements.track("avatar:" + id, avatar.actor)
 	avatar.actor.player_interaction_component.network_interactions = interactions
 	avatar.wield.actor = avatar.actor
@@ -539,6 +539,8 @@ func mark_teleport(id: String) -> void:
 		var avatar := _avatars[id]
 		if avatar.actor.authority_movement:
 			avatar.actor.authority_movement.invalidate()
+		if avatar.movement_audio:
+			avatar.movement_audio.reset()
 		avatar.revision += 1
 		if avatar.source:
 			avatar.source.clear()
@@ -641,7 +643,14 @@ func _physics_process(delta: float) -> void:
 	var poses := {}
 	for id in _avatars:
 		var avatar := _avatars[id]
-		poses[id] = [id, avatar.lifetime, SNAPSHOT.capture(avatar.actor, _tick, avatar.revision)]
+		var frame := SNAPSHOT.capture(avatar.actor, _tick, avatar.revision)
+		poses[id] = [id, avatar.lifetime, frame]
+		if avatar.movement_audio:
+			var view := avatar.actor.get_viewport()
+			if local_actor and (not view is SubViewport or view.audio_listener_enable_3d):
+				avatar.movement_audio.observe(frame)
+			else:
+				avatar.movement_audio.reset()
 	for peer: int in _ready_levels:
 		var batch := []
 		for id in _avatars:
@@ -763,4 +772,6 @@ func _apply_vitals(id: String, life: int, fields: Dictionary) -> void:
 	avatar.health_fraction = fields.health_fraction
 	if avatar.actor.is_local_presentation:
 		Attributes.apply(avatar.actor, fields.get("attributes", {}))
+	if fields.dead and avatar.movement_audio:
+		avatar.movement_audio.reset()
 	death.present(avatar.actor, fields.dead, fields.get("remaining", 0.0))

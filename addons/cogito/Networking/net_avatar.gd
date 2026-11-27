@@ -1,6 +1,7 @@
 extends RefCounted
 ## One incarnation of an Advanced avatar. Only replicas have a pose timeline.
 
+const MovementAudio := preload("net_movement_audio.gd")
 const WIELD := preload("net_wield.gd")
 const INPUT := preload("net_input_source.gd")
 const SNAPSHOT := preload("net_snapshot.gd")
@@ -22,6 +23,7 @@ var revision := 0
 var timeline: SNAPSHOT
 ## Receive buffer on a server simulating a remote owner.
 var source: INPUT
+var movement_audio: MovementAudio
 var _seated_pose := false
 
 
@@ -43,7 +45,13 @@ class HeadLook:
 
 ## Set the role before any camera, HUD, state chart or input handler enters the tree.
 func spawn(
-	prefab: PackedScene, root: Node, id: String, start: Transform3D, local: bool, server: bool
+	prefab: PackedScene,
+	root: Node,
+	id: String,
+	start: Transform3D,
+	local: bool,
+	server: bool,
+	dedicated := false
 ) -> void:
 	actor = prefab.instantiate()
 	actor.name = "Player_" + id.sha256_text()
@@ -82,8 +90,9 @@ func spawn(
 			attr.network_frozen = true
 			attr.set_block_signals(true)
 			attr.process_mode = Node.PROCESS_MODE_DISABLED
-	if not local and actor.has_node("FootstepPlayer"):
-		actor.get_node("FootstepPlayer").free()
+	if dedicated:
+		for player in actor.find_children("*", "AudioStreamPlayer3D", true, false):
+			player.free()
 	if server and not local:
 		source = INPUT.new()
 		actor.input_source = source
@@ -107,6 +116,8 @@ func spawn(
 		ray.process_mode = Node.PROCESS_MODE_DISABLED
 	var template := actor.inventory_data
 	root.add_child(actor)
+	if not dedicated and (not server or not local):
+		movement_audio = MovementAudio.new(actor)
 	if server and OS.get_environment("COGITO_AUTHORITY_MOVEMENT") == "1":
 		var profile := actor.authority_movement_profile()
 		if profile:
@@ -134,12 +145,14 @@ func spawn(
 func receive(frame: Dictionary) -> void:
 	var last := timeline.latest()
 	if timeline.push(frame):
+		movement_audio.reset()
 		var force_look: bool = (
 			last.is_empty() or revision != frame.revision or last.sitting != frame.sitting
 		)
 		revision = frame.revision
 		apply_pose(frame, 1.0, force_look)
 		actor.reset_physics_interpolation()
+	movement_audio.observe(timeline.latest())
 
 
 ## Updates visible pose only. The owner keeps its event-frequency look between resets.
