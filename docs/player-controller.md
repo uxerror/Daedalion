@@ -13,22 +13,27 @@ Use `no_pause_menu_states` to restrict the pause menu in specific states. Enteri
 ## Movement step
 
 `CogitoMovementStep` computes ground acceleration and speed, air control and gravity, jumps and
-landing thresholds, crouch clearance and head height, static stair candidates, slides and movement
+landing thresholds, crouch clearance and head height, static stair candidates, slides, ladder direction and speed, swim velocity and movement
 stamina costs. Offline and with the network switch off, Advanced calls these phases from its chart callbacks. It accelerates using
 the stored direction, saves the requested velocity, queries stairs, then carries the adjusted
 momentum into the next tick. The controller owns the sweeps, shape changes and `move_and_slide()`.
 The chart, Timers and stamina attribute still advance on their respective clocks and commit effects.
 
 For a simulation starting at a physics boundary, call `capture_movement_state()` and
-`capture_movement_profile()` on the configured actor. Both return independent values. Timer
-remainders are in seconds. Pass the sampled command values and fixed delta to the phases, and supply
+`capture_movement_profile()` on the configured actor. Both return independent values. Slide, jump and
+stamina timer remainders are in seconds. The ladder cooldown is an integer tick count. Pass the sampled command values and fixed delta to the phases, and supply
 fresh contact observations at each solve. The live actor reuses its scratch records and reads tuning
 when each rule runs. The golden runner exercises checkpoint restoration during a jump and a slide.
 
 Games overriding Advanced can keep their existing callbacks, exports and stair queries. A callback
 that calls `super` runs the shared rules there. A custom movement mode can supply its own profile,
-contact observations and mode memory. Ladder, water, ledge, roll and platform handling continue
-through their existing Advanced callbacks.
+contact observations and mode memory. The fixed step supports `LADDER_CLIMBING` and
+`SWIMMING`. Ladder entry remembers the shape and starts the floor-detach cooldown in
+whole ticks. Looking down reverses the climb axis. Jump with outward horizontal input
+applies the authored ladder jump scale. Swim stores the submerged flag and pre-swim
+posture. The main velocity carries rise, dive and idle sink momentum between ticks.
+Each solve receives fresh room-local volume observations. The swim ledge probe hands a
+successful capture to Advanced. Ledge animations, rolls and moving supports use the chart.
 
 The online opt-in hook is `authority_movement_profile()`. Advanced matches its shipped
 scene and script. A different prefab or controller uses its own chart by default. A game

@@ -428,6 +428,12 @@ func capture_movement_state() -> CogitoMovementState:
 	state.jump_stopped = jump_timer.is_stopped()
 	state.is_sitting = is_sitting
 	state.on_ladder = on_ladder
+	state.ladder_contact = _motion.ladder_contact
+	state.ladder_ticks = _motion.ladder_ticks
+	state.submerged = _motion.submerged
+	state.swim_depth = _motion.swim_depth
+	state.was_swimming = was_in_swimming_state
+	state.crouched_before_swim = was_in_crouching_state_before_swim
 	state.has_control = current_command.has_control
 	state.speed_multiplier = get_element_speed_multiplier()
 	state.jump_allowed = not actor_elements or actor_elements.can_jump()
@@ -441,6 +447,13 @@ func capture_movement_state() -> CogitoMovementState:
 		state.regen_stopped = stamina.regen_timer.is_stopped()
 	state.previous_y = stamina.last_y if stamina else 0.0
 	return state
+
+
+func uses_volume_queries() -> bool:
+	return authority_movement != null and (
+		is_sitting or is_dead or current_moving_state == MovingState.LedgeClimbing
+		or authority_movement.supports_volumes(self)
+	)
 
 
 func movement_grounded() -> bool:
@@ -475,6 +488,14 @@ func capture_movement_profile() -> CogitoMovementProfile:
 	profile.walking_speed = WALKING_SPEED
 	profile.sprinting_speed = SPRINTING_SPEED
 	profile.crouching_speed = CROUCHING_SPEED
+	profile.ladder_speed = LADDER_SPEED
+	profile.ladder_sprint_speed = LADDER_SPRINT_SPEED
+	profile.can_sprint_on_ladder = CAN_SPRINT_ON_LADDER
+	profile.ladder_cooldown = LADDER_COOLDOWN
+	profile.ladder_jump_scale = LADDER_JUMP_SCALE
+	profile.swimming_speed = SWIMMING_SPEED
+	profile.water_gravity = WATER_GRAVITY_COEFFICIENT
+	profile.auto_stand_after_swim = AUTO_STAND_AFTER_SWIM
 	profile.lerp_speed = LERP_SPEED
 	profile.air_lerp_speed = AIR_LERP_SPEED
 	profile.crouching_depth = CROUCHING_DEPTH
@@ -1304,7 +1325,11 @@ func _show_underwater_effect(show_effect: bool) -> void:
 func _handle_swim_under_water_sounds():
 	if not is_local_presentation:
 		return
-	if is_head_in_water():
+	_set_underwater_audio(is_head_in_water())
+
+
+func _set_underwater_audio(submerged: bool) -> void:
+	if submerged:
 		if not swim_under_water_audio_player:
 			swim_audio_init()
 		
@@ -1318,10 +1343,8 @@ func _handle_swim_under_water_sounds():
 
 # To reduce artifacts when the camera moves in and out of the water
 func _handle_eyes_position_in_water(delta):
-	if is_head_in_water():
-		eyes.position.y = lerp(eyes.position.y, -0.01, delta * LERP_SPEED * 1.5)
-	else:
-		eyes.position.y = lerp(eyes.position.y, 0.01, delta * LERP_SPEED * 1.5)
+	eyes.position.y = Movement.Swim.eye_height(
+		eyes.position.y, is_head_in_water(), delta * LERP_SPEED)
 
 
 #region Grounded State
@@ -2091,29 +2114,15 @@ func _process_on_ladder(_delta):
 	
 	_handle_swim_under_water_sounds()
 	
-	var ladder_speed = LADDER_SPEED
-	
-	if CAN_SPRINT_ON_LADDER and current_command.is_held(ACTION.SPRINT) and input_dir.length_squared() > 0.1:
-		#is_sprinting = true
-		if stamina_attribute.value_current > 0:
-			ladder_speed = LADDER_SPRINT_SPEED
-	#else:
-		#is_sprinting = false
-		
-	var jump = current_command.is_held(ACTION.JUMP)
-
-	var look_vector = get_aim_transform().basis
-	var looking_down = look_vector.z.dot(Vector3.UP) > 0.5
-
-	# Applying ladder input_dir to direction
-	var y_dir = 1 if looking_down else -1
-	direction = (body.global_transform.basis * Vector3(input_dir.x,input_dir.y * y_dir,0)).normalized()
+	var ladder_speed := Movement.Climb.speed(input_dir,
+		CAN_SPRINT_ON_LADDER and current_command.is_held(ACTION.SPRINT),
+		stamina_attribute.value_current if stamina_attribute else 0.0,
+		LADDER_SPEED, LADDER_SPRINT_SPEED)
+	direction = Movement.Climb.heading(body.global_basis, get_aim_transform().basis, input_dir)
 	main_velocity = direction * ladder_speed * get_element_speed_multiplier()
-	
-	if jump:
-		var jump_direction = (body.global_transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
 
-		if jump_direction and not jump_direction.dot(ladder_direction) < 0:
+	if current_command.is_held(ACTION.JUMP):
+		if Movement.Climb.jumping(body.global_basis, input_dir, ladder_direction):
 			if not _can_jump():
 				return
 			
@@ -2139,10 +2148,7 @@ func enter_ladder(ladder: CollisionShape3D, ladderDir: Vector3):
 	# called by ladder_area.gd
 	ladder_direction = ladderDir
 	# try and capture player's intent based on where they're looking
-	var look_vector = get_aim_transform().basis
-	var looking_away = look_vector.z.dot(ladderDir) < 0.33
-	var looking_down = look_vector.z.dot(Vector3.UP) > 0.5
-	if looking_down or not looking_away:
+	if Movement.Climb.accepts(get_aim_transform().basis, ladderDir):
 		var ladder_timer = get_tree().create_timer(LADDER_COOLDOWN)
 		ladder_timer.timeout.connect(ladder_buffer_finished)
 		ladder_on_cooldown = true
@@ -2210,33 +2216,19 @@ func _handle_water_physics(delta) -> void:
 	
 	input_direction = current_command.move
 	
-	var look_vector = get_aim_transform().basis
-	var direction = look_vector * Vector3(input_direction.x, 0, input_direction.y).normalized()
-	
-	if current_command.is_held(ACTION.JUMP):
-		direction.y = 1
-	elif current_command.is_held(ACTION.CROUCH):
-		if not movement_grounded():
-			direction.y = -1
-	
-	if not is_head_in_water() and direction.dot(Vector3.UP) > 0:
-		direction = direction.slide(Vector3.UP)
-	
-	direction = direction.normalized()
-	
-	current_speed = lerp(current_speed, SWIMMING_SPEED, delta * LERP_SPEED)
-	
-	var is_moving: bool = false
-	
-	if input_direction or current_command.is_held(ACTION.JUMP) or current_command.is_held(ACTION.CROUCH):
-		is_moving = true
-		main_velocity = lerp(main_velocity, direction * current_speed * get_element_speed_multiplier(), delta * LERP_SPEED)
-	else:
-		main_velocity = lerp(main_velocity, Vector3.ZERO, delta * LERP_SPEED)
-		
-		if not movement_grounded():
-			main_velocity.y -= gravity * WATER_GRAVITY_COEFFICIENT * delta
-	
+	var rise := current_command.is_held(ACTION.JUMP)
+	var dive := current_command.is_held(ACTION.CROUCH)
+	var grounded := movement_grounded()
+	var heading := Movement.Swim.heading(get_aim_transform().basis, input_direction,
+		rise, dive, grounded, is_head_in_water())
+	current_speed = Movement.approach(current_speed, SWIMMING_SPEED, delta, LERP_SPEED)
+	var is_moving := input_direction != Vector2.ZERO or rise or dive
+	var sink := 0.0
+	if not is_moving and not grounded:
+		sink = gravity * WATER_GRAVITY_COEFFICIENT * delta
+	var speed := current_speed * get_element_speed_multiplier() if is_moving else 0.0
+	main_velocity = Movement.Swim.velocity(main_velocity, heading, speed, delta * LERP_SPEED, sink)
+
 	_handle_swim_under_water_sounds()
 	
 	if is_moving and main_velocity.length() >= 0.2:
@@ -2326,6 +2318,8 @@ func _on_ledge_climbing_state_physics_processing(delta: float) -> void:
 		state_chart.send_event("idle")
 		try_crouch = false
 		state_chart.send_event("stand_up")
+		if authority_movement:
+			authority_movement.advance(self, delta)
 		return
 	
 	var platfrom_linear_velocity : Vector3 = Vector3.ZERO

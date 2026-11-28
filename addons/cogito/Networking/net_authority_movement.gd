@@ -4,10 +4,14 @@ extends RefCounted
 
 const Tick := preload("../CogitoObjects/cogito_movement_tick.gd")
 const Collision := preload("../CogitoObjects/cogito_movement_collision.gd")
+const MovementAudio := preload("net_movement_audio.gd")
+const Snapshot := preload("net_snapshot.gd")
 const MODE := CogitoMovementState.Mode
 const POSTURE := CogitoMovementState.Posture
 const EVENTS := {
 	MODE.IDLE: &"idle",
+	MODE.LADDER_CLIMBING: &"climb_ladder",
+	MODE.SWIMMING: &"swim",
 	MODE.WALKING: &"walk",
 	MODE.SPRINTING: &"sprint",
 	MODE.SLIDING: &"slide",
@@ -26,6 +30,7 @@ var force_requested := false
 var solves := 0
 var committed_tick := -1
 var modifier_generation := 0
+var _local_audio: MovementAudio
 var _modifier_bits := -1
 var _modifier_speed := 1.0
 var _committed_clearance := false
@@ -38,6 +43,8 @@ func _init(actor: CogitoPlayerAdvanced, tuning: CogitoMovementProfile) -> void:
 	profile = tuning
 	room = Collision.new(actor)
 	_chart_root = actor.state_chart.get_node("Root")
+	if actor.is_local_presentation:
+		_local_audio = MovementAudio.new(actor)
 
 
 func _clock(actor: CogitoPlayerAdvanced, fixed: bool) -> void:
@@ -45,6 +52,8 @@ func _clock(actor: CogitoPlayerAdvanced, fixed: bool) -> void:
 	if _fixed == fixed:
 		return
 	_fixed = fixed
+	if not fixed:
+		actor._motion.ladder_contact = 0
 	actor.jump_timer.paused = fixed
 	actor.sliding_timer.paused = fixed
 	var stamina := actor.stamina_attribute as CogitoStaminaAttribute
@@ -54,6 +63,8 @@ func _clock(actor: CogitoPlayerAdvanced, fixed: bool) -> void:
 
 
 func invalidate() -> void:
+	if _local_audio:
+		_local_audio.reset()
 	committed_tick = -1
 	_teleported = true
 	contacts = null
@@ -68,6 +79,16 @@ func respawn(actor: CogitoPlayerAdvanced) -> void:
 	modifier_generation = 0
 	actor.sliding_timer.stop()
 	actor.jump_timer.stop()
+	actor.on_ladder = false
+	actor.ladder_direction = Vector3.ZERO
+	actor.ladder_on_cooldown = false
+	actor._motion.ladder_contact = 0
+	actor._motion.ladder_ticks = 0
+	actor._motion.submerged = false
+	actor._motion.swim_depth = 0.0
+	actor.was_in_swimming_state = false
+	actor.was_in_crouching_state_before_swim = false
+	actor.state_chart.set_expression_property("on_ladder", false)
 	actor.slide_vector = Vector2.ZERO
 	actor.was_sliding = false
 	actor.jumped_from_slide = false
@@ -106,13 +127,10 @@ func unbind(actor: CogitoPlayerAdvanced) -> void:
 		room = null
 
 
-func _supported(actor: CogitoPlayerAdvanced) -> bool:
+func supports_volumes(actor: CogitoPlayerAdvanced) -> bool:
 	return (
 		not actor.is_sitting
-		and not actor.on_ladder
 		and not actor.currently_tweening
-		and not actor.is_body_in_water()
-		and not actor.is_head_in_water()
 		and actor.gravity_vector == Vector3.DOWN
 		and (
 			actor.current_moving_state
@@ -123,7 +141,9 @@ func _supported(actor: CogitoPlayerAdvanced) -> bool:
 				MODE.SNEAKING,
 				MODE.SLIDING,
 				MODE.JUMPING,
-				MODE.AIR_CONTROL
+				MODE.AIR_CONTROL,
+				MODE.LADDER_CLIMBING,
+				MODE.SWIMMING
 			]
 		)
 	)
@@ -135,7 +155,7 @@ func owns_checkpoint(actor: CogitoPlayerAdvanced, server_tick: int) -> bool:
 		committed_tick == server_tick
 		and contacts != null
 		and not actor.is_dead
-		and _supported(actor)
+		and supports_volumes(actor)
 	)
 
 
@@ -187,15 +207,7 @@ func advance(actor: CogitoPlayerAdvanced, dt: float) -> void:
 		# NetSeats has already committed the exit transform synchronously.
 		var exit_seat := _chart_root.get_node("Moving/Grounded/Sitting/On Grounded") as Transition
 		exit_seat.take()
-	if actor.current_moving_state == MODE.SWIMMING and not actor.is_body_in_water():
-		if not actor.is_head_in_water():
-			actor._show_underwater_effect(false)
-			actor._handle_swim_under_water_sounds()
-			actor.state_chart.send_event("grounded" if actor.movement_grounded() else "airborne")
-			if actor.AUTO_STAND_AFTER_SWIM or not actor.was_in_crouching_state_before_swim:
-				actor.try_crouch = false
-				actor.state_chart.send_event("stand_up")
-	if not _supported(actor):
+	if not supports_volumes(actor):
 		_clock(actor, false)
 		return
 	if not room:
@@ -215,12 +227,18 @@ func advance(actor: CogitoPlayerAdvanced, dt: float) -> void:
 			_clock(actor, false)
 			return
 		if _teleported:
+			actor._motion.ladder_contact = 0
 			contacts = support
 			_teleported = false
 	var s := actor.capture_movement_state()
 	s.cast_blocked = (s.cast_enabled or not s.standing_shape) and room.blocked(origin)
 	var tick := Tick.new()
-	tick.request(s, profile, actor.current_command, dt)
+	var volume := room.volumes(origin, s)
+	if solves == 0:
+		# At spawn the chart samples its authored head cast before its first
+		# posture update. Subsequent commands start from the committed head.
+		volume.submerged = actor.is_head_in_water()
+	tick.request(s, profile, actor.current_command, dt, volume)
 	var hit := room.solve(origin, s, profile, dt)
 	if hit.legacy:
 		_clock(actor, false)
@@ -237,11 +255,16 @@ func advance(actor: CogitoPlayerAdvanced, dt: float) -> void:
 	solves += 1
 	actor.authority_solve_count += 1
 	actor.transform = s.transform
+	actor.ladder_direction = volume.outward
 	_publish(actor, s, tick)
 	_effects(actor, tick, dt)
-	if actor.current_moving_state == MODE.JUMPING and s.posture != POSTURE.CROUCHING:
+	var swim_reach := (
+		s.mode == MODE.SWIMMING and actor.current_command.is_held(CogitoPlayerCommand.Action.JUMP)
+	)
+	if swim_reach or (s.mode == MODE.JUMPING and s.posture != POSTURE.CROUCHING):
 		if actor._is_ledge_climbable():
-			actor.bunny_hop_speed = profile.sprinting_speed
+			if not swim_reach:
+				actor.bunny_hop_speed = profile.sprinting_speed
 			actor.state_chart.send_event("ledge_climb")
 
 
@@ -254,6 +277,27 @@ func _timer(timer: Timer, remaining: float, duration: float) -> void:
 
 
 func _publish(actor: CogitoPlayerAdvanced, s: CogitoMovementState, tick: Tick) -> void:
+	# Enter/exit volume chart states before publishing their integrated values.
+	# Their authored entry callbacks initialize velocity and posture for offline play.
+	var volume_mode := s.mode in [MODE.LADDER_CLIMBING, MODE.SWIMMING]
+	if tick.entered_ladder and s.mode != MODE.LADDER_CLIMBING:
+		actor.state_chart.set_expression_property("on_ladder", true)
+		actor.state_chart.send_event("climb_ladder")
+	actor.state_chart.set_expression_property("on_ladder", s.on_ladder)
+	if tick.left_volume_on_floor:
+		actor.state_chart.send_event("grounded")
+	elif volume_mode and s.mode != int(actor.current_moving_state):
+		actor.state_chart.send_event(EVENTS[s.mode])
+	elif actor.current_moving_state in [MODE.LADDER_CLIMBING, MODE.SWIMMING] and not volume_mode:
+		actor.state_chart.send_event("jump" if s.mode == MODE.JUMPING else "airborne")
+	actor.on_ladder = s.on_ladder
+	actor.ladder_on_cooldown = s.ladder_ticks > 0
+	actor._motion.ladder_ticks = s.ladder_ticks
+	actor._motion.ladder_contact = s.ladder_contact
+	actor._motion.submerged = s.submerged
+	actor._motion.swim_depth = s.swim_depth
+	actor.was_in_swimming_state = s.was_swimming
+	actor.was_in_crouching_state_before_swim = s.crouched_before_swim
 	actor.velocity = s.velocity
 	actor._motion.requested_velocity = s.requested_velocity
 	actor.main_velocity = s.main_velocity
@@ -290,6 +334,8 @@ func _publish(actor: CogitoPlayerAdvanced, s: CogitoMovementState, tick: Tick) -
 	if s.mode != MODE.ROLLING:
 		actor.standing_collision_shape.disabled = not s.standing_shape
 		actor.crouching_collision_shape.disabled = not s.crouching_shape
+	if s.mode in [MODE.LADDER_CLIMBING, MODE.SWIMMING]:
+		actor.eyes.position.y = s.eye_position.y
 	actor.head.position = s.head_position
 	actor.swimming_head_shapecast.global_position = actor.head.global_position
 
@@ -323,7 +369,12 @@ func _effects(actor: CogitoPlayerAdvanced, tick: Tick, dt: float) -> void:
 				actor.wiggle_index += actor.WIGGLE_ON_CROUCHING_SPEED * dt
 	elif actor.slide_audio_player:
 		actor.slide_audio_player.stop()
-	actor._handle_eyes_position_in_water(dt)
+	if _local_audio:
+		_local_audio.observe_volumes(
+			Snapshot.capture(actor, committed_tick, 0), actor.is_head_in_water()
+		)
+	if actor.current_moving_state not in [MODE.LADDER_CLIMBING, MODE.SWIMMING]:
+		actor._handle_eyes_position_in_water(dt)
 	var stamina := actor.stamina_attribute as CogitoStaminaAttribute
 	if stamina and not actor.is_dead:
 		stamina.advance_movement_tick(dt)

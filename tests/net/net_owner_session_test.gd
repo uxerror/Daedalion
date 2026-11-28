@@ -218,7 +218,7 @@ func test_newer_held_state_and_rejected_wield_ack() -> void:
 	view.wield = original
 
 
-func test_protocol_14_is_rejected_at_admission() -> void:
+func test_protocol_17_is_rejected_at_admission() -> void:
 	_start(false)
 	var old := _branch(3)
 	var failures: Array[String] = []
@@ -226,7 +226,7 @@ func test_protocol_14_is_rejected_at_admission() -> void:
 	assert_int(old.join("memory", 1863)).is_equal(OK)
 	var session := old._session
 	old.multiplayer.connected_to_server.disconnect(session._connected)
-	var hello := func(): session._hello.rpc_id(1, 14, session.config.content_version, "")
+	var hello := func(): session._hello.rpc_id(1, 17, session.config.content_version, "")
 	old.multiplayer.connected_to_server.connect(hello, CONNECT_ONE_SHOT)
 	_pump()
 	assert_array(failures).contains_exactly(["Protocol version mismatch"])

@@ -95,7 +95,7 @@ func advance(cmd: CogitoPlayerCommand) -> void:
 	state.cast_blocked = (
 		(state.cast_enabled or not state.standing_shape) and room.blocked(state.transform)
 	)
-	step.request(state, profile, cmd, DT)
+	step.request(state, profile, cmd, DT, room.volumes(state.transform, state))
 	var hit := room.solve(state.transform, state, profile, DT)
 	step.finish(state, profile, cmd, hit, DT, Transform3D.IDENTITY)
 	body.transform = state.transform
@@ -118,7 +118,10 @@ func compare_to(actual: CogitoMovementState) -> void:
 	vel_error = maxf(vel_error, state.velocity.distance_to(actual.velocity))
 	eye_error = maxf(eye_error, absf(state.head_position.y - actual.head_position.y))
 	stamina_error = maxf(stamina_error, absf(state.stamina - actual.stamina))
-	for key: String in NetOwnerState.FLAGS + ["mode", "posture", "floor_normal", "wall_normal"]:
+	for key: String in (
+		NetOwnerState.FLAGS
+		+ ["mode", "posture", "floor_normal", "wall_normal", "ladder_contact", "ladder_ticks"]
+	):
 		if state.get(key) != actual.get(key):
 			mismatches[key] = mismatches.get(key, 0) + 1
 	for key: String in NetOwnerState.TIMERS:

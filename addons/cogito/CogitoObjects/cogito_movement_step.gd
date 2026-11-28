@@ -73,6 +73,48 @@ static func landing(vertical_speed: float, roll_limit: float, landing_limit: flo
 	return Landing.NONE
 
 
+class Climb:
+	static func accepts(aim: Basis, outward: Vector3) -> bool:
+		return aim.z.dot(Vector3.UP) > 0.5 or aim.z.dot(outward) >= 0.33
+
+	static func heading(body: Basis, aim: Basis, axes: Vector2) -> Vector3:
+		var vertical := axes.y if aim.z.dot(Vector3.UP) > 0.5 else -axes.y
+		return (body * Vector3(axes.x, vertical, 0)).normalized()
+
+	static func speed(
+		axes: Vector2, sprint: bool, stamina: float, normal: float, fast: float
+	) -> float:
+		return fast if sprint and axes.length_squared() > 0.1 and stamina > 0 else normal
+
+	static func jumping(body: Basis, axes: Vector2, outward: Vector3) -> bool:
+		var horizontal := CogitoMovementStep.heading(body, axes)
+		return horizontal != Vector3.ZERO and horizontal.dot(outward) >= 0
+
+
+class Swim:
+	static func eye_height(current: float, submerged: bool, weight: float) -> float:
+		return lerpf(current, -0.01 if submerged else 0.01, weight * 1.5)
+
+	static func heading(
+		aim: Basis, axes: Vector2, rise: bool, dive: bool, grounded: bool, submerged: bool
+	) -> Vector3:
+		var result := aim * Vector3(axes.x, 0, axes.y).normalized()
+		if rise:
+			result.y = 1
+		elif dive and not grounded:
+			result.y = -1
+		if not submerged and result.dot(Vector3.UP) > 0:
+			result = result.slide(Vector3.UP)
+		return result.normalized()
+
+	static func velocity(
+		momentum: Vector3, direction: Vector3, speed: float, weight: float, sink: float
+	) -> Vector3:
+		var result := momentum.lerp(direction * speed, weight)
+		result.y -= sink
+		return result
+
+
 class Ground:
 	static func speed(
 		mode: CogitoMovementState.Mode,

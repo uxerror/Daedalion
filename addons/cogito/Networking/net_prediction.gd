@@ -15,6 +15,8 @@ const EXACT_STATE_FIELDS := [
 	"posture",
 	"input_direction",
 	"slide_vector",
+	"ladder_contact",
+	"ladder_ticks",
 	"body_basis",
 	"requested_velocity",
 	"main_velocity",
@@ -319,7 +321,7 @@ func live(raw: CogitoPlayerCommand) -> void:
 	_simulation_eye.transform = Transform3D.IDENTITY
 	_clip_offset()
 	_display_offset()
-	_audio.observe(Snapshot.capture(_actor, newest, baseline.revision))
+	_audio.observe(Snapshot.capture(_actor, newest, baseline.revision), true, state.submerged)
 
 
 func _clip_offset() -> void:
@@ -343,4 +345,6 @@ func render(delta: float) -> void:
 
 func _display_offset() -> void:
 	var local_offset := _actor.head.global_basis.inverse() * render_offset
+	if state.mode in [CogitoMovementState.Mode.LADDER_CLIMBING, CogitoMovementState.Mode.SWIMMING]:
+		local_offset.y += state.eye_position.y
 	_actor.eyes.position = local_offset

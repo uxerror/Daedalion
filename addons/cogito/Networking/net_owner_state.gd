@@ -4,9 +4,9 @@ extends RefCounted
 
 enum Disposition { FRESH, HELD, NEUTRAL, GAP }
 
-const VERSION := 2
+const VERSION := 3
 const HEADER_BYTES := 68
-const ELIGIBLE_BYTES := 511
+const ELIGIBLE_BYTES := 519
 const ALIGNMENT := [
 	"binding", "life", "revision", "generation", "tick", "ack", "last_fresh_tick", "discontinuities"
 ]
@@ -77,7 +77,10 @@ const FLAGS := [
 	"posture_locked",
 	"has_stamina",
 	"regen_active",
-	"regen_stopped"
+	"regen_stopped",
+	"submerged",
+	"was_swimming",
+	"crouched_before_swim"
 ]
 
 var binding: int
@@ -130,6 +133,8 @@ static func _write_state(stream: StreamPeerBuffer, checkpoint: NetOwnerState) ->
 		if state_value.get(FLAGS[i]):
 			bits |= 1 << i
 	stream.put_u32(bits)
+	stream.put_u32(state_value.ladder_contact)
+	stream.put_u32(state_value.ladder_ticks)
 	stream.put_u8(
 		(
 			int(checkpoint.force_requested)
@@ -204,6 +209,8 @@ static func _read_state(stream: StreamPeerBuffer, value: NetOwnerState) -> bool:
 	var mode_value := stream.get_u8()
 	var posture_value := stream.get_u8()
 	var bits := stream.get_u32()
+	s.ladder_contact = stream.get_u32()
+	s.ladder_ticks = stream.get_u32()
 	var adapter := stream.get_u8()
 	if (
 		mode_value >= CogitoMovementState.Mode.size()

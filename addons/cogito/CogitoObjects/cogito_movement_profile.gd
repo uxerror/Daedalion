@@ -2,6 +2,14 @@ class_name CogitoMovementProfile
 extends RefCounted
 ## Captured from one configured prefab. The controller owns the editable defaults.
 
+var ladder_speed: float
+var ladder_sprint_speed: float
+var can_sprint_on_ladder: bool
+var ladder_cooldown: float
+var ladder_jump_scale: float
+var swimming_speed: float
+var water_gravity: float
+var auto_stand_after_swim: bool
 var min_speed: float
 var max_speed: float
 var walking_speed: float

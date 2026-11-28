@@ -206,7 +206,7 @@ adapter and fixed-tick stepper. It compares contacts, timers, permissions, postu
 stamina, position, velocity and simulation head height on every tick.
 
 `net_owner_session_test.gd` checks dedicated and listen owner privacy on serialized RPCs,
-reliable life renewal, takeover, explicit pose acceptance and protocol 14 rejection.
+reliable life renewal, takeover, explicit pose acceptance and rejection of a protocol 17 peer by a protocol 18 host.
 The movement source test covers repeated, skipped, expired and wrapped sequences. The
 authority and travel suites check mode generations across handoffs and room bindings.
 
@@ -245,7 +245,7 @@ one `PR0` row per walk, jump and crouch trial. These timings end at headless pre
 
 `tests/net/net_prediction_boundaries_test.gd` compares every replayed post to an independently
 advanced reference in a memory session. It exercises static stairs in both directions, a slide
-jump and slide expiry, a lost fallback pose, local volume and ledge detection, stamina
+jump and slide expiry, a lost fallback pose, local dynamic support and ledge detection, stamina
 exhaustion, an external spend, freeze/thaw and node reuse after death. The authority suite
 prints `PR4 CROSS` displacements. Travel tests cover failed preparation, a source checkpoint
 at the destination and a vehicle without a matching destination seat. The physics action
@@ -270,3 +270,35 @@ accepts one owner. Connect the observer directly to port 7777. Use `r.profile(10
 ```sh
 python3 -i -c 'import sys; sys.path.insert(0,"tools"); from check_multiplayer import DelayRelay; r=DelayRelay(7777); r.profile(150); print(r.port)'
 ```
+
+
+## Prediction PR6 ladders and swimming
+
+The original ladder and swim routes contribute to the eighteen-route PR1a digest.
+Run the additional offline routes separately with
+`nice -n 19 godot --headless --path . --fixed-fps 60 res://tests/player/volume_golden_runner.tscn`.
+The two digests include pitch-dependent ladder reversal, jump-off, dive, rise and exit.
+The gdUnit volume fixture also runs both routes.
+
+The legacy-chart comparison checks position and mode on all 80 ladder ticks up to
+jump-off and all 188 swim-route ticks through the ledge exit. At jump-off the fixed
+step applies the PR3 jump on the input tick.
+
+The authority suite checks 60 successive ticks from a decoded mid-climb or mid-dive checkpoint.
+It counts solves and prints displacements around ladder ends, seat entry
+and release, swim ledge capture, clearance under a low bank and falling from water into
+a roll. The prediction boundary suite measures climb and dive on the input tick and
+compares pending commands after a 0.30 m authority push with an independent restore
+from the decoded checkpoint. It also records audio and private attributes across replay.
+The eight `PR6 LANE` rows report matched-ack p50, p95 and maximum error in metres,
+maximum replay depth, inactive ticks and cumulative suspension reasons. Each lane checks
+the change in suspension counts after warm-up. The profiles are 0, 16, 100 and 150 ms
+RTT with every tenth command datagram dropped.
+
+The `prediction_boundaries` process scenario continues in Laboratory after travel.
+The ladder is at `NavigationRegion3D/MOVEMENT/Ladder`. The pool and a second ladder
+are at `SwimmingTest/WaterPool` and `SwimmingTest/Ladder2`. Ada climbs, dives and
+rises on live input. `PR6 PROCESS` prints displacement in metres for the authority,
+owner and dedicated observer (authority and owner on listen). Use the relay procedure
+above to repeat the route interactively at 100 and 150 ms, including a jump-off, a
+walking exit and a ledge capture while another player observes.

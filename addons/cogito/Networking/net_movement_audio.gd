@@ -23,6 +23,8 @@ var _previous := {}
 var _phase := 0.0
 var _slide: AudioStreamPlayer3D
 var _sliding := false
+var _volume_loop := false
+var _previous_volume := {}
 
 
 func _init(actor: CogitoPlayerAdvanced) -> void:
@@ -31,16 +33,23 @@ func _init(actor: CogitoPlayerAdvanced) -> void:
 
 func reset() -> void:
 	_previous = {}
+	_previous_volume = {}
 	_phase = 0.0
 	_set_sliding(false)
+	if _volume_loop:
+		_actor._set_underwater_audio(false)
+		_actor._show_underwater_effect(false)
+		_volume_loop = false
 
 
 ## Feed accepted snapshots, or a single stream of forward predicted poses for a future owner.
-func observe(frame: Dictionary) -> void:
+func observe(frame: Dictionary, volume_effects := false, submerged := false) -> void:
 	if _actor.is_dead or frame.sitting or frame.posture == POSTURE.SITTING:
 		reset()
 		return
 	var last := _previous
+	if volume_effects:
+		observe_volumes(frame, submerged)
 	if not last.is_empty() and frame.tick <= last.tick:
 		return
 	_previous = frame
@@ -63,14 +72,35 @@ func observe(frame: Dictionary) -> void:
 		_surface("landing", _actor.LERP_SPEED, frame.position)
 
 	var dt := float(frame.tick - last.tick) / Engine.physics_ticks_per_second
-	_cadence(mode, velocity, dt, frame.position)
+	if mode != MODE.LADDER_CLIMBING and (not volume_effects or mode != MODE.SWIMMING):
+		_cadence(mode, velocity, dt, frame.position)
+
+
+func observe_volumes(frame: Dictionary, submerged: bool) -> void:
+	var last := _previous_volume
+	if not last.is_empty() and frame.tick <= last.tick:
+		return
+	_previous_volume = frame
+	if _actor.is_local_presentation and submerged != _volume_loop:
+		_volume_loop = submerged
+		_actor._set_underwater_audio(submerged)
+		_actor._show_underwater_effect(submerged)
+	if last.is_empty() or Snapshot.discontinuous(last, frame):
+		_phase = 0.0
+		return
+	if (frame.moving == MODE.SWIMMING) != (last.moving == MODE.SWIMMING):
+		CogitoAudio.play_sound_3d_attached(_actor.swim_movement_sound, _actor)
+		_phase = 0.0
+	if frame.moving in [MODE.SWIMMING, MODE.LADDER_CLIMBING]:
+		var dt := float(frame.tick - last.tick) / Engine.physics_ticks_per_second
+		_cadence(frame.moving, frame.velocity, dt, frame.position)
 
 
 func _cadence(mode: int, velocity: Vector3, dt: float, point: Vector3) -> void:
 	var rate: float
 	var volume: float
 	match mode:
-		MODE.WALKING:
+		MODE.LADDER_CLIMBING, MODE.WALKING:
 			rate = _actor.WIGGLE_ON_WALKING_SPEED
 			volume = _actor.walk_volume_db
 		MODE.SPRINTING:
@@ -84,7 +114,9 @@ func _cadence(mode: int, velocity: Vector3, dt: float, point: Vector3) -> void:
 		_:
 			return
 	var speed := (
-		velocity.length() if mode == MODE.SWIMMING else Vector2(velocity.x, velocity.z).length()
+		velocity.length()
+		if mode in [MODE.SWIMMING, MODE.LADDER_CLIMBING]
+		else Vector2(velocity.x, velocity.z).length()
 	)
 	if speed < 0.2:
 		return
@@ -96,8 +128,13 @@ func _cadence(mode: int, velocity: Vector3, dt: float, point: Vector3) -> void:
 		if mode == MODE.SWIMMING:
 			CogitoAudio.play_sound_3d_attached(_actor.swim_movement_sound, _actor)
 		elif _actor.footstep_surface_detector:
-			_actor.footstep_surface_detector.volume_db = volume
-			_surface("footstep", speed, point)
+			var feet := _actor.footstep_surface_detector
+			feet.volume_db = volume
+			if mode == MODE.LADDER_CLIMBING:
+				if feet.generic_fallback_footstep_profile:
+					feet._play_footstep(feet.generic_fallback_footstep_profile, "footstep")
+			else:
+				_surface("footstep", speed, point)
 
 
 func _surface(kind: String, speed: float, point: Vector3) -> void:

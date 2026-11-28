@@ -140,6 +140,8 @@ func _verify_replay(block: NetOwnerState) -> void:
 	var packets := _channel.packets
 	var position := _owner.actor.position
 	var stamina := _owner.actor.stamina_attribute.value_current
+	var oxygen: float = _owner.actor.player_attributes["oxygen"].value_current
+	var health: float = _owner.actor.player_attributes["health"].value_current
 	var noises := [_shots, _ear.jumps, _ear.feet.footsteps, _ear.feet.landings]
 	var audio_tick: int = _owner.movement_audio._previous.tick
 	var wield_seq := _owner.wield._predicted_sequence
@@ -166,6 +168,8 @@ func _verify_replay(block: NetOwnerState) -> void:
 	assert_array([_shots, _ear.jumps, _ear.feet.footsteps, _ear.feet.landings]).is_equal(noises)
 	assert_int(_owner.wield._predicted_sequence).is_equal(wield_seq)
 	assert_float(_owner.actor.stamina_attribute.value_current).is_equal(stamina)
+	assert_float(_owner.actor.player_attributes["oxygen"].value_current).is_equal(oxygen)
+	assert_float(_owner.actor.player_attributes["health"].value_current).is_equal(health)
 	assert_float(_owner.actor.body.rotation.y).is_equal_approx(yaw, 0.000001)
 	assert_vector(_owner.actor.position).is_equal(position)
 	var post := prediction.post_at(live_sequence)

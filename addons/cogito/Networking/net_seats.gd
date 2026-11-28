@@ -33,6 +33,15 @@ func use(seat: CogitoSittable, pic: PlayerInteractionComponent) -> Dictionary:
 	actor.current_command = actor.neutral_command(actor.last_consumed_sequence)
 	actor.collision_mask = 0
 	actor.global_transform = seat.sit_position_node.global_transform
+	if (
+		actor.authority_movement
+		and (
+			actor.current_moving_state
+			in [CogitoMovementState.Mode.LADDER_CLIMBING, CogitoMovementState.Mode.SWIMMING]
+		)
+	):
+		# The authored sit transition starts in Grounded.
+		actor.state_chart.send_event("grounded")
 	actor.state_chart.send_event("sit")
 	seat.player_node = actor
 	seat.occupant_id = actor.get_meta(&"net_wield").player_id

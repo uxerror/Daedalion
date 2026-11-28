@@ -155,7 +155,7 @@ respawn_delay=10.0
 | `respawn_delay` | Finite, nonnegative seconds, default `10.0`. Zero enables immediate requests. | `--respawn-delay 1.5` |
 | `display_name` | `Host` for the listen player. Clients supply their own name in join credentials, default `Player`. | Config file |
 
-The protocol version is 17, including sessions with the authority movement switch off. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
+The protocol version is 18, including sessions with the authority movement switch off. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
 
 The dedicated level starts empty and simulates admitted remote avatars. Their first-person cameras, HUDs and light-meter cameras are omitted. The default demo boot prevents the menu subtree from entering the tree. Dedicated startup skips solo save recovery and cleanup, the fade panel, game options, graphics and input-map setup by Cogito's menu autoload. The engine still loads project resources, Cogito settings and the existing autoload nodes, including InputHelper, DebugLine, InputRouter, audio and quest services. The dedicated export configures a simulation main scene and strips authored presentation when packing. Room physics uses a non-rendering SubViewport. The operator guide describes the pack and service installation.
 
@@ -454,7 +454,7 @@ The project uses 60 physics ticks per second by default. Commands use unreliable
 
 Use `CogitoNet.player_world.travel.endpoint_for(player_id)` to find the room hosting a live identity, then call its `avatar_for(player_id)`. Its `actor` is the Advanced node. On a replica, `timeline.latest()` exposes the last received pose including `tick` and `ack`. On the server, `actor.last_consumed_sequence` records the last applied command.
 
-### Owner checkpoint (protocol 17)
+### Owner checkpoint (protocol 18)
 
 The reliable channel 0 spawn and in-place respawn include a packed `owner_state` field
 in the owner's pose dictionary. At 25 Hz the authority sends each ready client a single
@@ -479,35 +479,36 @@ and retains both ack and last-fresh tick. Each forward skip and each entry into 
 NEUTRAL increments the discontinuity count. The independent weapon acceptance number
 continues to describe the last accepted weapon action.
 
-**Block layout v2.** All multibyte fields are little-endian. Every offset is measured
+**Block layout v3.** All multibyte fields are little-endian. Every offset is measured
 from the start of the PackedByteArray. The exact lengths are **68 B fallback** and
-**511 B eligible**. The client rejects an unknown version, size mismatch, reserved bits,
+**519 B eligible**. The client rejects an unknown version, size mismatch, reserved bits,
 invalid alignment or enum, and non-finite movement data before installing any state.
 
 | Offset | Field, in wire order | Type | Bytes | Precision |
 |---:|---|---|---:|---|
-| 0 | Layout version | u8 | 1 | Exact, 2 |
+| 0 | Layout version | u8 | 1 | Exact, 3 |
 | 1 | Disposition bits 0–1 (fresh 0, held 1, neutral 2, gap 3), eligible bit 7 | u8 | 1 | Exact |
 | 2 | Authority physics rate | u16 | 2 | Integer Hz |
 | 4 | Client room binding, avatar life, pose revision, movement generation | 4 × i64 | 32 | Exact serials |
 | 36 | T, ack, last-fresh T, discontinuity count | 4 × i64 | 32 | Exact, −1 denotes no fresh command in this life |
 | 68 | Moving mode, posture | 2 × u8 | 2 | State enum values |
 | 70 | State flags, low bit first in the order below | u32 | 4 | Exact booleans |
-| 74 | Force requested, teleported, stamina locked, slope exhaustion enabled, authority input blocked | u8 | 1 | Bits 0–4 |
-| 75 | Level-local origin, transform basis columns, body basis columns | 7 × vec3f | 84 | Engine vector precision |
-| 159 | Requested, resolved, main and last velocity, direction, gravity direction and accumulator, floor and wall normals, step head offset, head and eye positions | 12 × vec3f | 144 | Binary32 per component |
-| 303 | Input direction, slide vector | 2 × vec2f | 16 | Binary32 per component |
-| 319 | Body yaw, neck yaw, head pitch, speed, lerp speed, gravity, jump target speed, bunny-hop speed, speed multiplier, stamina, previous world Y | 11 × f64 | 88 | Native scalar precision |
-| 407 | Remaining slide, jump cooldown and regen delay | 3 × f64 | 24 | Physics ticks, including fractional phase |
-| 431 | Pending force | vec3f | 12 | Binary32 per component |
-| 443 | Movement modifier generation | u32 | Exact |
-| 447 | Stamina max, regen rate, run/uphill/downhill exhaustion rates, step slope multiplier, regen delay duration in seconds, kernel jump cost | 8 × f64 | 64 | Native scalar precision |
+| 74 | Last observed ladder shape key, ladder cooldown remaining | 2 × u32 | 8 | Room-relative path hash (zero for no contact), whole physics ticks |
+| 82 | Force requested, teleported, stamina locked, slope exhaustion enabled, authority input blocked | u8 | 1 | Bits 0–4 |
+| 83 | Level-local origin, transform basis columns, body basis columns | 7 × vec3f | 84 | Engine vector precision |
+| 167 | Requested, resolved, main and last velocity, direction, gravity direction and accumulator, floor and wall normals, step head offset, head and eye positions | 12 × vec3f | 144 | Binary32 per component |
+| 311 | Input direction, slide vector | 2 × vec2f | 16 | Binary32 per component |
+| 327 | Body yaw, neck yaw, head pitch, speed, lerp speed, gravity, jump target speed, bunny-hop speed, speed multiplier, stamina, previous world Y | 11 × f64 | 88 | Native scalar precision |
+| 415 | Remaining slide, jump cooldown and regen delay | 3 × f64 | 24 | Physics ticks, including fractional phase |
+| 439 | Pending force | vec3f | 12 | Binary32 per component |
+| 451 | Movement modifier generation | u32 | 4 | Exact |
+| 455 | Stamina max, regen rate, run/uphill/downhill exhaustion rates, step slope multiplier, regen delay duration in seconds, kernel jump cost | 8 × f64 | 64 | Native scalar precision |
 
-The 29 state bits in order are floor, wall, ceiling, air steps, standing shape, crouching
+The 32 state bits in order are floor, wall, ceiling, air steps, standing shape, crouching
 shape, cast enabled, cast blocked, crouch latch, jump started, in air, was in air, was
 jumping, was sprinting, sprinting in air, was standing, was sliding, jumped from slide,
 jumped from crouch, slide stopped, jump stopped, sitting, on ladder, has control, jump
-allowed, posture locked, has stamina, regen active and regen stopped.
+allowed, posture locked, has stamina, regen active, regen stopped, submerged, was swimming and crouched before swim.
 
 The position uses the same binary32 components as the shipped Godot Vector3 build.
 At a level-local coordinate of 100 km the spacing is 7.8125 mm. Encoding introduces
@@ -525,19 +526,21 @@ envelope tick/ack and a strictly newer timeline tick before wield reconciliation
 A new life seeds a fresh timeline. Despawn, disconnect and room retirement release the
 holder. A newer forced revision replaces the old checkpoint and starts a new command history.
 
-In the dedicated two-client file-transport check, Ada's delivered pose rows measured
+In the PR4 dedicated two-client file-transport check, Ada's delivered pose rows measured
 11,542 B/s at the owner and 8,580 B/s at the observer with the switch off. With a kernel
 checkpoint they measured 22,680 and 8,910 B/s respectively. The fixture sizes the received
 Variant row over a window of at least one simulated second. Publication phase accounts for
 variation in the number of rows sampled. Batch, RPC and ENet overhead are outside this
-measurement.
+measurement. With PR6 checkpoint v3, both the authority-only and owner-prediction
+runs measured 22,984 B/s at the owner and 8,910 B/s at the observer. The encoded sizes of an eligible checkpoint are 511 B in v2 and 519 B
+in v3. The fallback header occupies 68 B in each version.
 
-### Owner prediction and replay (PR3–PR4)
+### Owner prediction and replay (PR3–PR6)
 
 Launch the server with `COGITO_AUTHORITY_MOVEMENT=1` and the owning client with
 `COGITO_OWNER_PREDICTION=1`. Both switches default to off. The client reads its switch
 once into `net_config.gd`'s static `owner_prediction` field. A test can set it before
-spawn. Protocol 17 adds four bytes to eligible owner poses for movement modifier generation.
+spawn. Protocol 18 requires checkpoint v3 on both peers. Its eight additional bytes apply only to eligible poses.
 Physics defaults to 60 Hz, pose publication to 25 Hz and remote interpolation to 100 ms. A listen host runs its own authority movement once.
 
 The latest accepted private checkpoint replaces the queued one. At the beginning of the
@@ -562,8 +565,8 @@ Set `COGITO_PREDICTION_DEBUG=1` on the client to print transitions and their seq
 
 | Reason | Condition |
 |---|---|
-| `fallback` | Authority supplied a legacy checkpoint, including server-driven ladders, water, ledges, rolls, moving supports and seats. |
-| `unsupported_mode`, `unsupported_contact` | Pending force, invalidated pose, unsupported mode, local ladder/water volume, ledge capture, roll, or dynamic obstruction. |
+| `fallback` | Authority supplied a legacy checkpoint, including ledge climbs, rolls, moving supports and seats. |
+| `unsupported_mode`, `unsupported_contact` | Pending force, invalidated pose, unsupported mode, local ledge capture (including a swim exit), roll, or dynamic obstruction. |
 | `missing_history`, `replay_budget` | A command or required post-state has expired, the tail has a hole or replay needs more than 24 ticks. |
 | `impossible_ack`, `physics_rate` | The ack exceeds the live sequence, regresses within the scope or the physics rates differ. |
 | `mode_transition` (PR4) | The generation changed while prediction was active. An intervening legacy pose may have been lost. Reset the visual offset and audio phase before resuming. |
@@ -598,7 +601,7 @@ clocks, jump-from-slide latch, bunny-hop speed, shape and step head offset are p
 eligible checkpoint. Slide, jump, land and footstep audio follow live movement ticks.
 
 The authority tests eligibility before committing any displacement. A dynamic hit, moving
-support, water, ladder or other active legacy mode can give that whole tick to Advanced.
+support or active legacy mode can give that whole tick to Advanced.
 A roll or ledge capture discovered by a committed step synchronizes the chart on that tick.
 Legacy physics callbacks run on the next tick. Advanced owns the actor's actual transform,
 requested and resolved velocities, main and last momentum, posture, hull, timers and
@@ -607,8 +610,21 @@ Returning to the kernel captures those fields at the new origin. An external for
 one authority tick. Seats and driver changes invalidate the pose revision and keep local
 limited look and driver axes. The unseated supported checkpoint permits resumption.
 
-The owner uses the same ledge clearance probes against the hypothetical solve, and checks
-ladder/water volumes before and after motion. While suspended it continues sending commands.
+Before each movement request both adapters query the standing or crouching hull and the
+authored head shape at the simulation pose in the bound room's World3D. The hull uses the
+environment and water Area layers. The head uses the prefab's water mask. Ladder direction
+and bounds and the water box's surface height come from the room geometry. The ladder key
+identifies a continuous overlap so a jump-off cannot recapture the same rungs. Depth is
+sampled again on replay. No historical actor transform is installed in the physics world.
+
+Ladder entry checks facing and pitch. The tick counter delays detachment on floor contact.
+Swim uses aim-relative input, held jump to rise, held crouch to dive, surface clipping and
+idle sinking. A ground or air solve commits water entry, then the next swim tick uses
+the command sampled on that tick. Clearance and the pre-swim crouch latch determine the exit posture. Forward
+jump at the bank runs the authored swim ledge probe at the solved pose. On capture, the
+authority passes the next tick to the ledge chart. Oxygen, suffocation damage and their
+private HUD updates run on authority time. The owner uses the same ledge clearance probes
+against the hypothetical solve. While suspended it continues sending commands.
 A supported checkpoint must cover the crossing command and leave a contiguous tail of at most
 24 commands. On a generation change the next live tick starts a fresh audio clock. The
 remote timeline still interpolates 100 ms behind and extrapolates for at most 50 ms.
@@ -621,7 +637,7 @@ world height and jump cost. External spends enter through the next authoritative
 Only the private reliable attribute stream updates the HUD.
 
 Death releases held actions and clears movement history. A reused actor receives a new life
-and fresh slide, jump and stamina phase, retaining its input sequence watermark. Transfer
+and fresh ladder contact, swim history, slide, jump and stamina phase, retaining its input sequence watermark. Transfer
 preparation suspends the source owner. Successful travel retires the source incarnation and
 seeds the destination after token, epoch and binding validation. Failed preparation advances
 the source revision. The owner discards commands from loading and waits for a fresh scoped
@@ -646,7 +662,7 @@ same presenter for remote players in its audible viewport. Dedicated avatars hav
 movement audio players. NPC hearing on both authorities still uses `_network_footstep()`
 and the room's NPC listeners. Playing a sound on a replica creates no hearing areas.
 
-The predicting owner feeds one live frame per movement tick to `movement_audio.observe(frame)`.
+The predicting owner feeds one live frame per movement tick to `movement_audio.observe()`. Ladder steps use vertical speed, swim entry and exit play one splash using the authored swim stream, and the simulation head observation toggles the underwater loop.
 Replay is silent. Entering or leaving prediction resets the audio clock. The first sample
 on the new clock seeds its cadence. Observers continue to use authoritative snapshots.
 
@@ -677,7 +693,7 @@ regeneration use physics time on these ticks. The listen player’s own movement
 stimuli and attribute updates run once on authority. Interaction checks use
 `movement_grounded()` and slope exhaustion uses `movement_floor_normal()`.
 
-Water and ladder movement, ledge climbs, hard-landing rolls, free fall, dynamic contacts,
+Ledge climbs, hard-landing rolls, free fall, dynamic contacts,
 seats and external forces use Advanced. A dynamic hit discards the trial before any effect
 or displacement. The chart resumes with the live momentum, pose, posture, timer phases and
 last contacts. A force or gravity change queues one legacy body move at the next boundary.

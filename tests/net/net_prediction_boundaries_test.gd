@@ -106,11 +106,16 @@ func test_lost_impulse_fallback_snaps_generation_and_replays_pending_walk() -> v
 	fail("No supported generation after dropped fallback")
 
 
-func test_local_volume_waits_for_crossing_ack_and_continues_sending() -> void:
+func test_local_dynamic_support_waits_for_crossing_ack_and_continues_sending() -> void:
 	await _ticks(45)
-	var pool: Area3D = _client.player_world.active_level().get_node("Pool")
-	var parked := pool.position
-	pool.position = _owner.actor.position
+	var platform := AnimatableBody3D.new()
+	var hull := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(4, 1, 4)
+	hull.shape = box
+	platform.add_child(hull)
+	platform.position = _owner.actor.position - Vector3.UP * 1.25
+	_client.player_world.active_level().add_child(platform)
 	_network[2].configure(1, 1, {"delay_ms": 100})
 	await _ticks(4)
 	var prediction := _owner.prediction
@@ -118,7 +123,7 @@ func test_local_volume_waits_for_crossing_ack_and_continues_sending() -> void:
 	var crossing := prediction._boundary_sequence
 	assert_int(crossing).is_greater(prediction.baseline.ack)
 	var packets := _channel.packets
-	pool.position = parked
+	platform.free()
 	for i in 18:
 		await _ticks(1)
 		if prediction.baseline.ack < crossing:
@@ -294,3 +299,222 @@ func test_slide_expiry_replays_across_last_timer_tick() -> void:
 	assert_bool(state.slide_stopped).is_true()
 	assert_int(state.mode).is_equal(CogitoMovementState.Mode.SNEAKING)
 	assert_array(_ear.slides).contains_exactly([true, false])
+
+
+func _stage_volume(point: Vector3) -> void:
+	_authority.actor.position = point
+	_authority.actor.main_velocity = Vector3.ZERO
+	_authority.actor.velocity = Vector3.ZERO
+	_server.player_world.mark_teleport(_client.local_player_id())
+	for i in 60:
+		await _ticks(1)
+		var prediction := _owner.prediction
+		if prediction.active and prediction.baseline.revision == _authority.revision:
+			return
+	fail("Volume staging revision did not become eligible")
+
+
+func _push_in_volume(mode: int) -> void:
+	_authority.actor.position.x += 0.30
+	var tick := _server.player_world._tick
+	for i in 24:
+		await _ticks(1)
+		var block := _owner.prediction.queued
+		if block and block.tick > tick and block.state:
+			assert_int(block.state.mode).is_equal(mode)
+			assert_int(_owner.prediction.newest - block.ack).is_greater(0)
+			var strokes := _ear.strokes
+			_verify_replay(block)
+			assert_int(_ear.strokes).is_equal(strokes)
+			return
+	fail("Missing authoritative volume checkpoint after push")
+
+
+func test_same_tick_climb_jump_off_and_restore() -> void:
+	await _ticks(45)
+	_ear = AudioTest.Recorder.new(_owner)
+	await _stage_volume(Vector3(-10, 4, 0.2))
+	var s := _owner.prediction.state
+	assert_int(s.mode).is_equal(CogitoMovementState.Mode.LADDER_CLIMBING)
+	assert_int(s.ladder_ticks).is_greater(0)
+	_network[2].configure(1, 1, {"delay_ms": 65})
+	var start := _owner.actor.position.y
+	_driver.walking = true
+	await _ticks(1)
+	assert_float(_owner.actor.position.y - start).is_equal_approx(2.0 / 60, 0.00001)
+	await _ticks(5)
+	await _push_in_volume(CogitoMovementState.Mode.LADDER_CLIMBING)
+	_driver.reverse = true
+	start = _owner.actor.position.y
+	await _ticks(1)
+	assert_float(_owner.actor.position.y - start).is_equal_approx(-2.0 / 60, 0.00001)
+	var push_tick := _server.player_world._tick
+	_authority.actor.position.x += 0.30
+	await _ticks(3)
+	_driver.held = 1 << ACTION.JUMP
+	await _ticks(1)
+	var departure := _owner.actor.last_consumed_sequence
+	assert_int(_owner.prediction.state.mode).is_equal(CogitoMovementState.Mode.JUMPING)
+	assert_int(_ear.jumps).is_equal(1)
+	_driver.held = 0
+	var crossed := false
+	for i in 10:
+		var block := _owner.prediction.queued
+		if block and block.state and block.tick > push_tick and block.ack < departure:
+			assert_int(block.state.mode).is_equal(CogitoMovementState.Mode.LADDER_CLIMBING)
+			assert_int(block.state.ladder_ticks).is_greater(0)
+			_verify_replay(block)
+			assert_bool(departure in _owner.prediction.last_replay).is_true()
+			var post := _owner.prediction.post_at(departure)
+			assert_int(post.mode).is_equal(CogitoMovementState.Mode.JUMPING)
+			assert_bool(post.on_ladder).is_false()
+			print("PR6 REPLAY jump-off sequence=", departure, " from ladder ack=", block.ack)
+			crossed = true
+			break
+		await _ticks(1)
+	assert_bool(crossed).is_true()
+	await _replay_after_spend()
+	assert_int(_ear.jumps).is_equal(1)
+
+
+func test_same_tick_dive_and_restore_rise_to_surface() -> void:
+	await _ticks(45)
+	_ear = AudioTest.Recorder.new(_owner)
+	await _stage_volume(Vector3(10, 9, 0))
+	_network[2].configure(1, 1, {"delay_ms": 65})
+	var start := _owner.actor.position.y
+	var initial := _owner.prediction.state
+	var profile := _owner.prediction.solver.profile
+	var dt := 1.0 / _owner.prediction.baseline.rate
+	var weight := dt * profile.lerp_speed
+	var speed := lerpf(initial.current_speed, profile.swimming_speed, weight)
+	var expected := lerpf(initial.main_velocity.y, -speed * initial.speed_multiplier, weight) * dt
+	_driver.held = 1 << ACTION.CROUCH
+	await _ticks(1)
+	var dive_delta := _owner.actor.position.y - start
+	assert_float(dive_delta).is_less(0)
+	assert_float(dive_delta).is_equal_approx(expected, 0.000001)
+	print("PR6 INPUT dive dy=", dive_delta, " expected=", expected)
+	assert_int(_owner.prediction.state.mode).is_equal(CogitoMovementState.Mode.SWIMMING)
+	assert_bool(_owner.prediction.state.submerged).is_true()
+	await _ticks(8)
+	await _push_in_volume(CogitoMovementState.Mode.SWIMMING)
+	_driver.held = 1 << ACTION.JUMP
+	await _ticks(125)
+	assert_float(_owner.actor.position.y).is_greater(start)
+	assert_bool(_owner.prediction.state.submerged).is_false()
+	assert_float(absf(_owner.actor.velocity.y)).is_less(0.02)
+	assert_int(_ear.strokes).is_greater(0)
+
+
+func test_climb_and_swim_rubber_banding(_timeout := 45000) -> void:
+	await _ticks(45)
+	_network[2].drop_every_tenth_command = true
+	for rtt: int in [0, 16, 100, 150]:
+		for peer: int in [1, 2]:
+			_network[peer].configure(3 - peer, 1, preload("packet_schedule.gd").profile(rtt))
+		for swimming: bool in [false, true]:
+			_driver.held = 0
+			_driver.walking = false
+			await _stage_volume(Vector3(10, 8, 0) if swimming else Vector3(-10, 4, 0.2))
+			await _ticks(35)
+			var mode := (
+				CogitoMovementState.Mode.SWIMMING
+				if swimming
+				else CogitoMovementState.Mode.LADDER_CLIMBING
+			)
+			assert_int(_owner.prediction.state.mode).is_equal(mode)
+			var samples: Array[float] = []
+			var depth := 0
+			var last_tick := -1
+			var resets := 0
+			var initial := _owner.prediction.reasons.duplicate()
+			for i in 90:
+				_driver.walking = not swimming
+				_driver.reverse = i >= 45
+				_driver.held = (1 << (ACTION.CROUCH if i < 45 else ACTION.JUMP)) if swimming else 0
+				await _ticks(1)
+				var prediction := _owner.prediction
+				resets += int(not prediction.active)
+				if last_tick != prediction.baseline.tick:
+					last_tick = prediction.baseline.tick
+					samples.append(prediction.last_position_error)
+					if prediction.last_restore_tick == last_tick:
+						depth = maxi(depth, prediction.last_replay.size())
+			samples.sort()
+			var p95 := samples[ceili(samples.size() * 0.95) - 1]
+			print(
+				"PR6 LANE ",
+				"swim" if swimming else "ladder",
+				" ",
+				rtt,
+				" ",
+				JSON.stringify(
+					{
+						"p50": samples[samples.size() >> 1],
+						"p95": p95,
+						"max": samples.back(),
+						"depth": depth,
+						"resets": resets,
+						"suspensions": _owner.prediction.reasons
+					}
+				)
+			)
+			assert_int(resets).is_zero()
+			assert_dict(_owner.prediction.reasons).is_equal(initial)
+			assert_float(p95).is_less_equal(0.02)
+
+
+func test_swim_ledge_handoff_and_resume() -> void:
+	for branch in [_server, _client]:
+		var bank := StaticBody3D.new()
+		var hull := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(4, 1, 5)
+		hull.shape = box
+		bank.add_child(hull)
+		bank.position = Vector3(10, 11.8, -6.4)
+		branch.player_world.active_level().add_child(bank)
+	await _ticks(40)
+	await _stage_volume(Vector3(10, 11.3, 0))
+	_network[2].configure(1, 1, {"delay_ms": 50})
+	_driver.held = 1 << ACTION.JUMP
+	_driver.walking = true
+	var captured := false
+	var fallback := false
+	for i in 180:
+		await _ticks(1)
+		captured = (
+			captured
+			or _authority.actor.current_moving_state == CogitoMovementState.Mode.LEDGE_CLIMBING
+		)
+		fallback = fallback or _owner.prediction.reason == "fallback"
+		if captured and fallback and _owner.prediction.active:
+			break
+	assert_bool(captured and fallback).is_true()
+	assert_bool(_owner.prediction.active).is_true()
+	assert_array(_entries).is_empty()
+
+
+func test_live_volume_audio_edges_and_vertical_steps() -> void:
+	await _ticks(40)
+	_ear = AudioTest.Recorder.new(_owner)
+	for branch in [_server, _client]:
+		var pool: Area3D = branch.player_world.active_level().get_node("Pool")
+		pool.position = Vector3(0, 1, 0)
+		pool.force_update_transform()
+	await _ticks(3)
+	assert_int(_owner.prediction.state.mode).is_equal(CogitoMovementState.Mode.SWIMMING)
+	assert_int(_ear.strokes).is_equal(1)
+	for branch in [_server, _client]:
+		var pool: Area3D = branch.player_world.active_level().get_node("Pool")
+		pool.position = Vector3(10, 6, 0)
+		pool.force_update_transform()
+	await _ticks(5)
+	assert_int(_ear.strokes).is_equal(2)
+	await _stage_volume(Vector3(-10, 4, 0.2))
+	_driver.walking = true
+	var initial := _ear.feet.footsteps
+	await _ticks(45)
+	assert_int(_ear.feet.footsteps).is_greater(initial)
+	assert_int(_ear.strokes).is_equal(2)

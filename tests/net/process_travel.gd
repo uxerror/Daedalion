@@ -18,6 +18,26 @@ var _last_snapshot := 0
 var _snapshot_gap := 0
 var _snapshot_count := 0
 var _route: PredictionRoute
+var _volume_driver: VolumeDriver
+
+
+class VolumeDriver:
+	extends CogitoPlayerInputSource
+	var phase: String
+
+	func sample(actor: CogitoPlayer, seq: int) -> CogitoPlayerCommand:
+		var cmd := super.sample(actor, seq)
+		cmd.yaw = PI / 2
+		cmd.pitch = 0
+		cmd.neck_yaw = 0
+		cmd.toggle_crouch = false
+		if phase == "climb":
+			cmd.move = Vector2.UP
+		elif phase == "dive":
+			cmd.held = 1 << CogitoPlayerCommand.Action.CROUCH
+		elif phase == "rise":
+			cmd.held = 1 << CogitoPlayerCommand.Action.JUMP
+		return cmd
 
 
 class PredictionRoute:
@@ -122,6 +142,11 @@ func _apply(cmd: Dictionary, travel: Node) -> void:
 	elif cmd.op == "route":
 		_route = PredictionRoute.new()
 		CogitoNet.local_player().input_source = _route
+	elif cmd.op == "volume_input":
+		if not _volume_driver:
+			_volume_driver = VolumeDriver.new()
+			CogitoNet.local_player().input_source = _volume_driver
+		_volume_driver.phase = cmd.phase
 	elif cmd.op == "chair":
 		var endpoint: Node = travel.endpoint_for(CogitoNet.local_player_id())
 		var interaction: Node = endpoint.active_level().get_node("CogitoSittable2/BasicInteraction")
@@ -145,7 +170,7 @@ func _apply(cmd: Dictionary, travel: Node) -> void:
 				continue
 			var endpoint: Node = travel.endpoint_for(record.player_id)
 			var root: Node3D = endpoint.active_level()
-			var actor: CogitoPlayer = endpoint.avatar_for(record.player_id).actor
+			var actor: CogitoPlayerAdvanced = endpoint.avatar_for(record.player_id).actor
 			if cmd.op == "cross":
 				_previous_tick = Time.get_ticks_usec()
 				_max_gap = 0
@@ -153,6 +178,19 @@ func _apply(cmd: Dictionary, travel: Node) -> void:
 				actor.global_position = zone.global_position
 			elif cmd.op == "lane_start":
 				actor.position = Vector3(-4, 51, 0)
+			elif cmd.op == "ladder_start":
+				var ladder: Ladder = root.get_node("NavigationRegion3D/MOVEMENT/Ladder")
+				var shape: CollisionShape3D = ladder.get_node("ladderArea")
+				var outward := ladder.outward(shape)
+				actor.body.rotation.y = atan2(outward.x, outward.z)
+				actor.neck.rotation.y = 0
+				actor.head.rotation.x = 0
+				actor.global_position = shape.global_position + outward * 0.29
+			elif cmd.op == "water_start":
+				var shape: CollisionShape3D = root.get_node(
+					"SwimmingTest/WaterPool/CollisionShape3D"
+				)
+				actor.global_position = shape.global_position + Vector3.UP * 0.35
 			elif cmd.op == "chair_start":
 				actor.position = Vector3(4, 51, 1.1)
 			elif cmd.op == "stage":
@@ -164,11 +202,14 @@ func _apply(cmd: Dictionary, travel: Node) -> void:
 
 func _sample(travel: Node) -> void:
 	var actors := {}
+	var modes := {}
 	for record in CogitoNet.players():
 		var endpoint: Node = travel.endpoint_for(record.player_id)
 		if not endpoint:
 			continue
-		var p: Vector3 = endpoint.avatar_for(record.player_id).actor.position
+		var avatar: CogitoPlayerAdvanced = endpoint.avatar_for(record.player_id).actor
+		var p := avatar.position
+		modes[record.display_name] = CogitoMovementState.Mode.keys()[avatar.current_moving_state]
 		actors[record.display_name] = [endpoint.world.entities.level_key, p.x, p.y, p.z]
 	var surface := ""
 	var local := CogitoNet.local_player()
@@ -180,6 +221,7 @@ func _sample(travel: Node) -> void:
 		switch_on = lobby.active_level().get_node("GenericSwitch").is_on
 	var data := {
 		"actors": actors,
+		"modes": modes,
 		"local": surface,
 		"levels": travel.levels.size(),
 		"lab_frozen": travel.residency.frozen(LAB),

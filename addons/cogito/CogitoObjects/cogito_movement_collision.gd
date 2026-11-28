@@ -5,6 +5,9 @@ extends RefCounted
 const STAIRS := CogitoMovementStep.Stairs
 
 var _space: PhysicsDirectSpaceState3D
+var _actor: CogitoPlayerAdvanced
+var _areas := PhysicsShapeQueryParameters3D.new()
+var _head := PhysicsShapeQueryParameters3D.new()
 var _standing: RID
 var _crouching: RID
 var _clearance := PhysicsShapeQueryParameters3D.new()
@@ -17,6 +20,17 @@ var _margin: float
 var _snap: float
 var _floor_cos: float
 var _slides: int
+
+
+class Volumes:
+	var ladder_key: int
+	var outward: Vector3
+	var ladder_bounds: AABB
+	var water_bounds: AABB
+	var surface_height: float
+	var in_water := false
+	var submerged := false
+	var depth := 0.0
 
 
 class Contact:
@@ -33,6 +47,17 @@ class Contact:
 
 ## A replica with collisions disabled can supply the original movement mask explicitly.
 func _init(actor: CogitoPlayerAdvanced, authored_mask := -1) -> void:
+	_actor = actor
+	_areas.collide_with_bodies = false
+	_areas.collide_with_areas = true
+	_areas.collision_mask = (
+		CogitoPhysics.CollisionMask.ENVIRONMENT | CogitoPhysics.CollisionMask.WATER
+	)
+	_head.collide_with_bodies = false
+	_head.collide_with_areas = true
+	_head.shape = actor.swimming_head_shapecast.shape
+	_head.collision_mask = actor.swimming_head_shapecast.collision_mask
+	_head.margin = actor.swimming_head_shapecast.margin
 	var world := actor.get_world_3d()
 	_space = world.direct_space_state
 	_mask = actor.initial_collision_mask if authored_mask < 0 else authored_mask
@@ -71,6 +96,8 @@ func _body(space: RID, collider: CollisionShape3D) -> RID:
 func set_exclusions(bodies: Array[RID]) -> void:
 	_params.exclude_bodies = bodies
 	_clearance.exclude = bodies
+	_areas.exclude = bodies
+	_head.exclude = bodies
 
 
 ## Seed a new pose after a teleport or check the support on leaving legacy.
@@ -91,6 +118,53 @@ func support(pose: Transform3D, standing: bool) -> Contact:
 			result.legacy = result.legacy or _dynamic_contact()
 	PhysicsServer3D.body_set_collision_mask(body, 0)
 	return result
+
+
+## Only the simulation hull and head enter these queries, including during replay.
+func volumes(pose: Transform3D, s: CogitoMovementState) -> Volumes:
+	var result := Volumes.new()
+	var hull := (
+		_actor.standing_collision_shape if s.standing_shape else _actor.crouching_collision_shape
+	)
+	_areas.shape = hull.shape
+	_areas.transform = pose * hull.transform
+	var room_from_world := s.transform * pose.affine_inverse()
+	var neck := _actor.neck.position
+	var head_at := (
+		pose.origin + s.body_basis * (neck + Basis(Vector3.UP, s.neck_yaw) * s.head_position)
+	)
+	_head.transform = Transform3D(_actor.swimming_head_shapecast.global_basis, head_at)
+	result.submerged = not _space.intersect_shape(_head, 1).is_empty()
+	for hit: Dictionary in _space.intersect_shape(_areas):
+		var area := hit.collider as Area3D
+		if area is Ladder or area is WaterArea:
+			var shape := (
+				area.shape_owner_get_owner(area.shape_find_owner(hit.shape)) as CollisionShape3D
+			)
+			if area is Ladder:
+				var key := String(_actor.get_parent().get_path_to(shape)).hash()
+				if result.ladder_key == 0 or key < result.ladder_key:
+					result.ladder_key = key
+					result.outward = area.outward(shape)
+					result.ladder_bounds = _room_bounds(shape, room_from_world)
+			else:
+				var surface := head_at
+				surface.y = area.surface_y(shape)
+				var depth := surface.y - head_at.y
+				if not result.in_water or depth > result.depth:
+					result.depth = depth
+					result.water_bounds = _room_bounds(shape, room_from_world)
+					result.surface_height = (room_from_world * surface).y
+				result.in_water = true
+	return result
+
+
+func _room_bounds(hull: CollisionShape3D, room_from_world: Transform3D) -> AABB:
+	var box := hull.shape as BoxShape3D
+	var local_bounds := (
+		AABB(-box.size * 0.5, box.size) if box else hull.shape.get_debug_mesh().get_aabb()
+	)
+	return room_from_world * hull.global_transform * local_bounds
 
 
 func blocked(pose: Transform3D) -> bool:
@@ -199,7 +273,11 @@ func solve(
 	# two layer-zero, mask-zero bodies and cannot collide with them at world zero.
 	PhysicsServer3D.body_set_collision_mask(body, _mask)
 	_params.margin = 0.001  # PhysicsTestMotionParameters3D default used for Advanced's steps.
-	_stairs(body, state, profile, dt, result)
+	if (
+		state.mode
+		not in [CogitoMovementState.Mode.LADDER_CLIMBING, CogitoMovementState.Mode.SWIMMING]
+	):
+		_stairs(body, state, profile, dt, result)
 	result.pose.origin += result.stair
 	var motion := result.velocity * dt
 	_params.margin = _margin

@@ -80,6 +80,13 @@ enum Posture { UNDEFINED, CROUCHING, STANDING, SITTING }
 @export_storage var is_sitting: bool
 @export_storage var on_ladder: bool
 
+## The previous overlap distinguishes a new entry from remaining inside after jumping off.
+@export_storage var ladder_contact: int
+@export_storage var ladder_ticks: int
+@export_storage var submerged: bool
+@export_storage var was_swimming: bool
+@export_storage var crouched_before_swim: bool
+
 ## Movement permissions and stamina on the observed frame.
 @export_storage var has_control: bool
 @export_storage var speed_multiplier: float
@@ -91,3 +98,6 @@ enum Posture { UNDEFINED, CROUCHING, STANDING, SITTING }
 @export_storage var regen_stopped: bool
 @export_storage var regen_remaining: float
 @export_storage var previous_y: float
+
+## Recomputed from the authored volume on every query, including the first restored tick.
+var swim_depth: float

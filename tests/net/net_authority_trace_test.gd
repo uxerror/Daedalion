@@ -38,7 +38,7 @@ const POSITION := {
 }
 
 
-func _run(enabled: bool) -> Dictionary:
+func _trace_output(enabled: bool, volumes := false) -> String:
 	var previous := OS.get_environment(SWITCH)
 	OS.set_environment(SWITCH, "1" if enabled else "0")
 	var output := []
@@ -52,17 +52,24 @@ func _run(enabled: bool) -> Dictionary:
 		"3000",
 		RUNNER
 	]
+	if volumes:
+		args.append_array(["--", "--volumes"])
 	var status := OS.execute(OS.get_executable_path(), args, output, true)
 	OS.set_environment(SWITCH, previous)
+	var log_text := "\n".join(output)
+	assert_int(status).override_failure_message(log_text.right(2000)).is_zero()
+	assert_bool("SCRIPT ERROR" in log_text).is_false()
+	return log_text
+
+
+func _run(enabled: bool) -> Dictionary:
+	var log_text := _trace_output(enabled)
 	var rows := {}
 	var raw := {}
 	var solves := 0
 	var bad_counts := 0
 	var summaries := 0
 	var checkpoints := {}
-	var log_text := "\n".join(output)
-	assert_int(status).override_failure_message(log_text.right(2000)).is_zero()
-	assert_bool("SCRIPT ERROR" in log_text).is_false()
 	for line in log_text.split("\n"):
 		if line.begins_with("TRACE "):
 			var fields := line.split(" ", false, 2)
@@ -163,3 +170,28 @@ func test_approved_online_routes_and_one_solve_per_tick(_timeout := 90000) -> vo
 	assert_bool(kernel.slide[75][10]).is_true()
 	assert_int(int(kernel.tired[132][6])).is_equal(CogitoMovementState.Mode.WALKING)
 	assert_float(kernel.tired.back()[9]).is_greater(kernel.tired[156][9])
+
+
+func _volume_rows(enabled: bool) -> Dictionary:
+	var rows := {"ladder": [], "swim": []}
+	for line in _trace_output(enabled, true).split("\n"):
+		if line.begins_with("TRACE "):
+			var fields := line.split(" ", false, 2)
+			rows[fields[1]].append(JSON.parse_string(fields[2]))
+	return rows
+
+
+func test_ladder_and_swim_follow_the_legacy_chart_until_air_handoff(_timeout := 90000) -> void:
+	var chart := _volume_rows(false)
+	var kernel := _volume_rows(true)
+	for lane: String in chart:
+		assert_int(kernel[lane].size()).is_equal(chart[lane].size())
+		# Jump-off at 80 and takeoff on the bank use PR3's same-tick jump.
+		var end := 80 if lane == "ladder" else 188
+		assert_int(kernel[lane].size()).is_greater(end)
+		for i in end:
+			var reference: Array = chart[lane][i]
+			var actual: Array = kernel[lane][i]
+			assert_vector(_pos(actual)).is_equal(_pos(reference))
+			assert_int(int(actual[6])).is_equal(int(reference[6]))
+		print("PR6 CHART ", lane, " matched_position_and_mode=", end)

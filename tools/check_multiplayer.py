@@ -1218,8 +1218,35 @@ class Scenario:
                 "route": route, "seat_suspensions": seated.get("suspensions", {}),
                 "destination_suspensions": destination.get("suspensions", {}),
                 "destination_predicted": destination["predicting"]}), flush=True)
+            self.order(self.server, op="cross", who="Ben" if dedicated else "Host")
+            self.sample(observer, lambda s: s["local"] == lab and "Ada" in s["actors"])
+            self.order(owner, op="volume_input", phase="idle")
+            self.order(self.server, op="ladder_start", who="Ada")
+            climb = self._volume_motion(roles, owner, "LADDER_CLIMBING", "climb", 0.35, enabled)
+            self.order(owner, op="volume_input", phase="idle")
+            self.order(self.server, op="water_start", who="Ada")
+            dive = self._volume_motion(roles, owner, "SWIMMING", "dive", -0.25, enabled)
+            rise = self._volume_motion(roles, owner, "SWIMMING", "rise", 0.30, enabled)
+            print("PR6 PROCESS", "dedicated" if dedicated else "listen",
+                  json.dumps({"climb_m": climb, "dive_m": dive, "rise_m": rise}), flush=True)
             for role in reversed(roles):
                 self.stop(role)
+
+    def _volume_motion(self, roles, owner, mode, phase, travel, enabled):
+        # Require a committed mode on the authority, the owner and the observing window.
+        starts = []
+        for role in roles:
+            pose = self.sample(role, lambda s: s["modes"].get("Ada") == mode
+                               and (role is not owner or s["predicting"] == enabled))
+            starts.append(pose["actors"]["Ada"][2])
+        self.order(owner, op="volume_input", phase=phase)
+        deltas = []
+        for role, height in zip(roles, starts):
+            pose = self.sample(role, lambda s: s["modes"].get("Ada") == mode
+                               and (s["actors"]["Ada"][2] - height) / travel >= 1
+                               and (role is not owner or s["predicting"] == enabled))
+            deltas.append(round(pose["actors"]["Ada"][2] - height, 4))
+        return deltas
 
     def latency(self):
         self.timeout_seconds = 60

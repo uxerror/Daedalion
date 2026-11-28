@@ -36,7 +36,8 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	for lane: String in LANES:
+	var routes := ["ladder", "swim"] if "--volumes" in OS.get_cmdline_user_args() else LANES
+	for lane: String in routes:
 		await _lane(lane)
 	get_tree().quit()
 
