@@ -136,15 +136,23 @@ func test_toggle_edges_are_consumed_once_and_hold_releases() -> void:
 	)
 
 
-func test_fall_triggers_roll_and_finishes_headless(_timeout := 6000) -> void:
+func test_fall_triggers_roll_and_finishes_headless(
+	disabled: bool, _test_parameters := [[false], [true]]
+) -> void:
 	var actor := _spawn(Vector3.UP * 6.0, ScriptedSource.new())
+	actor.disable_roll_anim = disabled
 	actor.TOGGLE_CROUCH = true
 	var roll_ticks := 0
 	for tick in 160:
 		await get_tree().physics_frame
 		if actor.current_moving_state == CogitoPlayerAdvanced.MovingState.Rolling:
 			roll_ticks += 1
-	assert_int(roll_ticks).is_greater(45)
+	assert_float(actor.animationPlayer.get_animation(&"roll").length).is_equal(1.0)
+	if disabled:
+		assert_int(roll_ticks).is_zero()
+	else:
+		assert_int(roll_ticks).is_greater(45)
+	print("PR7 OFFLINE physics roll_ticks=", roll_ticks)
 	assert_int(actor.current_moving_state).is_not_equal(CogitoPlayerAdvanced.MovingState.Rolling)
 	assert_int(actor.current_body_posture_state).is_equal(
 		CogitoPlayerAdvanced.BodyPostureState.Standing

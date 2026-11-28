@@ -4,9 +4,9 @@ extends RefCounted
 
 enum Disposition { FRESH, HELD, NEUTRAL, GAP }
 
-const VERSION := 3
+const VERSION := 4
 const HEADER_BYTES := 68
-const ELIGIBLE_BYTES := 519
+const ELIGIBLE_BYTES := 540
 const ALIGNMENT := [
 	"binding", "life", "revision", "generation", "tick", "ack", "last_fresh_tick", "discontinuities"
 ]
@@ -135,6 +135,10 @@ static func _write_state(stream: StreamPeerBuffer, checkpoint: NetOwnerState) ->
 	stream.put_u32(bits)
 	stream.put_u32(state_value.ladder_contact)
 	stream.put_u32(state_value.ladder_ticks)
+	stream.put_u32(state_value.roll_ticks)
+	stream.put_u8(state_value.ledge_stage)
+	stream.put_u32(state_value.ledge_key)
+	_put_vector(stream, state_value.ledge_target)
 	stream.put_u8(
 		(
 			int(checkpoint.force_requested)
@@ -211,9 +215,16 @@ static func _read_state(stream: StreamPeerBuffer, value: NetOwnerState) -> bool:
 	var bits := stream.get_u32()
 	s.ladder_contact = stream.get_u32()
 	s.ladder_ticks = stream.get_u32()
+	s.roll_ticks = stream.get_u32()
+	var stage := stream.get_u8()
+	s.ledge_stage = stage as CogitoMovementState.LedgeStage
+	s.ledge_key = stream.get_u32()
+	s.ledge_target = _get_vector(stream)
 	var adapter := stream.get_u8()
 	if (
 		mode_value >= CogitoMovementState.Mode.size()
+		or stage >= CogitoMovementState.LedgeStage.size()
+		or not s.ledge_target.is_finite()
 		or posture_value >= CogitoMovementState.Posture.size()
 	):
 		return false

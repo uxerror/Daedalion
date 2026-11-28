@@ -4,6 +4,7 @@ extends RefCounted
 
 const Step := preload("cogito_movement_step.gd")
 const MODE := CogitoMovementState.Mode
+const STAGE := CogitoMovementState.LedgeStage
 const POSTURE := CogitoMovementState.Posture
 const ACTION := CogitoPlayerCommand.Action
 const Collision := preload("cogito_movement_collision.gd")
@@ -13,6 +14,9 @@ var landed := false
 var landing: CogitoMovementStep.Landing = CogitoMovementStep.Landing.NONE
 var damage := 0
 var ground_effects := false
+var entered_ledge := false
+var exited_ledge := false
+var finished_roll := false
 var entered_ladder := false
 var left_volume_on_floor := false
 var cadence_mode := MODE.UNDEFINED
@@ -33,6 +37,16 @@ func request(
 	s.slide_stopped = s.slide_remaining <= 0
 	s.ladder_ticks = maxi(0, s.ladder_ticks - 1)
 	if volume:
+		if volume.ledge and s.mode in [MODE.JUMPING, MODE.SWIMMING]:
+			_start_ledge(s, p, volume)
+			return
+		if s.mode == MODE.LEDGE_CLIMBING:
+			s.submerged = volume.submerged
+			if cmd.is_held(ACTION.JUMP) or s.ledge_stage != STAGE.RISE:
+				_ledge(s, p, volume.world_from_room)
+				return
+			_leave_ledge(s, p, true)
+			s.ladder_contact = 0
 		var aim := s.body_basis * Basis(Vector3.UP, s.neck_yaw) * Basis(Vector3.RIGHT, s.head_pitch)
 		_volume_mode(s, p, volume, aim, dt)
 		if s.mode == MODE.SWIMMING:
@@ -42,10 +56,16 @@ func request(
 			_posture(s, p, cmd)
 			_climb(s, p, cmd, volume.outward, aim, dt)
 			return
+	if s.mode == MODE.ROLLING:
+		Step.request_motion(s, cmd.has_control, dt, s)
+		return
 	_posture(s, p, cmd)
 	var air := s.mode in [MODE.JUMPING, MODE.AIR_CONTROL]
 	if not air and s.on_floor and not _enter_swim:
 		_takeoff(s, p, cmd, dt)
+		if jump and volume and volume.ledge and not volume.moving_ledge:
+			_start_ledge(s, p, volume)
+			return
 	var axes := s.slide_vector if s.mode == MODE.SLIDING else cmd.move
 	s.direction = (
 		Step.air_heading(s.direction, s.body_basis, axes)
@@ -54,6 +74,59 @@ func request(
 	)
 	s.current_speed = clampf(s.current_speed, p.min_speed, p.max_speed)
 	Step.request_motion(s, cmd.has_control, dt, s)
+
+
+func _start_ledge(s: CogitoMovementState, p: CogitoMovementProfile, v: Collision.Volumes) -> void:
+	entered_ledge = true
+	if s.mode == MODE.JUMPING:
+		s.bunny_hop_speed = p.sprinting_speed
+	s.mode = MODE.LEDGE_CLIMBING
+	s.ledge_target = v.world_from_room.affine_inverse() * v.ledge.target
+	s.ledge_key = v.ledge_key
+	s.ledge_stage = STAGE.RISE
+	s.main_velocity = Vector3.ZERO
+	s.last_velocity = Vector3.ZERO
+	s.gravity_vec = Vector3.ZERO
+	s.direction = Vector3.ZERO
+	s.was_jumping = false
+	s.submerged = v.submerged
+	s.requested_velocity = Vector3.UP * p.climb_speed
+
+
+func _ledge(s: CogitoMovementState, p: CogitoMovementProfile, world: Transform3D) -> void:
+	var center := world * (s.transform * p.crouching_center)
+	var target := world * s.ledge_target
+	s.requested_velocity = Vector3.UP * p.climb_speed
+	if Step.Ledge.rising(center.y, target.y, p.standing_height, p.crouching_height):
+		return
+	if s.posture != POSTURE.CROUCHING:
+		s.ledge_stage = STAGE.MIDDLE
+		s.try_crouch = true
+		s.posture = POSTURE.CROUCHING
+		s.standing_shape = false
+		s.crouching_shape = true
+		s.requested_velocity = Vector3.ZERO
+		return
+	if s.ledge_stage != STAGE.FINAL:
+		s.ledge_stage = STAGE.MIDDLE
+		if Step.Ledge.below_lip(center.y, target.y, p.crouching_height, p.head_clearance):
+			return
+	s.ledge_stage = STAGE.FINAL
+	var goal := Step.Ledge.destination(target, p.crouching_height)
+	s.requested_velocity = center.direction_to(goal) * p.climb_speed
+
+
+func _leave_ledge(s: CogitoMovementState, p: CogitoMovementProfile, stand: bool) -> void:
+	exited_ledge = true
+	s.mode = MODE.IDLE
+	s.ledge_key = 0
+	s.ledge_target = Vector3.ZERO
+	s.ledge_stage = STAGE.RISE
+	s.current_lerp_speed = p.lerp_speed
+	if stand:
+		s.try_crouch = false
+		if not s.cast_blocked:
+			_stand(s)
 
 
 func _volume_mode(
@@ -252,7 +325,8 @@ func finish(
 		s.main_velocity *= p.speed_clamp_after_jump_coefficient
 		s.gravity_vec *= p.speed_clamp_after_jump_coefficient
 	var volume_mode := s.mode in [MODE.LADDER_CLIMBING, MODE.SWIMMING]
-	if not volume_mode:
+	var climbing := s.mode == MODE.LEDGE_CLIMBING
+	if not volume_mode and not climbing:
 		s.main_velocity = Step.with_gravity(s.main_velocity, s.gravity_vec)
 	s.transform = room_from_world * hit.pose
 	s.velocity = hit.velocity
@@ -262,7 +336,13 @@ func finish(
 	s.wall_normal = hit.wall_normal
 	s.on_wall = hit.wall_normal != Vector3.ZERO
 	s.on_ceiling = hit.ceiling
-	if _enter_swim:
+	if climbing:
+		s.eye_position.y = Step.Swim.eye_height(s.eye_position.y, s.submerged, dt * p.lerp_speed)
+		var target := room_from_world.affine_inverse() * s.ledge_target
+		var goal := Step.Ledge.destination(target, p.crouching_height)
+		if s.ledge_stage == STAGE.FINAL and Step.Ledge.reached(hit.pose * p.crouching_center, goal):
+			_leave_ledge(s, p, p.auto_stand_after_climb)
+	elif _enter_swim:
 		# Advanced observes the head after the ground/air solve. Swim input starts
 		# on the first tick spent in the new state.
 		_start_swim(s)
@@ -275,6 +355,15 @@ func finish(
 			left_volume_on_floor = true
 	elif s.mode in [MODE.AIR_CONTROL, MODE.JUMPING]:
 		_air(s, p, cmd, dt)
+	elif s.mode == MODE.ROLLING and s.on_floor:
+		s.roll_ticks = maxi(0, s.roll_ticks - 1)
+		if s.roll_ticks == 0:
+			finished_roll = true
+			s.mode = MODE.IDLE
+			if s.was_standing:
+				s.try_crouch = false
+				if not s.cast_blocked:
+					_stand(s)
 	elif s.on_floor:
 		_ground(s, p, cmd, dt)
 	else:
@@ -282,6 +371,10 @@ func finish(
 		s.was_in_air = true
 		s.mode = MODE.AIR_CONTROL
 		s.current_lerp_speed = p.air_lerp_speed
+	if s.mode == MODE.ROLLING or finished_roll:
+		s.eye_position.y = Step.Swim.eye_height(s.eye_position.y, s.submerged, dt * p.lerp_speed)
+	if s.mode != MODE.ROLLING:
+		s.roll_ticks = 0
 	var crouched := s.posture == POSTURE.CROUCHING
 	s.cast_enabled = crouched
 	s.head_position.y = Step.Posture.head_height(
@@ -301,6 +394,11 @@ func _air(
 		s.mode = MODE.IDLE
 		s.current_lerp_speed = p.lerp_speed
 		s.was_in_air = false
+		var impact := Step.landing(
+			s.last_velocity.y, p.landing_min_roll_velocity, p.landing_min_velocity
+		)
+		if Step.Roll.starts(impact, p.disable_roll_anim):
+			_ground(s, p, cmd, dt)
 	elif s.mode == MODE.JUMPING:
 		s.current_speed = Step.Ground.speed(MODE.JUMPING, s, p, dt)
 		if (
@@ -320,10 +418,15 @@ func _ground(
 	if p.fall_damage > 0 and s.last_velocity.y <= p.fall_damage_threshold:
 		damage = int(p.fall_damage * s.last_velocity.y / p.fall_damage_threshold)
 	landing = Step.landing(s.last_velocity.y, p.landing_min_roll_velocity, p.landing_min_velocity)
-	if landing == Step.Landing.HARD and not p.disable_roll_anim:
+	if Step.Roll.starts(landing, p.disable_roll_anim):
 		s.was_standing = s.posture == POSTURE.STANDING
 		s.is_sprinting_in_airborne = false
 		s.mode = MODE.ROLLING
+		s.roll_ticks = p.roll_duration_ticks
+		s.try_crouch = true
+		s.posture = POSTURE.CROUCHING
+		s.standing_shape = false
+		s.crouching_shape = true
 		return
 	var sprint := cmd.is_held(ACTION.SPRINT)
 	var crouched := s.posture == POSTURE.CROUCHING

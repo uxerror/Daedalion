@@ -17,6 +17,10 @@ const EXACT_STATE_FIELDS := [
 	"slide_vector",
 	"ladder_contact",
 	"ladder_ticks",
+	"roll_ticks",
+	"ledge_stage",
+	"ledge_key",
+	"ledge_target",
 	"body_basis",
 	"requested_velocity",
 	"main_velocity",
@@ -119,6 +123,7 @@ func _suspend(why: String) -> void:
 	_eye_staged = false
 	_simulation_eye.transform = Transform3D.IDENTITY
 	if active:
+		_actor.reset_roll_presentation()
 		render_offset = Vector3.ZERO
 		_actor.eyes.position = Vector3.ZERO
 	_present_predicted(false)
@@ -246,7 +251,7 @@ func begin_tick() -> void:
 		var slot := posmod(seq, CAPACITY)
 		if not solver.advance(state, _commands[slot], block):
 			_boundary_sequence = seq
-			_suspend("unsupported_contact")
+			_suspend(solver.suspend_reason)
 			return
 		_posts[slot] = state.duplicate()
 		last_replay.append(seq)
@@ -307,9 +312,10 @@ func live(raw: CogitoPlayerCommand) -> void:
 	if not contiguous or not command or newest - _floor_sequence > CAPACITY:
 		_suspend("missing_history")
 		return
+	var was_rolling := state.mode == Solver.MODE.ROLLING
 	if not solver.advance(state, command, baseline):
 		_boundary_sequence = newest
-		_suspend("unsupported_contact")
+		_suspend(solver.suspend_reason)
 		return
 	_posts[slot] = state.duplicate()
 	_actor.transform = state.transform
@@ -321,7 +327,12 @@ func live(raw: CogitoPlayerCommand) -> void:
 	_simulation_eye.transform = Transform3D.IDENTITY
 	_clip_offset()
 	_display_offset()
-	_audio.observe(Snapshot.capture(_actor, newest, baseline.revision), true, state.submerged)
+	var roll_impact := (
+		state.last_velocity.y if not was_rolling and state.mode == Solver.MODE.ROLLING else INF
+	)
+	_audio.observe(
+		Snapshot.capture(_actor, newest, baseline.revision), true, state.submerged, roll_impact
+	)
 
 
 func _clip_offset() -> void:
@@ -345,6 +356,15 @@ func render(delta: float) -> void:
 
 func _display_offset() -> void:
 	var local_offset := _actor.head.global_basis.inverse() * render_offset
-	if state.mode in [CogitoMovementState.Mode.LADDER_CLIMBING, CogitoMovementState.Mode.SWIMMING]:
+	var mode := state.mode
+	if (
+		mode
+		in [
+			Solver.MODE.LADDER_CLIMBING,
+			Solver.MODE.SWIMMING,
+			Solver.MODE.LEDGE_CLIMBING,
+			Solver.MODE.ROLLING
+		]
+	):
 		local_offset.y += state.eye_position.y
 	_actor.eyes.position = local_offset

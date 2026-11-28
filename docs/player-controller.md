@@ -32,8 +32,15 @@ contact observations and mode memory. The fixed step supports `LADDER_CLIMBING` 
 whole ticks. Looking down reverses the climb axis. Jump with outward horizontal input
 applies the authored ladder jump scale. Swim stores the submerged flag and pre-swim
 posture. The main velocity carries rise, dive and idle sink momentum between ticks.
-Each solve receives fresh room-local volume observations. The swim ledge probe hands a
-successful capture to Advanced. Ledge animations, rolls and moving supports use the chart.
+Each solve receives fresh room-local volume observations. A held jump toward a static ledge can enter
+`LEDGE_CLIMBING` from a jump or swim. Rise, middle and final advance by hull height,
+with one crouch request between rise and final. Jump release cancels rise. The last
+solve checks distance to the top, then applies AUTO_STAND_AFTER_CLIMB and clearance.
+A hard landing enters `ROLLING` unless disable_roll_anim is set. The online profile
+derives its duration in ticks from the authored first-person clip. Offline still
+exits on animation_finished at its existing chart callback. With the shipped clip and
+60 Hz physics, the golden roll spends 61 ticks in Rolling. On a local player the
+AnimationPlayer advances on idle frames, so a lower render rate can delay that exit.
 
 The online opt-in hook is `authority_movement_profile()`. Advanced matches its shipped
 scene and script. A different prefab or controller uses its own chart by default. A game
@@ -57,9 +64,9 @@ Offline aim continues to use the animated eye.
 
 On static stairs and slides, replay restores the enabled hull, head offset, slide direction,
 slide and jump timer phase, and jump history from the owner checkpoint. The online owner's
-ledge query uses a separate disabled ShapeCast at the simulated pose. A positive capture
-ends local speculation. Only Advanced on the authority writes the ledge collider and target.
-The shared probe uses the prefab's original cast and clearance distances.
+ledge query uses a separate disabled ShapeCast at the simulated pose. The shared probe uses the prefab's original cast and clearance distances.
+Both peers retain the room-local target, climb stage and collider key. A moving
+collider gives the climb back to Advanced until moving-support prediction lands in PR8.
 
 ## Per-actor input and presentation
 

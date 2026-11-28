@@ -12,6 +12,17 @@ var _arrival_usec := 0
 var _render_tick := -1.0
 
 
+## Optional mannequin clip phase for an online, tick-driven roll.
+static func roll_phase(actor: CogitoPlayerAdvanced) -> float:
+	if (
+		not actor.authority_movement
+		or actor.current_moving_state != CogitoPlayerAdvanced.MovingState.Rolling
+	):
+		return -1.0
+	var duration := actor.authority_movement.profile.roll_duration_ticks
+	return 1.0 - float(actor._motion.roll_ticks) / maxi(1, duration)
+
+
 ## Captures the simulated pose after movement. Revision changes force even a small teleport.
 static func capture(actor: CogitoPlayerAdvanced, tick: int, revision: int) -> Dictionary:
 	var frame := {
@@ -28,6 +39,9 @@ static func capture(actor: CogitoPlayerAdvanced, tick: int, revision: int) -> Di
 		"posture": int(actor.current_body_posture_state),
 		"sitting": actor.is_sitting,
 	}
+	var phase := roll_phase(actor)
+	if phase >= 0:
+		frame.roll_phase = phase
 	if actor.is_sitting and actor.current_seat:
 		var api := actor.player_interaction_component.network_interactions
 		if api:

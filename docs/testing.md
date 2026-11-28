@@ -206,7 +206,7 @@ adapter and fixed-tick stepper. It compares contacts, timers, permissions, postu
 stamina, position, velocity and simulation head height on every tick.
 
 `net_owner_session_test.gd` checks dedicated and listen owner privacy on serialized RPCs,
-reliable life renewal, takeover, explicit pose acceptance and rejection of a protocol 17 peer by a protocol 18 host.
+reliable life renewal, takeover, explicit pose acceptance and rejection of a protocol 18 peer by a protocol 19 host.
 The movement source test covers repeated, skipped, expired and wrapped sequences. The
 authority and travel suites check mode generations across handoffs and room bindings.
 
@@ -281,7 +281,7 @@ The two digests include pitch-dependent ladder reversal, jump-off, dive, rise an
 The gdUnit volume fixture also runs both routes.
 
 The legacy-chart comparison checks position and mode on all 80 ladder ticks up to
-jump-off and all 188 swim-route ticks through the ledge exit. At jump-off the fixed
+jump-off and the first 153 swim-route ticks before the PR7 capture boundary. At jump-off the fixed
 step applies the PR3 jump on the input tick.
 
 The authority suite checks 60 successive ticks from a decoded mid-climb or mid-dive checkpoint.
@@ -302,3 +302,23 @@ rises on live input. `PR6 PROCESS` prints displacement in metres for the authori
 owner and dedicated observer (authority and owner on listen). Use the relay procedure
 above to repeat the route interactively at 100 and 150 ms, including a jump-off, a
 walking exit and a ledge capture while another player observes.
+
+## Prediction PR7 ledges and rolls
+
+The original offline digest includes a dry ledge, a swim exit and a hard landing. The
+authority fixture restores a decoded owner checkpoint on each of the three climb stages.
+It tests AUTO_STAND on and off and builds a low ceiling for crouched exits. Stopping the
+first-person animation on roll entry exercises the independent 60-tick clock. A mid-roll
+restore compares all 30 remaining ticks through the standing or crouching exit. The offline
+player test measures the physics AnimationPlayer and repeats the drop with the roll disabled.
+
+Run `tests/net/net_prediction_ledge_roll_test.gd` for matched-ack traces,
+jump-release abort and a 0.30 m authority push. The eight PR7 LANE rows report metres
+(p50, p95, maximum), maximum replay depth, inactive ticks and suspension counters.
+The owner and the independent replay run in their respective room physics spaces.
+The dynamic-bank case in the prediction boundary suite checks moving_ledge and recovery.
+
+The prediction_boundaries process route drops Ada above the test floor in Lobby.
+After travelling to Laboratory, Ada climbs the two stacked boxes at ClimbingTest3.
+Both topologies require the authority, owner and observer to report each mode. The
+process scenario runs over file transport or ENet with the same commands as PR4.

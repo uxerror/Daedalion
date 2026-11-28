@@ -145,6 +145,10 @@ func test_remote_presentation_clock_through_mode_and_seat_boundaries() -> void:
 		frame.revision += int(seated != frame.sitting)
 		frame.sitting = seated
 		frame.moving = mode
+		if mode == MODE.ROLLING:
+			frame.roll_phase = 0.25
+		else:
+			frame.erase("roll_phase")
 		frame.tick += 12
 		frame.velocity = Vector3.RIGHT
 		endpoint._receive_pose(_id, remote.lifetime, frame)
@@ -172,6 +176,13 @@ func test_remote_presentation_clock_through_mode_and_seat_boundaries() -> void:
 		var displayed := remote.timeline.at_tick(remote.timeline._render_tick, 60)
 		assert_vector(remote.actor.position).is_equal(displayed.position)
 		assert_bool(remote.actor.is_sitting).is_equal(seated)
+		if mode == MODE.ROLLING:
+			var animator: AnimationPlayer = remote.actor.get_node("AnimationPlayer")
+			assert_str(animator.current_animation).is_equal("Roll")
+			assert_float(animator.current_animation_position).is_greater(0.0)
+		assert_bool(remote.actor.get_node("PlayerAnimationTree").active).is_equal(
+			not seated and mode != MODE.ROLLING
+		)
 		assert_object(remote.prediction).is_null()
 
 
@@ -218,7 +229,7 @@ func test_newer_held_state_and_rejected_wield_ack() -> void:
 	view.wield = original
 
 
-func test_protocol_17_is_rejected_at_admission() -> void:
+func test_protocol_18_is_rejected_at_admission() -> void:
 	_start(false)
 	var old := _branch(3)
 	var failures: Array[String] = []
@@ -226,7 +237,7 @@ func test_protocol_17_is_rejected_at_admission() -> void:
 	assert_int(old.join("memory", 1863)).is_equal(OK)
 	var session := old._session
 	old.multiplayer.connected_to_server.disconnect(session._connected)
-	var hello := func(): session._hello.rpc_id(1, 17, session.config.content_version, "")
+	var hello := func(): session._hello.rpc_id(1, 18, session.config.content_version, "")
 	old.multiplayer.connected_to_server.connect(hello, CONNECT_ONE_SHOT)
 	_pump()
 	assert_array(failures).contains_exactly(["Protocol version mismatch"])

@@ -30,8 +30,11 @@ class VolumeDriver:
 		cmd.yaw = PI / 2
 		cmd.pitch = 0
 		cmd.neck_yaw = 0
-		cmd.toggle_crouch = false
-		if phase == "climb":
+		cmd.toggle_crouch = phase == "drop"
+		if phase == "ledge":
+			cmd.move = Vector2.UP
+			cmd.held = 1 << CogitoPlayerCommand.Action.JUMP
+		elif phase == "climb":
 			cmd.move = Vector2.UP
 		elif phase == "dive":
 			cmd.held = 1 << CogitoPlayerCommand.Action.CROUCH
@@ -145,7 +148,7 @@ func _apply(cmd: Dictionary, travel: Node) -> void:
 	elif cmd.op == "volume_input":
 		if not _volume_driver:
 			_volume_driver = VolumeDriver.new()
-			CogitoNet.local_player().input_source = _volume_driver
+		CogitoNet.local_player().input_source = _volume_driver
 		_volume_driver.phase = cmd.phase
 	elif cmd.op == "chair":
 		var endpoint: Node = travel.endpoint_for(CogitoNet.local_player_id())
@@ -191,6 +194,15 @@ func _apply(cmd: Dictionary, travel: Node) -> void:
 					"SwimmingTest/WaterPool/CollisionShape3D"
 				)
 				actor.global_position = shape.global_position + Vector3.UP * 0.35
+			elif cmd.op == "drop_start":
+				actor.position = Vector3(0, 56, 0)
+				actor.main_velocity = Vector3.ZERO
+				actor.gravity_vec = Vector3.ZERO
+			elif cmd.op == "ledge_start":
+				var stack: Node3D = root.get_node("LedgeClimbingTests/ClimbingTest3")
+				actor.global_position = stack.global_position + Vector3(0.92, -0.69, 0)
+				actor.main_velocity = Vector3.ZERO
+				actor.gravity_vec = Vector3.ZERO
 			elif cmd.op == "chair_start":
 				actor.position = Vector3(4, 51, 1.1)
 			elif cmd.op == "stage":

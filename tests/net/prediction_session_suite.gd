@@ -144,6 +144,8 @@ func _verify_replay(block: NetOwnerState) -> void:
 	var health: float = _owner.actor.player_attributes["health"].value_current
 	var noises := [_shots, _ear.jumps, _ear.feet.footsteps, _ear.feet.landings]
 	var audio_tick: int = _owner.movement_audio._previous.tick
+	var clip := _owner.actor.animationPlayer.current_animation
+	var clip_time := _owner.actor.animationPlayer.current_animation_position if clip else 0.0
 	var wield_seq := _owner.wield._predicted_sequence
 	var shadow := Shadow.new(_authority.actor, block.tick, block)
 	var expected := range(block.ack + 1, live_sequence + 1)
@@ -167,6 +169,9 @@ func _verify_replay(block: NetOwnerState) -> void:
 	assert_int(_owner.movement_audio._previous.tick).is_equal(audio_tick)
 	assert_array([_shots, _ear.jumps, _ear.feet.footsteps, _ear.feet.landings]).is_equal(noises)
 	assert_int(_owner.wield._predicted_sequence).is_equal(wield_seq)
+	assert_str(_owner.actor.animationPlayer.current_animation).is_equal(clip)
+	if clip:
+		assert_float(_owner.actor.animationPlayer.current_animation_position).is_equal(clip_time)
 	assert_float(_owner.actor.stamina_attribute.value_current).is_equal(stamina)
 	assert_float(_owner.actor.player_attributes["oxygen"].value_current).is_equal(oxygen)
 	assert_float(_owner.actor.player_attributes["health"].value_current).is_equal(health)
@@ -212,6 +217,35 @@ func _verify_replay(block: NetOwnerState) -> void:
 	)
 	shadow.room.close()
 	shadow.body.free()
+
+
+func _stage_volume(point: Vector3) -> void:
+	_authority.actor.position = point
+	_authority.actor.main_velocity = Vector3.ZERO
+	_authority.actor.velocity = Vector3.ZERO
+	_server.player_world.mark_teleport(_client.local_player_id())
+	for i in 60:
+		await _ticks(1)
+		var prediction := _owner.prediction
+		if prediction.active and prediction.baseline.revision == _authority.revision:
+			return
+	fail("Volume staging revision did not become eligible")
+
+
+func _push_in_volume(mode: int) -> void:
+	_authority.actor.position.x += 0.30
+	var tick := _server.player_world._tick
+	for i in 24:
+		await _ticks(1)
+		var block := _owner.prediction.queued
+		if block and block.tick > tick and block.state:
+			assert_int(block.state.mode).is_equal(mode)
+			assert_int(_owner.prediction.newest - block.ack).is_greater(0)
+			var strokes := _ear.strokes
+			_verify_replay(block)
+			assert_int(_ear.strokes).is_equal(strokes)
+			return
+	fail("Missing authoritative volume checkpoint after push")
 
 
 func _deliver(block: NetOwnerState) -> void:

@@ -20,6 +20,7 @@ enum Mode {
 	FREE_FALL,
 	SWIMMING,
 }
+enum LedgeStage { RISE, MIDDLE, FINAL }
 enum Posture { UNDEFINED, CROUCHING, STANDING, SITTING }
 
 ## Motion.
@@ -68,6 +69,10 @@ enum Posture { UNDEFINED, CROUCHING, STANDING, SITTING }
 @export_storage var was_sprinting: bool
 @export_storage var is_sprinting_in_airborne: bool
 @export_storage var was_standing: bool
+@export_storage var roll_ticks: int
+@export_storage var ledge_target: Vector3
+@export_storage var ledge_stage: LedgeStage
+@export_storage var ledge_key: int
 @export_storage var was_sliding: bool
 @export_storage var jumped_from_slide: bool
 @export_storage var jumped_from_crouch: bool

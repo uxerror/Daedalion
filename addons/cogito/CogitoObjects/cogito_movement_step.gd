@@ -73,6 +73,49 @@ static func landing(vertical_speed: float, roll_limit: float, landing_limit: flo
 	return Landing.NONE
 
 
+class Ledge:
+	class Observation:
+		var target: Vector3
+		var collider: PhysicsBody3D
+
+	static func rising(center_y: float, target_y: float, tall: float, low: float) -> bool:
+		return center_y + ((tall - (2 * low)) + low / 2) < target_y
+
+	static func below_lip(center_y: float, target_y: float, low: float, clearance: float) -> bool:
+		return center_y - (low / 2 + clearance) < target_y
+
+	static func destination(target: Vector3, low: float) -> Vector3:
+		return target + Vector3(0, low / 2, 0)
+
+	static func reached(center: Vector3, destination_point: Vector3) -> bool:
+		return destination_point.distance_to(center) < 0.1
+
+	static func moving(collider: PhysicsBody3D) -> bool:
+		if not is_instance_valid(collider):
+			return false
+		if collider is StaticBody3D:
+			if (
+				collider.constant_linear_velocity != Vector3.ZERO
+				or collider.constant_angular_velocity != Vector3.ZERO
+			):
+				return true
+		var velocity: Vector3 = PhysicsServer3D.body_get_state(
+			collider.get_rid(), PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY
+		)
+		var angular: Vector3 = PhysicsServer3D.body_get_state(
+			collider.get_rid(), PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY
+		)
+		return velocity != Vector3.ZERO or angular != Vector3.ZERO
+
+
+class Roll:
+	static func starts(impact: Landing, disabled: bool) -> bool:
+		return impact == Landing.HARD and not disabled
+
+	static func exit_event(was_standing: bool) -> StringName:
+		return &"stand_up" if was_standing else &"grounded"
+
+
 class Climb:
 	static func accepts(aim: Basis, outward: Vector3) -> bool:
 		return aim.z.dot(Vector3.UP) > 0.5 or aim.z.dot(outward) >= 0.33

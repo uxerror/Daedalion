@@ -705,7 +705,7 @@ func _physics_process(delta: float) -> void:
 			death.check_automatic(id, avatar.lifetime)
 			continue
 		if local_actor:
-			avatar.present_seat(avatar.actor.is_sitting)
+			avatar.present_mode(avatar.actor.is_sitting, SNAPSHOT.roll_phase(avatar.actor))
 		avatar.wield.tick(delta)
 		if local_actor and avatar.actor == local_actor:
 			avatar.wield.reconcile(

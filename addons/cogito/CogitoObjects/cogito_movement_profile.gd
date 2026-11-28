@@ -32,6 +32,13 @@ var free_fall_min_velocity: float
 var fall_damage_threshold: float
 var fall_damage: int
 var disable_roll_anim: bool
+var roll_duration_ticks: int
+var climb_speed: float
+var standing_height: float
+var crouching_height: float
+var crouching_center: Vector3
+var head_clearance: float
+var auto_stand_after_climb: bool
 var landing_threshold: float
 var step_height_default: Vector3
 var step_height_in_air_default: Vector3

@@ -1207,6 +1207,12 @@ class Scenario:
             seated = self.sample(owner, lambda s: s["seated"] and not s["predicting"])
             self.order(owner, op="chair")
             self.sample(owner, lambda s: not s["seated"] and s["predicting"] == enabled)
+            self.order(owner, op="volume_input", phase="drop")
+            self.order(self.server, op="drop_start", who="Ada")
+            for role in roles:
+                self.sample(role, lambda s: s["modes"].get("Ada") == "ROLLING"
+                            and (role is not owner or s["predicting"] == enabled))
+            self.sample(owner, lambda s: s["modes"]["Ada"] == "IDLE")
             self.order(self.server, op="cross", who="Ada")
             destination = self.sample(owner, lambda s: s["local"] == lab and s["predicting"] == enabled)
             authority = self.sample(self.server, lambda s: s["actors"].get("Ada", [""])[0] == lab)
@@ -1229,6 +1235,20 @@ class Scenario:
             rise = self._volume_motion(roles, owner, "SWIMMING", "rise", 0.30, enabled)
             print("PR6 PROCESS", "dedicated" if dedicated else "listen",
                   json.dumps({"climb_m": climb, "dive_m": dive, "rise_m": rise}), flush=True)
+            self.order(owner, op="volume_input", phase="idle")
+            self.order(self.server, op="ledge_start", who="Ada")
+            self.sample(owner, lambda s: abs(s["actors"]["Ada"][1] + 24.825) < 0.06
+                        and s["modes"]["Ada"] == "IDLE" and s["predicting"] == enabled)
+            self.order(owner, op="volume_input", phase="ledge")
+            for role in roles:
+                self.sample(role, lambda s: s["modes"].get("Ada") == "LEDGE_CLIMBING"
+                            and (role is not owner or s["predicting"] == enabled))
+            self.sample(owner, lambda s: s["actors"]["Ada"][2] > 2.68)
+            self.order(owner, op="volume_input", phase="drop")
+            self.sample(self.server, lambda s: s["modes"]["Ada"] == "IDLE"
+                        and s["actors"]["Ada"][2] > 2.75)
+            print("PR7 PROCESS", "dedicated" if dedicated else "listen",
+                  "climb and landing roll seen on all peers; predicting =", enabled, flush=True)
             for role in reversed(roles):
                 self.stop(role)
 

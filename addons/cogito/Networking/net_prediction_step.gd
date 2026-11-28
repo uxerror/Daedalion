@@ -15,15 +15,16 @@ const SUPPORTED := [
 	MODE.JUMPING,
 	MODE.AIR_CONTROL,
 	MODE.LADDER_CLIMBING,
-	MODE.SWIMMING
+	MODE.SWIMMING,
+	MODE.ROLLING,
+	MODE.LEDGE_CLIMBING
 ]
 
 var room: Collision
 var profile: CogitoMovementProfile
 var world_from_room := Transform3D.IDENTITY
 var exclusions: Array[RID] = []
-var _ledge := ShapeCast3D.new()
-var _ledge_local: Transform3D
+var suspend_reason := "unsupported_contact"
 var _actor: CogitoPlayerAdvanced
 
 
@@ -31,16 +32,6 @@ func _init(actor: CogitoPlayerAdvanced, tuning: CogitoMovementProfile, mask: int
 	_actor = actor
 	profile = tuning
 	room = Collision.new(actor, mask)
-	var authored := actor.ledge_climbing_shapecast
-	_ledge_local = authored.transform
-	_ledge_local.origin = actor.ledge_climbing_shapecast_initial_position
-	_ledge.enabled = false
-	_ledge.top_level = true
-	_ledge.shape = authored.shape
-	_ledge.margin = authored.margin
-	_ledge.collision_mask = authored.collision_mask
-	_ledge.max_results = authored.max_results
-	actor.add_child(_ledge)
 	prepare()
 
 
@@ -56,9 +47,6 @@ func prepare() -> void:
 	if is_instance_valid(held) and held.get_parent() is PhysicsBody3D:
 		exclusions.append(held.get_parent().get_rid())
 	room.set_exclusions(exclusions)
-	_ledge.clear_exceptions()
-	for rid in exclusions:
-		_ledge.add_exception_rid(rid)
 
 
 func advance(s: CogitoMovementState, raw: CogitoPlayerCommand, block: NetOwnerState) -> bool:
@@ -77,39 +65,29 @@ func advance(s: CogitoMovementState, raw: CogitoPlayerCommand, block: NetOwnerSt
 	s.head_pitch = cmd.pitch
 	s.neck_yaw = cmd.neck_yaw
 	s.has_control = cmd.has_control
-	if cmd.toggle_crouch and not s.posture_locked and s.mode != MODE.SWIMMING:
+	var fixed_posture := s.mode in [MODE.SWIMMING, MODE.LEDGE_CLIMBING]
+	if cmd.toggle_crouch and not s.posture_locked and not fixed_posture:
 		for edge in cmd.edges:
 			if edge == ACTION.CROUCH:
 				s.try_crouch = not s.try_crouch
 	s.cast_blocked = (s.cast_enabled or not s.standing_shape) and room.blocked(origin)
 	var step := Tick.new()
-	step.request(s, profile, cmd, dt, room.volumes(origin, s))
+	var volume := room.volumes(origin, s, cmd)
+	suspend_reason = "unsupported_contact"
+	step.request(s, profile, cmd, dt, volume)
+	if volume.moving_ledge and s.mode == MODE.LEDGE_CLIMBING:
+		suspend_reason = "moving_ledge"
+		return false
 	var hit := room.solve(origin, s, profile, dt)
 	if hit.legacy:
 		return false
 	step.finish(s, profile, cmd, hit, dt, world_from_room.affine_inverse())
 	if s.has_stamina:
 		_advance_stamina(s, block, step.jump, hit.pose.origin.y, dt)
-	return s.mode in SUPPORTED and not _captures_ledge(s, hit.pose, cmd)
-
-
-func _captures_ledge(s: CogitoMovementState, pose: Transform3D, cmd: CogitoPlayerCommand) -> bool:
-	var swimming := s.mode == MODE.SWIMMING and cmd.is_held(ACTION.JUMP)
-	if not swimming and (s.mode != MODE.JUMPING or not _actor.CAN_CLIMB_LEDGE):
-		return false
-	if s.posture_locked or s.input_direction == Vector2.ZERO:
-		return false
-	if not swimming and s.posture == CogitoMovementState.Posture.CROUCHING:
-		return false
-	var forward := -s.body_basis.z
-	if s.direction.dot(forward) < 0.5:
-		return false
-	_ledge.global_transform = pose * _ledge_local
-	return _actor.probe_ledge(_ledge, _ledge.position, forward, swimming, false)
+	return s.mode in SUPPORTED
 
 
 func close() -> void:
-	_ledge.free()
 	room.close()
 
 

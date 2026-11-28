@@ -192,8 +192,18 @@ var last_velocity : Vector3= Vector3.ZERO
 var direction : Vector3 = Vector3.ZERO
 var is_free_looking : bool  = false
 var is_roll_animation_finished : bool = false
-var is_in_unpausable_state : bool = false
-var is_in_interaction_state : bool = true
+var is_in_unpausable_state : bool = false:
+	get:
+		if owner_prediction and owner_prediction.active:
+			if owner_prediction.state.mode == MovingState.Rolling:
+				return ^"StateChart/Root/Moving/Grounded/Rolling" in no_pause_menu_states
+		return is_in_unpausable_state
+var is_in_interaction_state : bool = true:
+	get:
+		if owner_prediction and owner_prediction.active:
+			if owner_prediction.state.mode == MovingState.Rolling:
+				return ^"StateChart/Root/Moving/Grounded/Rolling" not in no_interaction_states
+		return is_in_interaction_state
 var slide_audio_player : AudioStreamPlayer3D
 var swim_under_water_audio_player : AudioStreamPlayer3D
 var standing_height : float
@@ -351,6 +361,8 @@ func neutral_command(sequence: int) -> CogitoPlayerCommand:
 func get_aim_transform() -> Transform3D:
 	if owner_prediction and owner_prediction.active:
 		return owner_prediction.aim_transform()
+	if authority_movement and current_moving_state in [MovingState.Rolling, MovingState.LedgeClimbing]:
+		return head.global_transform
 	return _aim.global_transform
 
 
@@ -417,6 +429,12 @@ func capture_movement_state() -> CogitoMovementState:
 	state.was_sprinting = was_sprinting
 	state.is_sprinting_in_airborne = is_sprinting_in_airborne
 	state.was_standing = was_standing
+	if current_moving_state == MovingState.Rolling:
+		state.roll_ticks = _motion.roll_ticks
+	if current_moving_state == MovingState.LedgeClimbing:
+		state.ledge_target = _motion.ledge_target
+		state.ledge_stage = _motion.ledge_stage
+		state.ledge_key = _motion.ledge_key
 	state.was_sliding = was_sliding
 	state.jumped_from_slide = jumped_from_slide
 	state.jumped_from_crouch = jumped_from_crouch
@@ -513,6 +531,14 @@ func capture_movement_profile() -> CogitoMovementProfile:
 	profile.fall_damage_threshold = fall_damage_threshold
 	profile.fall_damage = fall_damage
 	profile.disable_roll_anim = disable_roll_anim
+	var clip := animationPlayer.get_animation(&"roll")
+	profile.roll_duration_ticks = ceili(clip.length * Engine.physics_ticks_per_second)
+	profile.climb_speed = CLIMBING_SPEED
+	profile.standing_height = standing_height
+	profile.crouching_height = crouching_height
+	profile.crouching_center = crouching_collision_shape.position
+	profile.head_clearance = MIN_FREE_SPACE_ABOVE_HEAD
+	profile.auto_stand_after_climb = AUTO_STAND_AFTER_CLIMB
 	profile.landing_threshold = landing_threshold
 	profile.step_height_default = STEP_HEIGHT_DEFAULT
 	profile.step_height_in_air_default = STEP_HEIGHT_IN_AIR_DEFAULT
@@ -867,8 +893,16 @@ func _on_sliding_timer_timeout():
 	is_free_looking = false
 
 
+func reset_roll_presentation() -> void:
+	if animationPlayer.current_animation == &"roll":
+		animationPlayer.play(&"RESET")
+		animationPlayer.advance(0.0)
+		animationPlayer.stop()
+
+
 func _on_animation_player_animation_finished(anim_name):
-	is_roll_animation_finished = anim_name == 'roll'
+	if not authority_movement and not owner_prediction:
+		is_roll_animation_finished = anim_name == 'roll'
 
 
 func _move_body() -> void:
@@ -1100,7 +1134,7 @@ func _is_ledge_climbable() -> bool:
 ## Prediction supplies a separate cast at the hypothetical pose. Only a live capture
 ## records a collider and climb target for the chart.
 func probe_ledge(probe: ShapeCast3D, rest_position: Vector3, forward: Vector3,
-		swimming: bool, commit: bool) -> bool:
+		swimming: bool, commit: bool, observation: Movement.Ledge.Observation = null) -> bool:
 	probe.position = rest_position
 	
 	# Check ladder first because its priority is higher
@@ -1162,8 +1196,8 @@ func probe_ledge(probe: ShapeCast3D, rest_position: Vector3, forward: Vector3,
 	if not probe.is_colliding():
 		return false
 	
+	var collider := probe.get_collider(0)
 	if commit:
-		var collider = probe.get_collider(0)
 		ledge_collider = null
 		if collider is not CSGPrimitive3D: # Warning: Don't use CSGs as moving platforms. It seems there is a bug in getting CSGs as collider
 			ledge_collider = collider
@@ -1191,10 +1225,16 @@ func probe_ledge(probe: ShapeCast3D, rest_position: Vector3, forward: Vector3,
 	if probe.is_colliding():
 		return false
 	
+	var target := probe.global_position
+	target.y = collision_point.y
+	target += forward * radius / 2
 	if commit:
-		ledge_position = probe.global_position
-		ledge_position.y = collision_point.y
-		ledge_position += forward * radius / 2
+		ledge_position = target
+		if authority_movement:
+			authority_movement.chart_ledge(self)
+	if observation:
+		observation.target = target
+		observation.collider = collider as PhysicsBody3D
 
 	return true
 
@@ -1418,7 +1458,7 @@ func _on_grounded_state_physics_processing(delta: float) -> void:
 		
 	var landing := Movement.landing(last_velocity.y, LANDING_MIN_ROLL_VELOCITY, LANDING_MIN_VELOCITY)
 	if landing == Movement.Landing.HARD:
-		if !disable_roll_anim:
+		if Movement.Roll.starts(landing, disable_roll_anim):
 			was_standing = current_body_posture_state == BodyPostureState.Standing
 			is_sprinting_in_airborne = false
 			state_chart.send_event("roll")
@@ -1958,23 +1998,31 @@ func _stand_up_finished():
 #region Rolling state
 func _on_rolling_state_entered() -> void:
 	current_moving_state = MovingState.Rolling
+	if authority_movement:
+		authority_movement.mode_eye(self, true)
+		_motion.roll_ticks = authority_movement.profile.roll_duration_ticks
 	animationPlayer.play("roll")
 	try_crouch = true
 	state_chart.send_event("crouch")
 
 
 func _on_rolling_state_exited() -> void:
+	if authority_movement:
+		reset_roll_presentation()
+		authority_movement.mode_eye(self, false)
 	current_moving_state = MovingState.Undefined
 
 
 func _on_rolling_state_physics_processing(delta: float) -> void:
-	if is_roll_animation_finished:
+	var finished := is_roll_animation_finished
+	if authority_movement:
+		_motion.roll_ticks = maxi(0, _motion.roll_ticks - 1)
+		finished = _motion.roll_ticks == 0
+	if finished:
 		is_roll_animation_finished = false
 		if was_standing:
 			try_crouch = false
-			state_chart.send_event("stand_up")
-		else:
-			state_chart.send_event("grounded")
+		state_chart.send_event(Movement.Roll.exit_event(was_standing))
 #endregion
 
 
@@ -2290,6 +2338,8 @@ func _on_swimming_state_physics_processing(delta: float) -> void:
 
 #region LedgeClimbing State
 func _on_ledge_climbing_state_entered() -> void:
+	if authority_movement:
+		authority_movement.mode_eye(self, true)
 	current_moving_state = MovingState.LedgeClimbing
 	
 	main_velocity = Vector3.ZERO
@@ -2301,6 +2351,8 @@ func _on_ledge_climbing_state_entered() -> void:
 
 
 func _on_ledge_climbing_state_exited() -> void:
+	if authority_movement:
+		authority_movement.mode_eye(self, false)
 	current_moving_state = MovingState.Undefined
 	is_in_ledge_climbing_final_stage = false
 	is_in_ledge_climbing_middle_stage = false
@@ -2331,7 +2383,8 @@ func _on_ledge_climbing_state_physics_processing(delta: float) -> void:
 	var move_direction = Vector3.UP
 	velocity = move_direction * CLIMBING_SPEED + platfrom_linear_velocity
 	
-	if crouching_collision_shape.global_position.y + ((standing_height - (2 * crouching_height)) + crouching_height / 2) < ledge_position.y:
+	var center := crouching_collision_shape.global_position
+	if Movement.Ledge.rising(center.y, ledge_position.y, standing_height, crouching_height):
 		_move_body()
 		return
 	
@@ -2343,19 +2396,22 @@ func _on_ledge_climbing_state_physics_processing(delta: float) -> void:
 	
 	is_in_ledge_climbing_middle_stage = true
 	
-	if not is_in_ledge_climbing_final_stage and crouching_collision_shape.global_position.y - (crouching_height / 2 + MIN_FREE_SPACE_ABOVE_HEAD) < ledge_position.y:
+	if not is_in_ledge_climbing_final_stage and Movement.Ledge.below_lip(
+		center.y, ledge_position.y, crouching_height, MIN_FREE_SPACE_ABOVE_HEAD
+	):
 		_move_body()
 		return
 	
 	is_in_ledge_climbing_final_stage = true
 
-	move_direction = crouching_collision_shape.global_position.direction_to(ledge_position + Vector3(0, crouching_height / 2, 0))
+	var target := Movement.Ledge.destination(ledge_position, crouching_height)
+	move_direction = center.direction_to(target)
 
 	velocity = move_direction * CLIMBING_SPEED + platfrom_linear_velocity
 	
 	_move_body()
 	
-	if (ledge_position + Vector3(0, crouching_height / 2, 0)).distance_to(crouching_collision_shape.global_position) < 0.1:
+	if Movement.Ledge.reached(crouching_collision_shape.global_position, target):
 		state_chart.send_event("idle")
 		if AUTO_STAND_AFTER_CLIMB:
 			try_crouch = false

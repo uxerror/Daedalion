@@ -187,7 +187,8 @@ func test_ladder_and_swim_follow_the_legacy_chart_until_air_handoff(_timeout := 
 	for lane: String in chart:
 		assert_int(kernel[lane].size()).is_equal(chart[lane].size())
 		# Jump-off at 80 and takeoff on the bank use PR3's same-tick jump.
-		var end := 80 if lane == "ladder" else 188
+		# PR7 samples the ledge before the solve to ascend on the capture tick.
+		var end := 80 if lane == "ladder" else 153
 		assert_int(kernel[lane].size()).is_greater(end)
 		for i in end:
 			var reference: Array = chart[lane][i]

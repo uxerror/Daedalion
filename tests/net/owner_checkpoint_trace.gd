@@ -14,6 +14,7 @@ var profile: CogitoMovementProfile
 var room: Collision
 var body: StaminaBody
 var stamina: CogitoStaminaAttribute
+var world_from_room: Transform3D
 var first: int
 var compared := 0
 var pos_error := 0.0
@@ -47,6 +48,7 @@ class StaminaBody:
 
 func _init(actor: CogitoPlayerAdvanced, k: int, checkpoint: NetOwnerState = null) -> void:
 	first = k
+	world_from_room = actor.global_transform * actor.transform.affine_inverse()
 	var source := checkpoint
 	if not source:
 		source = NetOwnerState.new()
@@ -89,15 +91,22 @@ func advance(cmd: CogitoPlayerCommand) -> void:
 	state.neck_yaw = cmd.neck_yaw
 	state.head_pitch = cmd.pitch
 	state.body_yaw = cmd.yaw
-	state.body_basis = state.transform.basis * Basis(Vector3.UP, cmd.yaw)
-	if cmd.toggle_crouch and CogitoPlayerCommand.Action.CROUCH in cmd.edges:
-		state.try_crouch = not state.try_crouch
-	state.cast_blocked = (
-		(state.cast_enabled or not state.standing_shape) and room.blocked(state.transform)
+	var origin := world_from_room * state.transform
+	state.body_basis = origin.basis * Basis(Vector3.UP, cmd.yaw)
+	var fixed := (
+		state.mode in [CogitoMovementState.Mode.SWIMMING, CogitoMovementState.Mode.LEDGE_CLIMBING]
 	)
-	step.request(state, profile, cmd, DT, room.volumes(state.transform, state))
-	var hit := room.solve(state.transform, state, profile, DT)
-	step.finish(state, profile, cmd, hit, DT, Transform3D.IDENTITY)
+	if (
+		cmd.toggle_crouch
+		and not fixed
+		and not state.posture_locked
+		and CogitoPlayerCommand.Action.CROUCH in cmd.edges
+	):
+		state.try_crouch = not state.try_crouch
+	state.cast_blocked = ((state.cast_enabled or not state.standing_shape) and room.blocked(origin))
+	step.request(state, profile, cmd, DT, room.volumes(origin, state, cmd))
+	var hit := room.solve(origin, state, profile, DT)
+	step.finish(state, profile, cmd, hit, DT, world_from_room.affine_inverse())
 	body.transform = state.transform
 	body.velocity = state.velocity
 	body.main_velocity = state.main_velocity
@@ -121,6 +130,7 @@ func compare_to(actual: CogitoMovementState) -> void:
 	for key: String in (
 		NetOwnerState.FLAGS
 		+ ["mode", "posture", "floor_normal", "wall_normal", "ladder_contact", "ladder_ticks"]
+		+ ["ledge_stage", "ledge_target", "ledge_key", "roll_ticks"]
 	):
 		if state.get(key) != actual.get(key):
 			mismatches[key] = mismatches.get(key, 0) + 1

@@ -245,10 +245,12 @@ func test_death_during_slide_jump_and_reused_node_respawn() -> void:
 	assert_int(prediction.baseline.ack).is_greater(sequence)
 
 
-func test_ledge_capture_stops_at_local_contact_before_revoking_pose() -> void:
+func test_moving_ledge_suspends_at_local_contact_before_revoking_pose() -> void:
 	for branch in [_server, _client]:
 		var level: Node = branch.player_world.active_level()
 		var ledge := StaticBody3D.new()
+		ledge.name = "MovingBank"
+		ledge.constant_linear_velocity = Vector3.RIGHT * 0.1
 		var hull := CollisionShape3D.new()
 		var box := BoxShape3D.new()
 		box.size = Vector3(4, 1, 5)
@@ -265,10 +267,11 @@ func test_ledge_capture_stops_at_local_contact_before_revoking_pose() -> void:
 		await _ticks(1)
 		if not _owner.prediction.active:
 			break
-	assert_str(_owner.prediction.reason).is_equal("unsupported_contact")
+	assert_str(_owner.prediction.reason).is_equal("moving_ledge")
 	assert_object(_owner.prediction.baseline.state).is_not_null()
 	assert_int(_owner.prediction._boundary_sequence).is_greater(_owner.prediction.baseline.ack)
 	_driver.held = 0
+	_driver.reverse = true
 	_network[2].configure(1, 1, {"loss": 0.0})
 	var saw_capture := false
 	for i in 100:
@@ -299,35 +302,6 @@ func test_slide_expiry_replays_across_last_timer_tick() -> void:
 	assert_bool(state.slide_stopped).is_true()
 	assert_int(state.mode).is_equal(CogitoMovementState.Mode.SNEAKING)
 	assert_array(_ear.slides).contains_exactly([true, false])
-
-
-func _stage_volume(point: Vector3) -> void:
-	_authority.actor.position = point
-	_authority.actor.main_velocity = Vector3.ZERO
-	_authority.actor.velocity = Vector3.ZERO
-	_server.player_world.mark_teleport(_client.local_player_id())
-	for i in 60:
-		await _ticks(1)
-		var prediction := _owner.prediction
-		if prediction.active and prediction.baseline.revision == _authority.revision:
-			return
-	fail("Volume staging revision did not become eligible")
-
-
-func _push_in_volume(mode: int) -> void:
-	_authority.actor.position.x += 0.30
-	var tick := _server.player_world._tick
-	for i in 24:
-		await _ticks(1)
-		var block := _owner.prediction.queued
-		if block and block.tick > tick and block.state:
-			assert_int(block.state.mode).is_equal(mode)
-			assert_int(_owner.prediction.newest - block.ack).is_greater(0)
-			var strokes := _ear.strokes
-			_verify_replay(block)
-			assert_int(_ear.strokes).is_equal(strokes)
-			return
-	fail("Missing authoritative volume checkpoint after push")
 
 
 func test_same_tick_climb_jump_off_and_restore() -> void:
@@ -465,9 +439,10 @@ func test_climb_and_swim_rubber_banding(_timeout := 45000) -> void:
 			assert_float(p95).is_less_equal(0.02)
 
 
-func test_swim_ledge_handoff_and_resume() -> void:
+func test_swim_ledge_capture_stays_predicted() -> void:
 	for branch in [_server, _client]:
 		var bank := StaticBody3D.new()
+		bank.name = "Bank"
 		var hull := CollisionShape3D.new()
 		var box := BoxShape3D.new()
 		box.size = Vector3(4, 1, 5)
@@ -481,17 +456,22 @@ func test_swim_ledge_handoff_and_resume() -> void:
 	_driver.held = 1 << ACTION.JUMP
 	_driver.walking = true
 	var captured := false
-	var fallback := false
+	var predicted := false
+	var reasons := _owner.prediction.reasons.duplicate()
 	for i in 180:
 		await _ticks(1)
 		captured = (
 			captured
 			or _authority.actor.current_moving_state == CogitoMovementState.Mode.LEDGE_CLIMBING
 		)
-		fallback = fallback or _owner.prediction.reason == "fallback"
-		if captured and fallback and _owner.prediction.active:
+		assert_bool(_owner.prediction.active).is_true()
+		predicted = (
+			predicted or _owner.prediction.state.mode == CogitoMovementState.Mode.LEDGE_CLIMBING
+		)
+		if captured and predicted and _owner.prediction.state.mode == CogitoMovementState.Mode.IDLE:
 			break
-	assert_bool(captured and fallback).is_true()
+	assert_dict(_owner.prediction.reasons).is_equal(reasons)
+	assert_bool(captured and predicted).is_true()
 	assert_bool(_owner.prediction.active).is_true()
 	assert_array(_entries).is_empty()
 

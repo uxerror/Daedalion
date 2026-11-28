@@ -43,7 +43,9 @@ func reset() -> void:
 
 
 ## Feed accepted snapshots, or a single stream of forward predicted poses for a future owner.
-func observe(frame: Dictionary, volume_effects := false, submerged := false) -> void:
+func observe(
+	frame: Dictionary, volume_effects := false, submerged := false, roll_impact := INF
+) -> void:
 	if _actor.is_dead or frame.sitting or frame.posture == POSTURE.SITTING:
 		reset()
 		return
@@ -53,6 +55,9 @@ func observe(frame: Dictionary, volume_effects := false, submerged := false) -> 
 	if not last.is_empty() and frame.tick <= last.tick:
 		return
 	_previous = frame
+	if is_finite(roll_impact) and (last.is_empty() or last.moving != MODE.ROLLING):
+		_actor.animationPlayer.play(&"roll")
+		_landing(roll_impact, frame.position)
 	if last.is_empty() or Snapshot.discontinuous(last, frame):
 		_phase = 0.0
 		_set_sliding(false)
@@ -67,13 +72,18 @@ func observe(frame: Dictionary, volume_effects := false, submerged := false) -> 
 			CogitoAudio.play_sound(_actor.jump_sound)
 		else:
 			CogitoAudio.play_sound_3d_attached(_actor.jump_sound, _actor)
-	if mode in GROUND and last.moving in AIR and last.velocity.y < _actor.landing_threshold:
-		_actor.set_landing_audio(last.velocity.y)
-		_surface("landing", _actor.LERP_SPEED, frame.position)
+	if not is_finite(roll_impact) and mode in GROUND and last.moving in AIR:
+		_landing(last.velocity.y, frame.position)
 
 	var dt := float(frame.tick - last.tick) / Engine.physics_ticks_per_second
 	if mode != MODE.LADDER_CLIMBING and (not volume_effects or mode != MODE.SWIMMING):
 		_cadence(mode, velocity, dt, frame.position)
+
+
+func _landing(impact: float, position: Vector3) -> void:
+	if impact < _actor.landing_threshold:
+		_actor.set_landing_audio(impact)
+		_surface("landing", _actor.LERP_SPEED, position)
 
 
 func observe_volumes(frame: Dictionary, submerged: bool) -> void:

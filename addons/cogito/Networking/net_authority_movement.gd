@@ -7,11 +7,13 @@ const Collision := preload("../CogitoObjects/cogito_movement_collision.gd")
 const MovementAudio := preload("net_movement_audio.gd")
 const Snapshot := preload("net_snapshot.gd")
 const MODE := CogitoMovementState.Mode
+const STAGE := CogitoMovementState.LedgeStage
 const POSTURE := CogitoMovementState.Posture
 const EVENTS := {
 	MODE.IDLE: &"idle",
 	MODE.LADDER_CLIMBING: &"climb_ladder",
 	MODE.SWIMMING: &"swim",
+	MODE.LEDGE_CLIMBING: &"ledge_climb",
 	MODE.WALKING: &"walk",
 	MODE.SPRINTING: &"sprint",
 	MODE.SLIDING: &"slide",
@@ -37,11 +39,12 @@ var _committed_clearance := false
 var _chart_root: Node
 var _fixed := false
 var _teleported := false
+var _legacy_ledge := false
 
 
 func _init(actor: CogitoPlayerAdvanced, tuning: CogitoMovementProfile) -> void:
 	profile = tuning
-	room = Collision.new(actor)
+	room = Collision.new(actor, -1, true)
 	_chart_root = actor.state_chart.get_node("Root")
 	if actor.is_local_presentation:
 		_local_audio = MovementAudio.new(actor)
@@ -97,6 +100,17 @@ func respawn(actor: CogitoPlayerAdvanced) -> void:
 	actor.is_in_air = false
 	actor.was_jumping = false
 	actor.was_standing = false
+	actor._motion.roll_ticks = 0
+	actor._motion.ledge_key = 0
+	actor._motion.ledge_target = Vector3.ZERO
+	actor._motion.ledge_stage = STAGE.RISE
+	actor.ledge_collider = null
+	actor.ledge_position = Vector3.ZERO
+	actor.is_in_ledge_climbing_final_stage = false
+	actor.is_in_ledge_climbing_middle_stage = false
+	_legacy_ledge = false
+	actor.is_roll_animation_finished = false
+	actor.reset_roll_presentation()
 	actor.was_sprinting = false
 	actor.is_sprinting_in_airborne = false
 	actor.jump_target_speed = 0
@@ -119,6 +133,30 @@ func respawn(actor: CogitoPlayerAdvanced) -> void:
 		stamina.last_y = actor.global_position.y
 
 
+## Preserve the authored capture if a chart tick enters climb during a dynamic solve.
+func chart_ledge(actor: CogitoPlayerAdvanced) -> void:
+	var body := actor.ledge_collider as PhysicsBody3D
+	_legacy_ledge = CogitoMovementStep.Ledge.moving(body)
+	var local := actor.transform * actor.global_transform.affine_inverse()
+	actor._motion.ledge_target = local * actor.ledge_position
+	actor._motion.ledge_key = String(actor.get_parent().get_path_to(body)).hash() if body else 0
+	actor._motion.ledge_stage = STAGE.RISE
+	if actor.is_in_ledge_climbing_final_stage:
+		actor._motion.ledge_stage = STAGE.FINAL
+	elif actor.is_in_ledge_climbing_middle_stage:
+		actor._motion.ledge_stage = STAGE.MIDDLE
+
+
+func mode_eye(actor: CogitoPlayerAdvanced, active: bool) -> void:
+	var parent := actor.head if active else actor._aim
+	var pic := actor.player_interaction_component
+	for marker: Node3D in [
+		pic.interaction_raycast, pic.carryable_position, actor.item_drop_shapecast
+	]:
+		if marker.get_parent() != parent:
+			marker.reparent(parent, false)
+
+
 func unbind(actor: CogitoPlayerAdvanced) -> void:
 	invalidate()
 	_clock(actor, false)
@@ -132,6 +170,7 @@ func supports_volumes(actor: CogitoPlayerAdvanced) -> bool:
 		not actor.is_sitting
 		and not actor.currently_tweening
 		and actor.gravity_vector == Vector3.DOWN
+		and not (_legacy_ledge and actor.current_moving_state == MODE.LEDGE_CLIMBING)
 		and (
 			actor.current_moving_state
 			in [
@@ -143,6 +182,8 @@ func supports_volumes(actor: CogitoPlayerAdvanced) -> bool:
 				MODE.JUMPING,
 				MODE.AIR_CONTROL,
 				MODE.LADDER_CLIMBING,
+				MODE.ROLLING,
+				MODE.LEDGE_CLIMBING,
 				MODE.SWIMMING
 			]
 		)
@@ -207,11 +248,21 @@ func advance(actor: CogitoPlayerAdvanced, dt: float) -> void:
 		# NetSeats has already committed the exit transform synchronously.
 		var exit_seat := _chart_root.get_node("Moving/Grounded/Sitting/On Grounded") as Transition
 		exit_seat.take()
+	if actor.current_moving_state != MODE.LEDGE_CLIMBING:
+		_legacy_ledge = false
+	elif _legacy_ledge and is_instance_valid(actor.ledge_collider):
+		if not CogitoMovementStep.Ledge.moving(actor.ledge_collider as PhysicsBody3D):
+			chart_ledge(actor)
+	if _teleported and actor.current_moving_state in [MODE.LEDGE_CLIMBING, MODE.ROLLING]:
+		actor.state_chart.send_event(
+			"idle" if actor.current_moving_state == MODE.LEDGE_CLIMBING else "grounded"
+		)
+		_legacy_ledge = false
 	if not supports_volumes(actor):
 		_clock(actor, false)
 		return
 	if not room:
-		room = Collision.new(actor)
+		room = Collision.new(actor, -1, true)
 	var excluded: Array[RID] = [actor.get_rid()]
 	for exception in actor.get_collision_exceptions():
 		if is_instance_valid(exception):
@@ -233,14 +284,26 @@ func advance(actor: CogitoPlayerAdvanced, dt: float) -> void:
 	var s := actor.capture_movement_state()
 	s.cast_blocked = (s.cast_enabled or not s.standing_shape) and room.blocked(origin)
 	var tick := Tick.new()
-	var volume := room.volumes(origin, s)
+	var volume := room.volumes(origin, s, actor.current_command)
 	if solves == 0:
 		# At spawn the chart samples its authored head cast before its first
 		# posture update. Subsequent commands start from the committed head.
 		volume.submerged = actor.is_head_in_water()
 	tick.request(s, profile, actor.current_command, dt, volume)
+	if volume.moving_ledge and s.mode == MODE.LEDGE_CLIMBING:
+		_legacy_ledge = true
+		_clock(actor, false)
+		contacts = null
+		if tick.entered_ledge:
+			actor.bunny_hop_speed = s.bunny_hop_speed
+			actor.ledge_position = volume.ledge.target
+			actor.ledge_collider = volume.ledge.collider
+			actor.state_chart.send_event("ledge_climb")
+		return
 	var hit := room.solve(origin, s, profile, dt)
 	if hit.legacy:
+		if actor.current_moving_state == MODE.LEDGE_CLIMBING:
+			_legacy_ledge = true
 		_clock(actor, false)
 		return
 	_clock(actor, true)
@@ -256,16 +319,10 @@ func advance(actor: CogitoPlayerAdvanced, dt: float) -> void:
 	actor.authority_solve_count += 1
 	actor.transform = s.transform
 	actor.ladder_direction = volume.outward
+	if volume.ledge:
+		actor.ledge_collider = volume.ledge.collider
 	_publish(actor, s, tick)
 	_effects(actor, tick, dt)
-	var swim_reach := (
-		s.mode == MODE.SWIMMING and actor.current_command.is_held(CogitoPlayerCommand.Action.JUMP)
-	)
-	if swim_reach or (s.mode == MODE.JUMPING and s.posture != POSTURE.CROUCHING):
-		if actor._is_ledge_climbable():
-			if not swim_reach:
-				actor.bunny_hop_speed = profile.sprinting_speed
-			actor.state_chart.send_event("ledge_climb")
 
 
 func _timer(timer: Timer, remaining: float, duration: float) -> void:
@@ -280,6 +337,12 @@ func _publish(actor: CogitoPlayerAdvanced, s: CogitoMovementState, tick: Tick) -
 	# Enter/exit volume chart states before publishing their integrated values.
 	# Their authored entry callbacks initialize velocity and posture for offline play.
 	var volume_mode := s.mode in [MODE.LADDER_CLIMBING, MODE.SWIMMING]
+	if tick.exited_ledge:
+		actor.state_chart.send_event("idle")
+	if tick.entered_ledge:
+		if tick.jump:
+			actor.state_chart.send_event("jump")
+		actor.state_chart.send_event("ledge_climb")
 	if tick.entered_ladder and s.mode != MODE.LADDER_CLIMBING:
 		actor.state_chart.set_expression_property("on_ladder", true)
 		actor.state_chart.send_event("climb_ladder")
@@ -292,6 +355,18 @@ func _publish(actor: CogitoPlayerAdvanced, s: CogitoMovementState, tick: Tick) -
 		actor.state_chart.send_event("jump" if s.mode == MODE.JUMPING else "airborne")
 	actor.on_ladder = s.on_ladder
 	actor.ladder_on_cooldown = s.ladder_ticks > 0
+	actor._motion.ledge_stage = s.ledge_stage
+	actor._motion.ledge_key = s.ledge_key
+	actor._motion.ledge_target = s.ledge_target
+	actor.is_in_ledge_climbing_middle_stage = s.ledge_stage != STAGE.RISE
+	actor.is_in_ledge_climbing_final_stage = s.ledge_stage == STAGE.FINAL
+	if s.mode == MODE.LEDGE_CLIMBING:
+		actor.ledge_position = (
+			actor.global_transform * (s.transform.affine_inverse() * s.ledge_target)
+		)
+	else:
+		actor.ledge_collider = null
+	actor._motion.roll_ticks = s.roll_ticks
 	actor._motion.ladder_ticks = s.ladder_ticks
 	actor._motion.ladder_contact = s.ladder_contact
 	actor._motion.submerged = s.submerged
@@ -318,6 +393,8 @@ func _publish(actor: CogitoPlayerAdvanced, s: CogitoMovementState, tick: Tick) -
 	actor.bunny_hop_speed = s.bunny_hop_speed
 	actor.try_crouch = s.try_crouch
 	actor.state_chart.set_expression_property("is_crouch_shapecast_colliding", s.cast_blocked)
+	if tick.finished_roll:
+		actor.state_chart.send_event(CogitoMovementStep.Roll.exit_event(s.was_standing))
 	if s.posture != int(actor.current_body_posture_state):
 		actor.state_chart.send_event("crouch" if s.posture == POSTURE.CROUCHING else "stand_up")
 	if tick.landed:
@@ -331,13 +408,20 @@ func _publish(actor: CogitoPlayerAdvanced, s: CogitoMovementState, tick: Tick) -
 	actor.slide_vector = s.slide_vector
 	_timer(actor.jump_timer, s.jump_remaining, profile.jump_cooldown)
 	_timer(actor.sliding_timer, s.slide_remaining, profile.slide_duration)
-	if s.mode != MODE.ROLLING:
-		actor.standing_collision_shape.disabled = not s.standing_shape
-		actor.crouching_collision_shape.disabled = not s.crouching_shape
-	if s.mode in [MODE.LADDER_CLIMBING, MODE.SWIMMING]:
+	actor.standing_collision_shape.disabled = not s.standing_shape
+	actor.crouching_collision_shape.disabled = not s.crouching_shape
+	if _step_eye(s.mode, tick):
 		actor.eyes.position.y = s.eye_position.y
 	actor.head.position = s.head_position
 	actor.swimming_head_shapecast.global_position = actor.head.global_position
+
+
+func _step_eye(mode: int, tick: Tick) -> bool:
+	return (
+		mode in [MODE.LADDER_CLIMBING, MODE.SWIMMING, MODE.LEDGE_CLIMBING, MODE.ROLLING]
+		or tick.finished_roll
+		or tick.exited_ledge
+	)
 
 
 func _effects(actor: CogitoPlayerAdvanced, tick: Tick, dt: float) -> void:
@@ -373,7 +457,7 @@ func _effects(actor: CogitoPlayerAdvanced, tick: Tick, dt: float) -> void:
 		_local_audio.observe_volumes(
 			Snapshot.capture(actor, committed_tick, 0), actor.is_head_in_water()
 		)
-	if actor.current_moving_state not in [MODE.LADDER_CLIMBING, MODE.SWIMMING]:
+	if not _step_eye(actor.current_moving_state, tick):
 		actor._handle_eyes_position_in_water(dt)
 	var stamina := actor.stamina_attribute as CogitoStaminaAttribute
 	if stamina and not actor.is_dead:

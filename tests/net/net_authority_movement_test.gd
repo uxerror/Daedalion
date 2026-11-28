@@ -3,6 +3,7 @@ extends "memory_session_suite.gd"
 const MODE := CogitoMovementState.Mode
 const ACTION := CogitoPlayerCommand.Action
 const SWITCH := "COGITO_AUTHORITY_MOVEMENT"
+const Shadow := preload("owner_checkpoint_trace.gd")
 const CustomPlayer := preload("res://tests/net/custom_movement_player.tscn")
 const Seat := preload("res://addons/cogito/DemoScenes/DemoPrefabs/cogito_sittable.tscn")
 
@@ -277,49 +278,131 @@ func test_unmatched_prefab_keeps_legacy_writer() -> void:
 	avatar.despawn()
 
 
-func _cross_animated_mode(start: Vector3, mode: int) -> void:
-	_actor.position = start
+func test_ledge_climb_and_return_to_ground(
+	auto_stand: bool, roof: bool, _test_parameters := [[true, false], [false, false], [true, true]]
+) -> void:
+	await _stage()
+	_actor.AUTO_STAND_AFTER_CLIMB = auto_stand
+	_actor.authority_movement.profile.auto_stand_after_climb = auto_stand
+	if roof:
+		_add_roof(Vector3(16, 2.96, -3.0), Vector3(2, 0.1, 2.5))
+	var shadows: Array[Shadow] = []
+	_actor.position = Vector3(16, 1, 0)
 	_server.player_world.mark_teleport(_server.local_player_id())
-	var entered := false
-	var exited := false
-	var legacy_moves := 0
-	for tick in 165:
-		if mode == MODE.LEDGE_CLIMBING:
-			_driver.axes = Vector2.UP if tick >= 15 and tick < 95 else Vector2.ZERO
-			_driver.held = (1 << ACTION.JUMP) if tick >= 32 and tick < 90 else 0
-		var origin := _actor.position
-		var active := _actor.current_moving_state == mode
-		var count := _actor.authority_solve_count
-		var solves := _actor.authority_movement.solves
-		await _ticks(1)
-		var moves := _actor.authority_solve_count - count
-		assert_int(moves).is_less_equal(1)
-		if active:
-			assert_int(_actor.authority_movement.solves).is_equal(solves)
-			legacy_moves += moves
-		if active != (_actor.current_moving_state == mode):
-			assert_int(moves).is_equal(1)
-			var displacement := _actor.position - origin
-			print("PR4 CROSS mode=", mode, " entering=", not active, " delta=", displacement)
-			if active:
-				assert_vector(displacement).is_equal_approx(
-					_actor.get_position_delta(), Vector3.ONE * 0.0001
-				)
-			entered = entered or not active
-			exited = exited or active
-	assert_bool(entered and exited).is_true()
-	assert_int(legacy_moves).is_greater(0)
-	await _one_move(true)
+	var stages := {}
+	for tick in 150:
+		_driver.axes = Vector2.UP if tick >= 15 and tick < 95 else Vector2.ZERO
+		_driver.held = (1 << ACTION.JUMP) if tick >= 32 and tick < 90 else 0
+		var active := _actor.current_moving_state == MODE.LEDGE_CLIMBING
+		var delta := await _one_move(true)
+		for shadow in shadows:
+			shadow.advance(_actor.current_command)
+			var checkpoint := NetOwnerState.new()
+			_actor.authority_movement.capture_checkpoint(_actor, checkpoint)
+			shadow.compare_to(checkpoint.state)
+		if _actor.current_moving_state == MODE.LEDGE_CLIMBING:
+			var stage := _actor._motion.ledge_stage
+			if not stages.has(stage):
+				shadows.append(Shadow.new(_actor, tick))
+			stages[stage] = true
+			if not active:
+				assert_float(delta.y).is_equal_approx(_actor.CLIMBING_SPEED / 60, 0.0001)
+				print("PR7 CROSS air->ledge ", delta)
+		elif active:
+			assert_int(stages.size()).is_equal(3)
+			for shadow in shadows:
+				assert_dict(shadow.mismatches).is_empty()
+				assert_float(shadow.pos_error).is_zero()
+				assert_float(shadow.vel_error).is_zero()
+				shadow.report("ledge")
+			var standing := (
+				_actor.current_body_posture_state == CogitoMovementState.Posture.STANDING
+			)
+			assert_bool(standing).is_equal(auto_stand and not roof)
+			print("PR7 CROSS ledge->idle ", delta)
+			return
+	fail("Incomplete ledge climb")
 
 
-func test_ledge_climb_and_return_to_ground() -> void:
+func _add_roof(at: Vector3, size: Vector3) -> void:
+	var hull := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = size
+	hull.shape = box
+	hull.position = at
+	_room.get_node("Obstacles").add_child(hull)
+
+
+func test_hard_landing_roll_and_return_to_ground(
+	ceiling: bool,
+	disabled: bool,
+	crouched: bool,
+	_test_parameters := [
+		[false, false, false], [true, false, false], [false, true, false], [false, false, true]
+	]
+) -> void:
 	await _stage()
-	await _cross_animated_mode(Vector3(16, 1, 0), MODE.LEDGE_CLIMBING)
+	_driver.held = (1 << ACTION.CROUCH) if crouched else 0
+	_actor.authority_movement.profile.disable_roll_anim = disabled
+	_actor.position = Vector3(0, 6, 0)
+	_server.player_world.mark_teleport(_server.local_player_id())
+	var entered := -1
+	var shadow: Shadow = null
+	for i in 160:
+		var airborne := not _actor.movement_grounded()
+		var delta := await _one_move(true)
+		if shadow:
+			shadow.advance(_actor.current_command)
+			var checkpoint := NetOwnerState.new()
+			_actor.authority_movement.capture_checkpoint(_actor, checkpoint)
+			shadow.compare_to(checkpoint.state)
+		elif entered >= 0 and i == entered + 30:
+			shadow = Shadow.new(_actor, i)
+		if disabled:
+			assert_int(_actor.current_moving_state).is_not_equal(MODE.ROLLING)
+			if airborne and _actor.movement_grounded():
+				await _ticks(5)
+				assert_int(_actor._motion.roll_ticks).is_zero()
+				return
+		if entered < 0 and _actor.current_moving_state == MODE.ROLLING:
+			assert_bool(airborne and _actor.movement_grounded()).is_true()
+			assert_int(_actor._motion.roll_ticks).is_equal(60)
+			assert_bool(_actor.was_standing).is_equal(not crouched)
+			entered = i
+			print("PR7 CROSS air->roll ", delta)
+			_actor.animationPlayer.stop()
+			if ceiling:
+				_add_roof(_actor.position + Vector3.UP * 0.49, Vector3(2, 0.1, 2))
+		elif entered >= 0 and _actor.current_moving_state != MODE.ROLLING:
+			assert_int(i - entered).is_equal(60)
+			assert_dict(shadow.mismatches).is_empty()
+			assert_float(shadow.pos_error).is_zero()
+			assert_float(shadow.vel_error).is_zero()
+			assert_float(shadow.eye_error).is_zero()
+			shadow.report("roll")
+			var standing := (
+				_actor.current_body_posture_state == CogitoMovementState.Posture.STANDING
+			)
+			assert_bool(standing).is_equal(not ceiling and not crouched)
+			print("PR7 CROSS roll exit ceiling=", ceiling, " delta=", delta)
+			if not ceiling and not crouched:
+				await _slide_after_roll()
+			return
+	fail("Missing hard landing or roll completion")
 
 
-func test_hard_landing_roll_and_return_to_ground() -> void:
-	await _stage()
-	await _cross_animated_mode(Vector3(0, 6, 0), MODE.ROLLING)
+func _slide_after_roll() -> void:
+	_driver.axes = Vector2.UP
+	_driver.held = 1 << ACTION.SPRINT
+	for i in 20:
+		await _one_move(true)
+		if _actor.current_moving_state == MODE.SPRINTING:
+			break
+	assert_int(_actor.current_moving_state).is_equal(MODE.SPRINTING)
+	_driver.held |= 1 << ACTION.CROUCH
+	var delta := await _one_move(true)
+	assert_int(_actor.current_moving_state).is_equal(MODE.SLIDING)
+	print("PR7 CROSS sprint->slide after roll ", delta)
 
 
 func _crossing(previous: NetOwnerState, eligible: bool) -> NetOwnerState:
@@ -438,7 +521,7 @@ func test_swim_ledge_captures_after_one_solve_and_resumes() -> void:
 		if mode == MODE.LEDGE_CLIMBING and mode != _actor.current_moving_state:
 			assert_int(moves).is_equal(1)
 			var delta := _actor.position - origin
-			assert_vector(delta).is_equal_approx(_actor.get_position_delta(), Vector3.ONE * 0.0001)
+			assert_float(delta.length()).is_equal_approx(_actor.CLIMBING_SPEED / 60, 0.001)
 			print("PR6 CROSS ledge->ground ", delta)
 			resumed = true
 			break
@@ -579,7 +662,7 @@ func test_decoded_climb_and_dive_follow_authority_for_sixty_ticks() -> void:
 		await _ticks(8)
 		var mode := MODE.SWIMMING if swimming else MODE.LADDER_CLIMBING
 		assert_int(_actor.current_moving_state).is_equal(mode)
-		var shadow := preload("owner_checkpoint_trace.gd").new(_actor, 8)
+		var shadow := Shadow.new(_actor, 8)
 		for i in 60:
 			if i == 25:
 				_driver.axes = Vector2.ZERO if swimming else Vector2.DOWN

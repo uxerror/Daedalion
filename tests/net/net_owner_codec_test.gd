@@ -78,7 +78,8 @@ func test_every_stored_field_and_adapter_latch_round_trips() -> void:
 		for i in Codec.STAMINA_TUNING.size():
 			block.set(Codec.STAMINA_TUNING[i], 0.123 + i)
 		var wire := Codec.encode(block)
-		assert_int(wire.size()).is_equal(Codec.ELIGIBLE_BYTES)
+		assert_int(wire.size()).is_equal(540)
+		assert_int(wire[0]).is_equal(4)
 		var copy := Codec.decode(wire)
 		assert_object(copy).is_not_null()
 		for key in fields:
@@ -98,5 +99,11 @@ func test_every_stored_field_and_adapter_latch_round_trips() -> void:
 		assert_bool(copy.force_requested).is_equal(not invert)
 		assert_object(Codec.decode(wire.slice(0, -1))).is_null()
 		assert_object(Codec.decode(wire + PackedByteArray([0]))).is_null()
+		var bad_stage := wire.duplicate()
+		bad_stage[86] = CogitoMovementState.LedgeStage.size()
+		assert_object(Codec.decode(bad_stage)).is_null()
+		var bad_target := wire.duplicate()
+		bad_target.encode_float(91, INF)
+		assert_object(Codec.decode(bad_target)).is_null()
 		wire.encode_double(wire.size() - 8, NAN)
 		assert_object(Codec.decode(wire)).is_null()

@@ -30,7 +30,7 @@ var movement_audio: MovementAudio
 var mode_generation := 0
 var checkpoint_eligible := false
 var _baseline: NetOwnerState
-var _seated_pose := false
+var _pose_clip := &""
 
 
 class HeadLook:
@@ -220,7 +220,7 @@ func apply_pose(frame: Dictionary, weight: float, force_look: bool) -> void:
 	actor.current_moving_state = frame.moving
 	actor.current_body_posture_state = frame.posture
 	actor.is_sitting = frame.sitting
-	present_seat(frame.sitting)
+	present_mode(frame.sitting, frame.get("roll_phase", -1.0))
 	var api := actor.player_interaction_component.network_interactions
 	if api:
 		actor.current_seat = api.world.entities.live_object(frame.get("seat", "")) as CogitoSittable
@@ -247,16 +247,26 @@ func apply_pose(frame: Dictionary, weight: float, force_look: bool) -> void:
 		tree.standing_up()
 
 
-## Switch the mannequin to the authored sitting clip while attached to a seat.
-func present_seat(seated: bool) -> void:
-	if _seated_pose == seated:
+## The observer selects the clip at the discrete mode boundary on its render timeline.
+func present_mode(seated: bool, roll_phase := -1.0) -> void:
+	var clip := &"Sitting_Idle" if seated else &""
+	if not actor.is_local_presentation and not seated and roll_phase >= 0:
+		clip = &"Roll"
+	if _pose_clip == clip:
 		return
-	_seated_pose = seated
+	_pose_clip = clip
 	var tree := actor.get_node("PlayerAnimationTree") as AnimationTree
 	var animator := actor.get_node("AnimationPlayer") as AnimationPlayer
-	tree.active = not seated
-	if seated:
-		animator.play(&"Sitting_Idle")
+	tree.active = clip == &""
+	if clip != &"":
+		if clip == &"Roll":
+			var length := animator.get_animation(clip).length
+			var seconds := actor.animationPlayer.get_animation(&"roll").length
+			var speed := length / maxf(0.001, seconds)
+			animator.play(clip, -1.0, speed)
+			animator.seek(clampf(roll_phase, 0, 1) * length, true)
+		else:
+			animator.play(clip)
 	else:
 		animator.stop()
 
