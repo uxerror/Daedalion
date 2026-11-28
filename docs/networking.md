@@ -155,7 +155,7 @@ respawn_delay=10.0
 | `respawn_delay` | Finite, nonnegative seconds, default `10.0`. Zero enables immediate requests. | `--respawn-delay 1.5` |
 | `display_name` | `Host` for the listen player. Clients supply their own name in join credentials, default `Player`. | Config file |
 
-The protocol version is 16, including sessions with the authority movement switch off. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
+The protocol version is 17, including sessions with the authority movement switch off. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
 
 The dedicated level starts empty and simulates admitted remote avatars. Their first-person cameras, HUDs and light-meter cameras are omitted. The default demo boot prevents the menu subtree from entering the tree. Dedicated startup skips solo save recovery and cleanup, the fade panel, game options, graphics and input-map setup by Cogito's menu autoload. The engine still loads project resources, Cogito settings and the existing autoload nodes, including InputHelper, DebugLine, InputRouter, audio and quest services. The dedicated export configures a simulation main scene and strips authored presentation when packing. Room physics uses a non-rendering SubViewport. The operator guide describes the pack and service installation.
 
@@ -399,7 +399,7 @@ func should_unload(key: String) -> bool:
 	return key != "res://addons/cogito/DemoScenes/COGITO_3_Lobby.tscn"
 ```
 
-**Physical attachments.** A carried crate or corpse remains in the source and loses its carry grant. A weapon holstered to carry it stays holstered. The Advanced controller preserves seated posture and resolves the saved seat ID in the destination. A matching, available seat gets a new local claim. An absent or occupied seat leaves the controller seated at its connector without a seat claim. The original vehicle stays in its source. Games that want travel to dismount everybody can return an empty attachment dictionary.
+**Physical attachments.** A carried crate or corpse remains in the source and loses its carry grant. A weapon holstered to carry it stays holstered. The Advanced controller preserves seated posture and resolves the saved seat ID in the destination. A matching, available seat gets a new local claim. With the fixed-tick authority enabled, an absent or occupied destination seat leaves the actor standing at the validated spawn. The legacy authority retains the saved seated posture until released. The original vehicle stays in its source. Games that want travel to dismount everybody can return an empty attachment dictionary.
 
 Install a `CogitoTravelPolicy` resource on the authority before opening the session. Override `participants(actor, zone)` to veto a transfer or select several living players from the source. Each participant has independent readiness, placement and recovery. Override `attachments` to record additional state, `departing` to release or consume source attachments after all validation, `arrived` to apply destination state, and `placement` to choose a level-local transform (or return null). For example, a game can require host approval and all local party members at the door:
 
@@ -454,7 +454,7 @@ The project uses 60 physics ticks per second by default. Commands use unreliable
 
 Use `CogitoNet.player_world.travel.endpoint_for(player_id)` to find the room hosting a live identity, then call its `avatar_for(player_id)`. Its `actor` is the Advanced node. On a replica, `timeline.latest()` exposes the last received pose including `tick` and `ack`. On the server, `actor.last_consumed_sequence` records the last applied command.
 
-### Protocol 15 owner checkpoint
+### Owner checkpoint (protocol 17)
 
 The reliable channel 0 spawn and in-place respawn include a packed `owner_state` field
 in the owner's pose dictionary. At 25 Hz the authority sends each ready client a single
@@ -479,14 +479,14 @@ and retains both ack and last-fresh tick. Each forward skip and each entry into 
 NEUTRAL increments the discontinuity count. The independent weapon acceptance number
 continues to describe the last accepted weapon action.
 
-**Block layout v1.** All multibyte fields are little-endian. Every offset is measured
+**Block layout v2.** All multibyte fields are little-endian. Every offset is measured
 from the start of the PackedByteArray. The exact lengths are **68 B fallback** and
-**507 B eligible**. The client rejects an unknown version, size mismatch, reserved bits,
+**511 B eligible**. The client rejects an unknown version, size mismatch, reserved bits,
 invalid alignment or enum, and non-finite movement data before installing any state.
 
 | Offset | Field, in wire order | Type | Bytes | Precision |
 |---:|---|---|---:|---|
-| 0 | Layout version | u8 | 1 | Exact, 1 |
+| 0 | Layout version | u8 | 1 | Exact, 2 |
 | 1 | Disposition bits 0–1 (fresh 0, held 1, neutral 2, gap 3), eligible bit 7 | u8 | 1 | Exact |
 | 2 | Authority physics rate | u16 | 2 | Integer Hz |
 | 4 | Client room binding, avatar life, pose revision, movement generation | 4 × i64 | 32 | Exact serials |
@@ -500,7 +500,8 @@ invalid alignment or enum, and non-finite movement data before installing any st
 | 319 | Body yaw, neck yaw, head pitch, speed, lerp speed, gravity, jump target speed, bunny-hop speed, speed multiplier, stamina, previous world Y | 11 × f64 | 88 | Native scalar precision |
 | 407 | Remaining slide, jump cooldown and regen delay | 3 × f64 | 24 | Physics ticks, including fractional phase |
 | 431 | Pending force | vec3f | 12 | Binary32 per component |
-| 443 | Stamina max, regen rate, run/uphill/downhill exhaustion rates, step slope multiplier, regen delay duration in seconds, kernel jump cost | 8 × f64 | 64 | Native scalar precision |
+| 443 | Movement modifier generation | u32 | Exact |
+| 447 | Stamina max, regen rate, run/uphill/downhill exhaustion rates, step slope multiplier, regen delay duration in seconds, kernel jump cost | 8 × f64 | 64 | Native scalar precision |
 
 The 29 state bits in order are floor, wall, ceiling, air steps, standing shape, crouching
 shape, cast enabled, cast blocked, crouch latch, jump started, in air, was in air, was
@@ -531,13 +532,13 @@ Variant row over a window of at least one simulated second. Publication phase ac
 variation in the number of rows sampled. Batch, RPC and ENet overhead are outside this
 measurement.
 
-### Owner prediction and replay (PR3)
+### Owner prediction and replay (PR3–PR4)
 
 Launch the server with `COGITO_AUTHORITY_MOVEMENT=1` and the owning client with
 `COGITO_OWNER_PREDICTION=1`. Both switches default to off. The client reads its switch
 once into `net_config.gd`'s static `owner_prediction` field. A test can set it before
-spawn. Owner checkpoints retain the protocol 15 layout, 60 Hz default physics, 25 Hz
-publication and 100 ms remote interpolation. A listen host runs its own authority movement once.
+spawn. Protocol 17 adds four bytes to eligible owner poses for movement modifier generation.
+Physics defaults to 60 Hz, pose publication to 25 Hz and remote interpolation to 100 ms. A listen host runs its own authority movement once.
 
 The latest accepted private checkpoint replaces the queued one. At the beginning of the
 next owner physics tick the client compares its stored post-state at the acknowledged
@@ -562,10 +563,11 @@ Set `COGITO_PREDICTION_DEBUG=1` on the client to print transitions and their seq
 | Reason | Condition |
 |---|---|
 | `fallback` | Authority supplied a legacy checkpoint, including server-driven ladders, water, ledges, rolls, moving supports and seats. |
-| `unsupported_mode`, `unsupported_contact` | Pending force, invalidated pose, unsupported mode, local ladder/water volume or dynamic obstruction. |
+| `unsupported_mode`, `unsupported_contact` | Pending force, invalidated pose, unsupported mode, local ladder/water volume, ledge capture, roll, or dynamic obstruction. |
 | `missing_history`, `replay_budget` | A command or required post-state has expired, the tail has a hole or replay needs more than 24 ticks. |
 | `impossible_ack`, `physics_rate` | The ack exceeds the live sequence, regresses within the scope or the physics rates differ. |
-| `travel` | A room transfer is loading. |
+| `mode_transition` (PR4) | The generation changed while prediction was active. An intervening legacy pose may have been lost. Reset the visual offset and audio phase before resuming. |
+| `travel` | The authority started preparing a transfer, or the owner received a load offer. |
 
 During suspension the owner follows the published position and head with the usual PR2
 smoothing and continues sending input while alive. An eligible checkpoint with a complete
@@ -587,6 +589,43 @@ continuity with a world-space offset capped at 0.25 m, decaying with a 50 ms hal
 A swept eye clearance sphere shortens the offset at obstructions. An error over 1 m,
 unsafe clearance or a forced pose, seat, room or life change clears the offset. Live
 look remains on the actor through ordinary corrections.
+
+#### Static movement and handoffs
+
+Both solvers test the standing or crouching hull at the two authored stair heights, apply the
+air-step policy and probe down for descent. The slide direction, remaining slide and jump
+clocks, jump-from-slide latch, bunny-hop speed, shape and step head offset are part of each
+eligible checkpoint. Slide, jump, land and footstep audio follow live movement ticks.
+
+The authority tests eligibility before committing any displacement. A dynamic hit, moving
+support, water, ladder or other active legacy mode can give that whole tick to Advanced.
+A roll or ledge capture discovered by a committed step synchronizes the chart on that tick.
+Legacy physics callbacks run on the next tick. Advanced owns the actor's actual transform,
+requested and resolved velocities, main and last momentum, posture, hull, timers and
+contact summary throughout the crossing. Its first body solve replaces the static contacts.
+Returning to the kernel captures those fields at the new origin. An external force consumes
+one authority tick. Seats and driver changes invalidate the pose revision and keep local
+limited look and driver axes. The unseated supported checkpoint permits resumption.
+
+The owner uses the same ledge clearance probes against the hypothetical solve, and checks
+ladder/water volumes before and after motion. While suspended it continues sending commands.
+A supported checkpoint must cover the crossing command and leave a contiguous tail of at most
+24 commands. On a generation change the next live tick starts a fresh audio clock. The
+remote timeline still interpolates 100 ms behind and extrapolates for at most 50 ms.
+
+The post-tick modifier generation covers effective input block, speed multiplier, jump
+permission and posture lock. The authority samples these every simulation tick, including
+between publications. A correction re-runs pending input under the checkpoint's restrictions.
+Stamina uses the checkpoint's private value, run rates, regen delay, regen phase, previous
+world height and jump cost. External spends enter through the next authoritative value.
+Only the private reliable attribute stream updates the HUD.
+
+Death releases held actions and clears movement history. A reused actor receives a new life
+and fresh slide, jump and stamina phase, retaining its input sequence watermark. Transfer
+preparation suspends the source owner. Successful travel retires the source incarnation and
+seeds the destination after token, epoch and binding validation. Failed preparation advances
+the source revision. The owner discards commands from loading and waits for a fresh scoped
+baseline. Old-life, stale-tick and wrong-binding poses are rejected before wield reconciliation.
 
 ### Movement sounds
 

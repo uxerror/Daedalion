@@ -1171,6 +1171,56 @@ class Scenario:
                     self.stop(role)
         print("PASS prediction: dedicated and listen, dropped jump tap, movement and observer agreement")
 
+    def prediction_boundaries(self):
+        lobby = "res://addons/cogito/DemoScenes/COGITO_3_Lobby.tscn"
+        lab = "res://addons/cogito/DemoScenes/COGITO_4_Laboratory.tscn"
+        extra = ("--travel", "boundaries")
+        enabled = self.prediction_enabled()
+        for dedicated in (True, False):
+            self.deadline = time.monotonic() + self.timeout_seconds
+            self.port = 17777 if self.file_transport else available_port()
+            if self.file_transport:
+                self.bus = self.directory / f"bus-{len(self.roles)}"
+                self.bus.mkdir()
+            self.server = self.fixture("Host", "authority" if dedicated else "host", extra=extra)
+            self.wait_line(self.server, lambda line: line.startswith("NET READY"))
+            owner = self.fixture("Ada", "client", extra=extra)
+            roles = [self.server, owner]
+            if dedicated:
+                roles.append(self.fixture("Ben", "client", extra=extra))
+            for role in roles:
+                self.sample(role, lambda s: len(s["actors"]) == 2)
+                self.order(role, op="lane")
+            self.order(self.server, op="lane_start", who="Ada")
+            self.sample(owner, lambda s: abs(s["actors"]["Ada"][2] - 50.801) < 0.005
+                        and s["predicting"] == enabled)
+            self.order(owner, op="route")
+            end = self.sample(owner, lambda s: "route" in s and (
+                (s["route"][-1] and s["route_rest"]) or s["route"][0] > 600))
+            route = end["route"]
+            if route[1] < 0.55 or not all(route[2:]) or not end["route_rest"]:
+                raise CheckFailed(f"stairs, slide and slide-jump trace {route}")
+            self.order(self.server, op="chair_start", who="Ada")
+            self.sample(owner, lambda s: abs(s["actors"]["Ada"][1] - 4) < 0.05
+                        and abs(s["actors"]["Ada"][2] - 50.801) < 0.01 and s["route_rest"])
+            self.order(owner, op="chair")
+            seated = self.sample(owner, lambda s: s["seated"] and not s["predicting"])
+            self.order(owner, op="chair")
+            self.sample(owner, lambda s: not s["seated"] and s["predicting"] == enabled)
+            self.order(self.server, op="cross", who="Ada")
+            destination = self.sample(owner, lambda s: s["local"] == lab and s["predicting"] == enabled)
+            authority = self.sample(self.server, lambda s: s["actors"].get("Ada", [""])[0] == lab)
+            if authority["controller"] or destination["seated"]:
+                raise CheckFailed("Unexpected controller on authority or destination attachment")
+            observer = roles[-1] if dedicated else self.server
+            self.sample(observer, lambda s: s["local"] == lobby)
+            print("PR4 PROCESS", "dedicated" if dedicated else "listen", json.dumps({
+                "route": route, "seat_suspensions": seated.get("suspensions", {}),
+                "destination_suspensions": destination.get("suspensions", {}),
+                "destination_predicted": destination["predicting"]}), flush=True)
+            for role in reversed(roles):
+                self.stop(role)
+
     def latency(self):
         self.timeout_seconds = 60
         self.deadline = time.monotonic() + self.timeout_seconds
@@ -1308,7 +1358,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     scenarios = ("dedicated", "listen", "friendly_fire_off", "npc_dedicated", "npc_listen",
                  "persistent_dedicated", "persistent_listen", "travel_dedicated", "travel_listen",
-                 "residency_dedicated", "menus", "latency", "prediction")
+                 "residency_dedicated", "menus", "latency", "prediction", "prediction_boundaries")
     parser.add_argument("--scenario", choices=scenarios)
     parser.add_argument("--file-transport", action="store_true", help="use a socket-free packet bus")
     parser.add_argument("--survival-only", action="store_true", help="run only MP5 scenarios")

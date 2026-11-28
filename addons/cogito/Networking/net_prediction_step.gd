@@ -20,6 +20,8 @@ var room: Collision
 var profile: CogitoMovementProfile
 var world_from_room := Transform3D.IDENTITY
 var exclusions: Array[RID] = []
+var _ledge := ShapeCast3D.new()
+var _ledge_local: Transform3D
 var _volume := PhysicsShapeQueryParameters3D.new()
 var _space: PhysicsDirectSpaceState3D
 var _actor: CogitoPlayerAdvanced
@@ -30,6 +32,16 @@ func _init(actor: CogitoPlayerAdvanced, tuning: CogitoMovementProfile, mask: int
 	profile = tuning
 	room = Collision.new(actor, mask)
 	_space = actor.get_world_3d().direct_space_state
+	var authored := actor.ledge_climbing_shapecast
+	_ledge_local = authored.transform
+	_ledge_local.origin = actor.ledge_climbing_shapecast_initial_position
+	_ledge.enabled = false
+	_ledge.top_level = true
+	_ledge.shape = authored.shape
+	_ledge.margin = authored.margin
+	_ledge.collision_mask = authored.collision_mask
+	_ledge.max_results = authored.max_results
+	actor.add_child(_ledge)
 	_volume.collide_with_bodies = false
 	_volume.collide_with_areas = true
 	_volume.collision_mask = 0xffffffff
@@ -46,6 +58,9 @@ func prepare() -> void:
 		exclusions.append(held.get_parent().get_rid())
 	room.set_exclusions(exclusions)
 	_volume.exclude = exclusions
+	_ledge.clear_exceptions()
+	for rid in exclusions:
+		_ledge.add_exception_rid(rid)
 
 
 func _legacy_volume(pose: Transform3D, standing: bool) -> bool:
@@ -68,6 +83,8 @@ func advance(s: CogitoMovementState, raw: CogitoPlayerCommand, block: NetOwnerSt
 		cmd.has_control = false
 	var dt := 1.0 / block.rate
 	var origin := world_from_room * s.transform
+	if _legacy_volume(origin, s.standing_shape):
+		return false
 	var rotation := Basis.from_euler(Vector3(0, cmd.yaw, 0))
 	s.body_basis = origin.basis * rotation
 	s.body_yaw = cmd.yaw
@@ -87,7 +104,24 @@ func advance(s: CogitoMovementState, raw: CogitoPlayerCommand, block: NetOwnerSt
 	step.finish(s, profile, cmd, hit, dt, world_from_room.affine_inverse())
 	if s.has_stamina:
 		_advance_stamina(s, block, step.jump, hit.pose.origin.y, dt)
-	return s.mode in SUPPORTED
+	return s.mode in SUPPORTED and not _captures_ledge(s, hit.pose)
+
+
+func _captures_ledge(s: CogitoMovementState, pose: Transform3D) -> bool:
+	if s.mode != MODE.JUMPING or not _actor.CAN_CLIMB_LEDGE or s.posture_locked:
+		return false
+	if s.posture == CogitoMovementState.Posture.CROUCHING or s.input_direction == Vector2.ZERO:
+		return false
+	var forward := -s.body_basis.z
+	if s.direction.dot(forward) < 0.5:
+		return false
+	_ledge.global_transform = pose * _ledge_local
+	return _actor.probe_ledge(_ledge, _ledge.position, forward, false, false)
+
+
+func close() -> void:
+	_ledge.free()
+	room.close()
 
 
 ## Mirror the authority's fixed stamina timer against private movement values only.

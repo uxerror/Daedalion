@@ -4,9 +4,9 @@ extends RefCounted
 
 enum Disposition { FRESH, HELD, NEUTRAL, GAP }
 
-const VERSION := 1
+const VERSION := 2
 const HEADER_BYTES := 68
-const ELIGIBLE_BYTES := 507
+const ELIGIBLE_BYTES := 511
 const ALIGNMENT := [
 	"binding", "life", "revision", "generation", "tick", "ack", "last_fresh_tick", "discontinuities"
 ]
@@ -84,6 +84,7 @@ var binding: int
 var life: int
 var revision: int
 var generation: int
+var modifier_generation: int
 var tick: int
 var ack := -1
 var last_fresh_tick := -1
@@ -152,6 +153,7 @@ static func _write_state(stream: StreamPeerBuffer, checkpoint: NetOwnerState) ->
 	for field: String in TIMERS:
 		stream.put_double(float(state_value.get(field)) * checkpoint.rate)
 	_put_vector(stream, checkpoint.pending_force)
+	stream.put_u32(checkpoint.modifier_generation)
 	for field: String in STAMINA_TUNING:
 		stream.put_double(checkpoint.get(field))
 
@@ -238,6 +240,7 @@ static func _read_state(stream: StreamPeerBuffer, value: NetOwnerState) -> bool:
 		valid = valid and is_finite(ticks) and ticks >= 0
 		s.set(field, ticks / value.rate)
 	value.pending_force = _get_vector(stream)
+	value.modifier_generation = stream.get_u32()
 	for field: String in STAMINA_TUNING:
 		var tuning := stream.get_double()
 		valid = valid and is_finite(tuning)

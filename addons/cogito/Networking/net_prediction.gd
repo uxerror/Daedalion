@@ -30,6 +30,7 @@ const ADAPTER_FIELDS := [
 	"stamina_locked", "input_blocked", "use_floor_slope_for_run_exhaustion", "pending_force"
 ]
 
+var minimum_revision := 0
 var in_transfer := false
 var active := false
 var queued: NetOwnerState
@@ -74,7 +75,8 @@ func _init(actor: CogitoPlayerAdvanced, p: CogitoMovementProfile, mask: int, aud
 	reset()
 
 
-func reset() -> void:
+func reset(crossing := false) -> void:
+	minimum_revision = 0
 	_suspend("")
 	queued = null
 	baseline = null
@@ -83,7 +85,7 @@ func reset() -> void:
 	newest = _actor.last_consumed_sequence
 	_floor_sequence = newest
 	_last_valid_ack = -1
-	_boundary_sequence = -1
+	_boundary_sequence = newest if crossing else -1
 	last_replay.clear()
 	last_restore_tick = -1
 	last_position_error = 0
@@ -92,9 +94,13 @@ func reset() -> void:
 
 
 func close() -> void:
+	# The actor is retiring. Its gameplay markers leave with their current parents,
+	# including when the room has already taken the camera out of the tree.
+	active = false
+	render_offset = Vector3.ZERO
+	_audio.reset()
 	reset()
-	_simulation_eye.free()
-	solver.room.close()
+	solver.close()
 
 
 func _present_predicted(enabled: bool) -> void:
@@ -112,7 +118,7 @@ func _suspend(why: String) -> void:
 	_simulation_eye.transform = Transform3D.IDENTITY
 	if active:
 		render_offset = Vector3.ZERO
-		_display_offset()
+		_actor.eyes.position = Vector3.ZERO
 	_present_predicted(false)
 	state = null
 	if why and reason != why:
@@ -122,11 +128,18 @@ func _suspend(why: String) -> void:
 	reason = why
 
 
-func transfer(loading: bool) -> void:
+func transfer(loading: bool, revision := 0) -> void:
+	if loading == in_transfer:
+		return
 	in_transfer = loading
 	queued = null
 	if loading:
 		_suspend("travel")
+	else:
+		# Commands sampled during loading belong to the retired source interval.
+		reset()
+		minimum_revision = revision
+		_boundary_sequence = newest
 
 
 func post_at(sequence: int) -> CogitoMovementState:
@@ -165,6 +178,7 @@ func _matches(block: NetOwnerState, previous: NetOwnerState, post: CogitoMovemen
 		return false
 	if (
 		block.generation != previous.generation
+		or block.modifier_generation != previous.modifier_generation
 		or block.discontinuities != previous.discontinuities
 		or block.disposition != previous.disposition
 		or block.disposition != NetOwnerState.Disposition.FRESH
@@ -199,6 +213,9 @@ func begin_tick() -> void:
 	queued = null
 	var previous := baseline
 	baseline = block
+	if active and previous and previous.generation != block.generation:
+		# A complete legacy excursion can fall between two delivered eligible poses.
+		_suspend("mode_transition")
 	var first := maxi(block.ack, _floor_sequence) + 1
 	var problem := _problem(block, first)
 	if block.ack <= newest:

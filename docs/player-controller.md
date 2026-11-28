@@ -50,6 +50,12 @@ offset after reconciliation. Mouse motion received between samples keeps its cur
 orientation. On suspension the authored camera paths and server-pose presentation resume.
 Offline aim continues to use the animated eye.
 
+On static stairs and slides, replay restores the enabled hull, head offset, slide direction,
+slide and jump timer phase, and jump history from the owner checkpoint. The online owner's
+ledge query uses a separate disabled ShapeCast at the simulated pose. A positive capture
+ends local speculation. Only Advanced on the authority writes the ledge collider and target.
+The shared probe uses the prefab's original cast and clearance distances.
+
 ## Per-actor input and presentation
 
 Advanced samples one `CogitoPlayerInputSource` at the start of each physics tick, before its child

@@ -221,6 +221,9 @@ func enter(zone: Area3D, actor: CogitoPlayerAdvanced) -> void:
 		req.input_blocked = member.network_input_blocked
 		member.network_input_blocked = true
 		pending[id] = req
+		var peer: int = endpoint.peer_for_actor(member)
+		if member.authority_movement and peer > 1:
+			_preparing.rpc_id(peer, req.source, endpoint.avatar_for(id).lifetime)
 		_reuse(key)
 
 
@@ -390,6 +393,15 @@ func _offer(id: String, req: Dictionary) -> void:
 
 
 @rpc("authority", "call_remote", "reliable", 0)
+func _preparing(key: String, life: int) -> void:
+	var source: Node = levels.get(key)
+	if source:
+		var avatar: Variant = source.avatar_for(_session().local_id)
+		if avatar and avatar.lifetime == life and avatar.prediction:
+			avatar.prediction.transfer(true)
+
+
+@rpc("authority", "call_remote", "reliable", 0)
 func _load_room(token: int, first: String, key: String, path: String, epoch: int) -> void:
 	if token <= _client_token:
 		return
@@ -532,10 +544,10 @@ func _finished(token: int) -> void:
 		_hide_loading()
 
 
-func _hide_loading() -> void:
+func _hide_loading(revision := 0) -> void:
 	var actor := local_actor()
 	if actor and actor.owner_prediction:
-		actor.owner_prediction.transfer(false)
+		actor.owner_prediction.transfer(false, revision)
 	if _overlay:
 		var layer := _overlay
 		_overlay = null
@@ -598,25 +610,29 @@ func _recover(id: String, req: Dictionary, reason: String) -> void:
 func _fail(id: String, reason: String) -> void:
 	var req: Dictionary = pending[id]
 	var source: Node = levels.get(req.source)
+	var revision := 0
 	if source and source.avatar_for(id):
 		source.avatar_for(id).actor.network_input_blocked = req.get("input_blocked", false)
+		if source.avatar_for(id).actor.authority_movement:
+			source.mark_teleport(id)
+			revision = source.avatar_for(id).revision
 	pending.erase(id)
 	_track_empty(req.key)
 	var peer: int = _session().for_id(id).peer_id
 	if peer == 1:
 		_hide_loading()
 	elif peer:
-		_error.rpc_id(peer, id, reason)
-	_error(id, reason)
+		_error.rpc_id(peer, id, reason, revision)
+	_error(id, reason, revision)
 
 
 @rpc("authority", "call_remote", "reliable", 0)
-func _error(id: String, reason: String) -> void:
+func _error(id: String, reason: String, revision := 0) -> void:
 	failed.emit(id, reason)
 	var actor := local_actor()
 	if actor and id == _session().local_id:
 		if actor.owner_prediction and actor.owner_prediction.in_transfer:
-			_hide_loading()
+			_hide_loading(revision)
 		actor.player_interaction_component.hint_prompt.emit(null, reason)
 	push_warning(reason)
 

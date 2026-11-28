@@ -442,6 +442,9 @@ func _create(
 		persistence.mark_dirty(_level_key)
 	inventory.attach(avatar.actor, id, _peer_by_id[id], life)
 	if not initial_pose.is_empty():
+		if checkpoint and avatar.prediction:
+			# Recovery can reinstall a source room whose server actor survived the load.
+			avatar.actor.last_consumed_sequence = checkpoint.ack
 		avatar.receive(initial_pose, checkpoint)
 	if local:
 		command_channel.clear()
@@ -458,6 +461,8 @@ func _create(
 ## Check every simulated tick, including handoffs between two 25 Hz publications.
 func _observe_mode(avatar: AVATAR, tick: int) -> void:
 	var kernel := avatar.actor.authority_movement
+	if kernel:
+		kernel.observe_modifiers(avatar.actor)
 	var eligible := kernel != null and kernel.owns_checkpoint(avatar.actor, tick)
 	if eligible != avatar.checkpoint_eligible:
 		avatar.mode_generation = travel.next_serial()
@@ -675,7 +680,11 @@ func _physics_process(delta: float) -> void:
 		if local_actor.current_command.sequence <= local_actor.owner_prediction.newest:
 			return
 		local_actor.owner_prediction.live(local_actor.current_command)
-	if local_actor and inventory.local:
+	if (
+		local_actor
+		and inventory.local
+		and not (local_actor.owner_prediction and local_actor.is_dead)
+	):
 		var own := _avatars[_session.local_id].wield
 		own.predict(local_actor.current_command, delta)
 	if not multiplayer.is_server():
@@ -869,6 +878,12 @@ func _apply_vitals(id: String, life: int, fields: Dictionary) -> void:
 			avatar.revision = fields.revision
 			command_channel.clear()
 	if fields.dead and avatar.prediction:
+		if not avatar.actor.is_dead:
+			avatar.actor.player_interaction_component.release_held_actions()
+			avatar.actor.current_command = avatar.actor.neutral_command(
+				avatar.actor.last_consumed_sequence
+			)
+			avatar.actor.current_command.has_control = false
 		avatar.clear_baseline()
 	if fields.dead and avatar.movement_audio:
 		avatar.movement_audio.reset()

@@ -68,6 +68,7 @@ func test_every_stored_field_and_adapter_latch_round_trips() -> void:
 		var block := _block()
 		block.state = CogitoMovementState.new()
 		var fields := _fill(block.state, invert)
+		block.modifier_generation = 0xffff0012
 		block.pending_force = Vector3(5, -3, 4)
 		block.teleported = invert
 		block.force_requested = not invert
@@ -86,6 +87,7 @@ func test_every_stored_field_and_adapter_latch_round_trips() -> void:
 				assert_float(copy.state.get(key)).is_equal_approx(expected, 1e-12)
 			else:
 				assert_that(copy.state.get(key)).is_equal(expected)
+		assert_int(copy.modifier_generation).is_equal(block.modifier_generation)
 		assert_vector(copy.pending_force).is_equal(block.pending_force)
 		for key: String in Codec.STAMINA_TUNING:
 			assert_float(copy.get(key)).is_equal(block.get(key))

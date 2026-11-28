@@ -17,6 +17,50 @@ var _watch_snapshots := false
 var _last_snapshot := 0
 var _snapshot_gap := 0
 var _snapshot_count := 0
+var _route: PredictionRoute
+
+
+class PredictionRoute:
+	extends CogitoPlayerInputSource
+	const ACTION := CogitoPlayerCommand.Action
+	const MODE := CogitoPlayerAdvanced.MovingState
+	var ticks := 0
+	var start_y: float
+	var rise := 0.0
+	var returned := false
+	var sliding := false
+	var slide_jump := false
+	var requested_slide := false
+
+	func sample(actor: CogitoPlayer, seq: int) -> CogitoPlayerCommand:
+		var cmd := super.sample(actor, seq)
+		var player := actor as CogitoPlayerAdvanced
+		var mode := player.current_moving_state
+		if ticks == 0:
+			start_y = actor.position.y
+		if rise < 0.55:
+			rise = maxf(rise, actor.position.y - start_y)
+			cmd.move = Vector2.UP
+		elif not returned:
+			cmd.move = Vector2.DOWN
+			returned = actor.position.z > 0 and absf(actor.position.y - start_y) < 0.03
+		elif not slide_jump:
+			cmd.move = Vector2.DOWN
+			cmd.held = 1 << ACTION.SPRINT
+			requested_slide = requested_slide or mode == MODE.Sprinting
+			if requested_slide:
+				cmd.held |= 1 << ACTION.CROUCH
+			if mode == MODE.Sliding and not sliding:
+				sliding = true
+				cmd.add_edge(ACTION.JUMP)
+			if sliding:
+				cmd.held |= 1 << ACTION.JUMP
+				slide_jump = mode == MODE.Jumping
+		cmd.toggle_crouch = false
+		cmd.yaw = 0
+		cmd.pitch = 0
+		ticks += 1
+		return cmd
 
 
 func _ready() -> void:
@@ -61,7 +105,28 @@ func _physics_process(_delta: float) -> void:
 
 
 func _apply(cmd: Dictionary, travel: Node) -> void:
-	if cmd.op == "watch":
+	if cmd.op == "lane":
+		var root: Node3D = travel.levels[LOBBY].active_level()
+		var lane := preload("../player/golden_level.tscn").instantiate() as Node3D
+		# Give the delayed server-pose path a landing before it turns to descend.
+		var top: CollisionShape3D = lane.get_node("Obstacles/Step3")
+		var landing := top.shape.duplicate() as BoxShape3D
+		landing.size.z += 4
+		top.shape = landing
+		top.position.z -= 2
+		lane.position.y = 50
+		root.add_child(lane)
+		var chair: CogitoSittable = root.get_node("CogitoSittable2")
+		chair.position = Vector3(4, 50.1, 0)
+		chair.sit_area_behaviour = CogitoSittable.SitAreaBehaviour.NONE
+	elif cmd.op == "route":
+		_route = PredictionRoute.new()
+		CogitoNet.local_player().input_source = _route
+	elif cmd.op == "chair":
+		var endpoint: Node = travel.endpoint_for(CogitoNet.local_player_id())
+		var interaction: Node = endpoint.active_level().get_node("CogitoSittable2/BasicInteraction")
+		endpoint.interactions.submit(interaction, &"interact")
+	elif cmd.op == "watch":
 		_watch_snapshots = true
 	elif cmd.op == "report":
 		_watch_snapshots = false
@@ -86,6 +151,10 @@ func _apply(cmd: Dictionary, travel: Node) -> void:
 				_max_gap = 0
 				var zone := root.get_node(TO_LAB if root.scene_file_path == LOBBY else TO_LOBBY)
 				actor.global_position = zone.global_position
+			elif cmd.op == "lane_start":
+				actor.position = Vector3(-4, 51, 0)
+			elif cmd.op == "chair_start":
+				actor.position = Vector3(4, 51, 1.1)
 			elif cmd.op == "stage":
 				actor.global_position = root.get_node("GenericSwitch").global_position
 				actor.global_position += Vector3(0, -0.8, 0.75)
@@ -117,4 +186,19 @@ func _sample(travel: Node) -> void:
 		"order": _order,
 		"switch": switch_on,
 	}
+	var player := local as CogitoPlayerAdvanced
+	data.seated = player != null and player.is_sitting
+	data.predicting = (
+		player != null and player.owner_prediction != null and player.owner_prediction.active
+	)
+	data.controller = player != null and player.owner_prediction != null
+	if _route:
+		data.route = [_route.ticks, _route.rise, _route.returned, _route.sliding, _route.slide_jump]
+		data.route_rest = (
+			player != null
+			and player.current_moving_state == CogitoPlayerAdvanced.MovingState.Idle
+			and player.velocity.length() < 0.01
+		)
+	if player and player.owner_prediction:
+		data.suspensions = player.owner_prediction.reasons
 	print("NET POS ", JSON.stringify(data))

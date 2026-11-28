@@ -25,6 +25,9 @@ var pending_force := Vector3.ZERO
 var force_requested := false
 var solves := 0
 var committed_tick := -1
+var modifier_generation := 0
+var _modifier_bits := -1
+var _modifier_speed := 1.0
 var _committed_clearance := false
 var _chart_root: Node
 var _fixed := false
@@ -56,6 +59,43 @@ func invalidate() -> void:
 	contacts = null
 	pending_force = Vector3.ZERO
 	force_requested = false
+
+
+## A new life can reuse the same CharacterBody, timers and stamina component.
+func respawn(actor: CogitoPlayerAdvanced) -> void:
+	invalidate()
+	_modifier_bits = -1
+	modifier_generation = 0
+	actor.sliding_timer.stop()
+	actor.jump_timer.stop()
+	actor.slide_vector = Vector2.ZERO
+	actor.was_sliding = false
+	actor.jumped_from_slide = false
+	actor.jumped_from_crouch = false
+	actor.was_in_air = false
+	actor.is_in_air = false
+	actor.was_jumping = false
+	actor.was_standing = false
+	actor.was_sprinting = false
+	actor.is_sprinting_in_airborne = false
+	actor.jump_target_speed = 0
+	actor.bunny_hop_speed = profile.sprinting_speed
+	actor.main_velocity = Vector3.ZERO
+	actor.direction = Vector3.ZERO
+	actor.input_direction = Vector2.ZERO
+	actor._motion.requested_velocity = Vector3.ZERO
+	actor.current_speed = profile.walking_speed
+	actor.current_lerp_speed = profile.lerp_speed
+	actor.head_offset = Vector3.ZERO
+	actor.head.position.y = 0
+	actor.standing_collision_shape.disabled = false
+	actor.crouching_collision_shape.disabled = true
+	actor.crouch_shapecast.enabled = false
+	var stamina := actor.stamina_attribute as CogitoStaminaAttribute
+	if stamina:
+		stamina.regen_timer.stop()
+		stamina.is_regenerating = false
+		stamina.last_y = actor.global_position.y
 
 
 func unbind(actor: CogitoPlayerAdvanced) -> void:
@@ -99,8 +139,21 @@ func owns_checkpoint(actor: CogitoPlayerAdvanced, server_tick: int) -> bool:
 	)
 
 
+## Sample at the post-simulation boundary, including ticks between pose publications.
+func observe_modifiers(actor: CogitoPlayerAdvanced) -> void:
+	var jump := not actor.actor_elements or actor.actor_elements.can_jump()
+	var bits := int(jump) | (int(actor.is_movement_locked_by_elements()) << 1)
+	bits |= int(actor.network_input_blocked) << 2
+	var speed := actor.get_element_speed_multiplier()
+	if bits != _modifier_bits or speed != _modifier_speed:
+		modifier_generation += 1
+		_modifier_bits = bits
+		_modifier_speed = speed
+
+
 func capture_checkpoint(actor: CogitoPlayerAdvanced, block: NetOwnerState) -> void:
 	block.state = actor.capture_movement_state()
+	block.modifier_generation = modifier_generation
 	# The authored ShapeCast can still describe the previous physics frame.
 	block.state.cast_blocked = _committed_clearance
 	block.pending_force = pending_force

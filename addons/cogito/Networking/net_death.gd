@@ -262,6 +262,8 @@ func try_respawn(id: String, life: int) -> String:
 	actor.state_chart.send_event("grounded")
 	actor.state_chart.send_event("idle")
 	actor.state_chart.send_event("stand_up")
+	if actor.authority_movement:
+		actor.authority_movement.respawn(actor)
 	actor.reset_physics_interpolation()
 	players.renew_life(id)
 	present(actor, false, 0)

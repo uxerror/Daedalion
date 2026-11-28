@@ -1072,99 +1072,109 @@ func _is_ledge_climbable() -> bool:
 	if current_moving_state != MovingState.Swimming and not CAN_CLIMB_LEDGE:
 		return false
 	
-	ledge_climbing_shapecast.position = ledge_climbing_shapecast_initial_position
+	return probe_ledge(ledge_climbing_shapecast, ledge_climbing_shapecast_initial_position,
+		-body.global_basis.z, current_moving_state == MovingState.Swimming, true)
+
+
+## Prediction supplies a separate cast at the hypothetical pose. Only a live capture
+## records a collider and climb target for the chart.
+func probe_ledge(probe: ShapeCast3D, rest_position: Vector3, forward: Vector3,
+		swimming: bool, commit: bool) -> bool:
+	probe.position = rest_position
 	
 	# Check ladder first because its priority is higher
-	ledge_climbing_shapecast.global_position -= Vector3(0, ledge_climbing_shapecast_height, 0)
-	ledge_climbing_shapecast.target_position = ledge_climbing_shapecast.global_basis.inverse() * (-body.global_basis.z * radius)
+	probe.global_position -= Vector3(0, ledge_climbing_shapecast_height, 0)
+	probe.target_position = probe.global_basis.inverse() * (forward * radius)
 	
-	ledge_climbing_shapecast.collide_with_areas = true
+	probe.collide_with_areas = true
 	
-	ledge_climbing_shapecast.force_shapecast_update()
+	probe.force_shapecast_update()
 	
-	if ledge_climbing_shapecast.is_colliding():
-		if ledge_climbing_shapecast.get_collider(0) is Ladder:
+	if probe.is_colliding():
+		if probe.get_collider(0) is Ladder:
 			return false
 	
-	ledge_climbing_shapecast.collide_with_areas = false
+	probe.collide_with_areas = false
 	
-	ledge_climbing_shapecast.position = ledge_climbing_shapecast_initial_position
+	probe.position = rest_position
 	
-	ledge_climbing_shapecast.target_position = Vector3.ZERO
+	probe.target_position = Vector3.ZERO
 	
-	if current_moving_state == MovingState.Swimming:
-		ledge_climbing_shapecast.global_position -= Vector3(0, standing_height - crouching_height, 0)
+	if swimming:
+		probe.global_position -= Vector3(0, standing_height - crouching_height, 0)
 	
-	ledge_climbing_shapecast.force_shapecast_update()
+	probe.force_shapecast_update()
 	
-	if ledge_climbing_shapecast.is_colliding():
+	if probe.is_colliding():
 		return false
 	
-	ledge_climbing_shapecast.target_position = Vector3(0, ARM_LENGTH + MIN_FREE_SPACE_ABOVE_HEAD, 0)
+	probe.target_position = Vector3(0, ARM_LENGTH + MIN_FREE_SPACE_ABOVE_HEAD, 0)
 	
-	ledge_climbing_shapecast.force_shapecast_update()
+	probe.force_shapecast_update()
 	
 	var collision_safe_fraction : float = 1.0
 	
-	if ledge_climbing_shapecast.is_colliding():
-		collision_safe_fraction = ledge_climbing_shapecast.get_closest_collision_safe_fraction()
+	if probe.is_colliding():
+		collision_safe_fraction = probe.get_closest_collision_safe_fraction()
 	
-	ledge_climbing_shapecast.global_position += Vector3(0, ARM_LENGTH + MIN_FREE_SPACE_ABOVE_HEAD, 0) * collision_safe_fraction
-	ledge_climbing_shapecast.target_position = ledge_climbing_shapecast.global_basis.inverse() * (-body.global_basis.z * radius)
+	probe.global_position += Vector3(0, ARM_LENGTH + MIN_FREE_SPACE_ABOVE_HEAD, 0) * collision_safe_fraction
+	probe.target_position = probe.global_basis.inverse() * (forward * radius)
 	
-	ledge_climbing_shapecast.force_shapecast_update()
+	probe.force_shapecast_update()
 	
-	if ledge_climbing_shapecast.is_colliding():
-		ledge_climbing_shapecast.position = ledge_climbing_shapecast_initial_position
+	if probe.is_colliding():
+		probe.position = rest_position
 		
-		if current_moving_state == MovingState.Swimming:
-			ledge_climbing_shapecast.global_position -= Vector3(0, standing_height - crouching_height, 0)
+		if swimming:
+			probe.global_position -= Vector3(0, standing_height - crouching_height, 0)
 		
-		ledge_climbing_shapecast.force_shapecast_update()
+		probe.force_shapecast_update()
 		
-		if ledge_climbing_shapecast.is_colliding():
+		if probe.is_colliding():
 			return false
 	
-	ledge_climbing_shapecast.global_position += -body.global_basis.z * radius
-	ledge_climbing_shapecast.target_position = Vector3(0, -(ARM_LENGTH + MIN_FREE_SPACE_ABOVE_HEAD) - (standing_height - MIN_CLIMB_HEIGHT), 0)
+	probe.global_position += forward * radius
+	probe.target_position = Vector3(0, -(ARM_LENGTH + MIN_FREE_SPACE_ABOVE_HEAD) - (standing_height - MIN_CLIMB_HEIGHT), 0)
 	
-	ledge_climbing_shapecast.force_shapecast_update()
+	probe.force_shapecast_update()
 	
-	if not ledge_climbing_shapecast.is_colliding():
+	if not probe.is_colliding():
 		return false
 	
-	var collider = ledge_climbing_shapecast.get_collider(0)
-	ledge_collider = null
-	if collider is not CSGPrimitive3D: # Warning: Don't use CSGs as moving platforms. It seems there is a bug in getting CSGs as collider
-		ledge_collider = collider
-	
-	var collision_normal : Vector3 = ledge_climbing_shapecast.get_collision_normal(0)
+	if commit:
+		var collider = probe.get_collider(0)
+		ledge_collider = null
+		if collider is not CSGPrimitive3D: # Warning: Don't use CSGs as moving platforms. It seems there is a bug in getting CSGs as collider
+			ledge_collider = collider
+
+	var collision_normal : Vector3 = probe.get_collision_normal(0)
 	
 	if not collision_normal.is_equal_approx(Vector3.UP):
 		return false
 	
-	var collision_point = ledge_climbing_shapecast.get_collision_point(0)
+	var collision_point = probe.get_collision_point(0)
 	
-	ledge_climbing_shapecast.global_position.y = collision_point.y + (crouching_height + MIN_FREE_SPACE_ABOVE_HEAD) / 2
-	ledge_climbing_shapecast.target_position = Vector3.ZERO
+	probe.global_position.y = collision_point.y + (crouching_height + MIN_FREE_SPACE_ABOVE_HEAD) / 2
+	probe.target_position = Vector3.ZERO
 	
-	ledge_climbing_shapecast.force_shapecast_update()
+	probe.force_shapecast_update()
 	
-	if ledge_climbing_shapecast.is_colliding():
+	if probe.is_colliding():
 		return false
 	
-	ledge_climbing_shapecast.global_position.y = collision_point.y + (crouching_height + MIN_FREE_SPACE_ABOVE_HEAD) / 2
-	ledge_climbing_shapecast.target_position = ledge_climbing_shapecast.global_basis.inverse() * (-body.global_basis.z * radius)
+	probe.global_position.y = collision_point.y + (crouching_height + MIN_FREE_SPACE_ABOVE_HEAD) / 2
+	probe.target_position = probe.global_basis.inverse() * (forward * radius)
 	
-	ledge_climbing_shapecast.force_shapecast_update()
+	probe.force_shapecast_update()
 	
-	if ledge_climbing_shapecast.is_colliding():
+	if probe.is_colliding():
 		return false
 	
-	ledge_position = ledge_climbing_shapecast.global_position
-	ledge_position.y = collision_point.y
-	ledge_position += -body.global_basis.z * radius / 2
-	
+	if commit:
+		ledge_position = probe.global_position
+		ledge_position.y = collision_point.y
+		ledge_position += forward * radius / 2
+
 	return true
 
 

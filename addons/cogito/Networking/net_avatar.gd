@@ -156,7 +156,7 @@ func spawn(
 ## Received on the authority-only spawn or pose endpoint.
 func receive(frame: Dictionary, checkpoint: NetOwnerState = null) -> bool:
 	var last := timeline.latest()
-	if frame.revision < revision:
+	if frame.revision < revision or (prediction and frame.revision < prediction.minimum_revision):
 		return false
 	if checkpoint and _baseline and checkpoint.generation < _baseline.generation:
 		return false
@@ -171,7 +171,7 @@ func receive(frame: Dictionary, checkpoint: NetOwnerState = null) -> bool:
 			last.is_empty() or last.revision != frame.revision or last.sitting != frame.sitting
 		)
 		if prediction and force_look:
-			clear_baseline()
+			clear_baseline(not last.is_empty())
 			_baseline = checkpoint
 		revision = frame.revision
 		if not prediction or not prediction.active:
@@ -190,9 +190,9 @@ func latest_owner_baseline() -> NetOwnerState:
 	return _baseline
 
 
-func clear_baseline() -> void:
+func clear_baseline(crossing := false) -> void:
 	if prediction:
-		prediction.reset()
+		prediction.reset(crossing)
 		wield.cancel_prediction()
 	_baseline = null
 
@@ -263,8 +263,9 @@ func present_seat(seated: bool) -> void:
 
 ## Release locally held objects and remove the name immediately so reconnect can reuse it.
 func despawn() -> void:
-	clear_baseline()
+	_baseline = null
 	if prediction:
+		wield.cancel_prediction()
 		prediction.close()
 		actor.owner_prediction = null
 		prediction = null

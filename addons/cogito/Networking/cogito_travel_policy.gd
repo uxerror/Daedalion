@@ -30,10 +30,21 @@ func departing(actor: CogitoPlayerAdvanced, _state: Dictionary, players: Node) -
 	players.carry.release(players.peer_for_actor(actor), false)
 
 
-## Resolve the saved seat in the destination, preserving TEMP posture even without a match.
+## Reacquire the destination seat through its occupancy and driver checks.
 func arrived(actor: CogitoPlayerAdvanced, state: Dictionary, players: Node) -> void:
 	var posture: CogitoPlayerAdvancedState = state.get("posture")
 	if not posture:
+		return
+	if actor.authority_movement:
+		var destination: CogitoSittable
+		if not posture.current_sittable_id.is_empty():
+			destination = CogitoPersistentId.find_in_level(actor, posture.current_sittable_id)
+		elif posture.current_sittable_path:
+			destination = CogitoPersistentId.resolve_path(
+				actor, posture.current_sittable_path, CogitoSceneManager
+			)
+		if destination:
+			players.seats.use(destination, actor.player_interaction_component)
 		return
 	posture.load_sitting_state(actor)
 	var seat := actor.current_seat

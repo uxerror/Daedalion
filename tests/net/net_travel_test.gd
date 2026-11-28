@@ -15,6 +15,8 @@ var _root: Node3D
 var _server: Facade
 var _now := 0
 var _dir: String
+var _kernel_switch: String
+var _prediction_switch: bool
 
 
 class PartyPolicy:
@@ -38,6 +40,8 @@ class PinWest:
 
 
 func before_test() -> void:
+	_kernel_switch = OS.get_environment("COGITO_AUTHORITY_MOVEMENT")
+	_prediction_switch = NetConfig.owner_prediction
 	_now = 0
 	_dir = create_temp_dir("mp10-%d" % Time.get_ticks_usec())
 	_previous = get_tree().current_scene
@@ -48,6 +52,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	OS.set_environment("COGITO_AUTHORITY_MOVEMENT", _kernel_switch)
+	NetConfig.owner_prediction = _prediction_switch
 	if _server.player_world and _server.player_world.persistence:
 		var writer := _server.player_world.persistence
 		assert_bool(writer.reap(_server.player_world, Time.get_ticks_msec() + 3000)).is_true()
@@ -314,14 +320,18 @@ func test_npc_target_released_when_host_travels() -> void:
 
 
 func test_failed_preparation_and_checkpoint_keep_source_and_release_guard() -> void:
+	OS.set_environment("COGITO_AUTHORITY_MOVEMENT", "1")
+	NetConfig.owner_prediction = true
 	_boot()
 	var a := _join(2, 2832)
 	assert_bool(await _arrive(a, A)).is_true()
 	var source := _room(a)
-	var actor := a.local_player()
+	var actor := a.local_player() as CogitoPlayerAdvanced
 	var gate: Area3D = source.active_level().get_node("Doorway")
 	var failures: Array[String] = []
 	_server.travel_failed.connect(func(_id: String, message: String): failures.append(message))
+	# Put the failed connector on static floor, outside the parked vehicle and the pool.
+	gate.position = Vector3(0, 1, -6)
 	gate.target_scene_path = "res://tests/net/no-room.tscn"
 	_enter(a, -1)
 	await _ticks(10)
@@ -330,12 +340,20 @@ func test_failed_preparation_and_checkpoint_keep_source_and_release_guard() -> v
 	var writer: Facade.Persistence = source.persistence
 	writer.files.storage.fail_before = func(op: String): return op == "publish staging"
 	source.travel.enter(gate, source.avatar_for(a.local_player_id()).actor)
+	_pump()
+	assert_bool(actor.owner_prediction.in_transfer).is_true()
+	assert_bool(actor.owner_prediction.active).is_false()
+	var prior_revision := source.avatar_for(a.local_player_id()).revision as int
 	var deadline := Time.get_ticks_msec() + 5000
 	while failures.size() < 2 and Time.get_ticks_msec() < deadline:
 		await _ticks(1)
 	assert_int(failures.size()).is_equal(2)
 	assert_object(a.local_player()).is_same(actor)
 	assert_dict(source.travel.pending).is_empty()
+	await _ticks(20)
+	assert_bool(actor.owner_prediction.in_transfer).is_false()
+	assert_bool(actor.owner_prediction.active).is_true()
+	assert_int(actor.owner_prediction.baseline.revision).is_greater(prior_revision)
 	writer.files.storage.fail_before = Callable()
 	writer.request_save()
 	_now = 2000
@@ -467,7 +485,7 @@ func test_empty_boot_eviction_cli_and_first_join() -> void:
 	assert_bool(await _arrive(a, A)).is_true()
 
 
-func test_unmatched_seat_preserves_offline_posture_and_host_view() -> void:
+func test_unmatched_seat_uses_authority_spawn_policy_and_host_view() -> void:
 	_boot(true)
 	var b := _join(2, 2872)
 	assert_bool(await _arrive(b, A)).is_true()
@@ -482,7 +500,7 @@ func test_unmatched_seat_preserves_offline_posture_and_host_view() -> void:
 	assert_bool(await _arrive(_server, B)).is_true()
 	var target := _room(_server)
 	actor = _server.local_player()
-	assert_bool(actor.is_sitting).is_true()
+	assert_bool(actor.is_sitting).is_equal(actor.authority_movement == null)
 	assert_object(actor.current_seat).is_null()
 	assert_str(cart.occupant_id).is_empty()
 	var hidden: SubViewport = source.active_level().get_viewport()
@@ -734,3 +752,39 @@ func test_lab_loot_deadline_and_ballistic_step_survive_frozen_restart(_timeout :
 	assert_float(moved[0].row.pos.x).is_greater(flights[0].row.pos.x)
 	assert_float(fridge.timer.time_left).is_less(left)
 	assert_int(_server.disconnect_session()).is_equal(OK)
+
+
+func test_unmatched_destination_seat_and_old_room_owner_pose() -> void:
+	OS.set_environment("COGITO_AUTHORITY_MOVEMENT", "1")
+	NetConfig.owner_prediction = true
+	_boot()
+	var client := _join(2, 2912)
+	assert_bool(await _arrive(client, A)).is_true()
+	await _ticks(24)
+	var id := client.local_player_id()
+	var source := _room(client)
+	var old_view := client.player_world.avatar_for(id)
+	var old := old_view.latest_owner_baseline()
+	var frame := old_view.timeline.latest().duplicate()
+	frame.owner_state = NetOwnerState.encode(old)
+	assert_bool(old_view.prediction.active).is_true()
+	var seat: CogitoVehicle = source.active_level().get_node("Cart")
+	seat.set_meta(CogitoPersistentId.META_KEY, "level:WestOnly")
+	var actor: CogitoPlayerAdvanced = source.avatar_for(id).actor
+	assert_bool(source.seats.use(seat, actor.player_interaction_component).ok).is_true()
+	assert_bool(await _arrive(client, B)).is_true()
+	await _ticks(20)
+	var target: Node = client.player_world.travel.endpoint_for(id)
+	var view: Variant = target.avatar_for(id)
+	assert_object(old_view.prediction).is_null()
+	assert_bool(view.actor.is_sitting).is_false()
+	assert_object(view.actor.current_seat).is_null()
+	assert_bool(view.prediction.active).is_true()
+	assert_bool(view.prediction.state.standing_shape).is_true()
+	var current: NetOwnerState = view.latest_owner_baseline()
+	assert_int(current.life).is_greater(old.life)
+	target._receive_pose(id, old.life, frame, old.ack)
+	target._receive_pose(id, current.life, frame, old.ack)
+	assert_object(view.latest_owner_baseline()).is_same(current)
+	assert_bool(view.prediction.active).is_true()
+	assert_vector(view.prediction.render_offset).is_equal(Vector3.ZERO)

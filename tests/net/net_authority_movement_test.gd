@@ -74,7 +74,12 @@ func _one_move(kernel: bool) -> Vector3:
 	await _ticks(1)
 	assert_int(_actor.authority_solve_count - count).is_equal(1)
 	assert_int(_actor.authority_movement.solves - solves).is_equal(int(kernel))
-	return _actor.position - start
+	var displacement := _actor.position - start
+	if not kernel:
+		assert_vector(displacement).is_equal_approx(
+			_actor.get_position_delta(), Vector3.ONE * 0.0001
+		)
+	return displacement
 
 
 func test_queries_from_corrected_origin_leave_actor_and_old_contacts_intact() -> void:
@@ -112,6 +117,7 @@ func test_ladder_and_external_impulse_crossings() -> void:
 	assert_float(impulse.x).is_equal_approx(0.1, 0.001)
 	var resumed := await _one_move(true)
 	assert_float(absf(resumed.x)).is_less(0.001)
+	print("PR4 CROSS ladder=", [walk, climb, departure], " impulse=", [impulse, resumed])
 
 
 func test_water_crossing_preserves_one_writer() -> void:
@@ -135,6 +141,7 @@ func test_water_crossing_preserves_one_writer() -> void:
 		assert_int(_actor.authority_solve_count - count).is_equal(1)
 	var resumed := await _one_move(true)
 	assert_float(-resumed.z).is_greater(0.001)
+	print("PR4 CROSS swim=", swim, " walk=", resumed)
 
 
 func test_seat_and_death_release_to_one_simulation() -> void:
@@ -159,6 +166,7 @@ func test_seat_and_death_release_to_one_simulation() -> void:
 	_driver.axes = Vector2.UP
 	var resumed := await _one_move(true)
 	assert_float(-resumed.z).is_greater(0.001)
+	print("PR4 CROSS seat=", occupied, " walk=", resumed)
 	endpoint.death.die(_actor)
 	count = _actor.authority_solve_count
 	occupied = _actor.global_position
@@ -260,6 +268,7 @@ func _cross_animated_mode(start: Vector3, mode: int) -> void:
 		if mode == MODE.LEDGE_CLIMBING:
 			_driver.axes = Vector2.UP if tick >= 15 and tick < 95 else Vector2.ZERO
 			_driver.held = (1 << ACTION.JUMP) if tick >= 32 and tick < 90 else 0
+		var origin := _actor.position
 		var active := _actor.current_moving_state == mode
 		var count := _actor.authority_solve_count
 		var solves := _actor.authority_movement.solves
@@ -271,6 +280,12 @@ func _cross_animated_mode(start: Vector3, mode: int) -> void:
 			legacy_moves += moves
 		if active != (_actor.current_moving_state == mode):
 			assert_int(moves).is_equal(1)
+			var displacement := _actor.position - origin
+			print("PR4 CROSS mode=", mode, " entering=", not active, " delta=", displacement)
+			if active:
+				assert_vector(displacement).is_equal_approx(
+					_actor.get_position_delta(), Vector3.ONE * 0.0001
+				)
 			entered = entered or not active
 			exited = exited or active
 	assert_bool(entered and exited).is_true()

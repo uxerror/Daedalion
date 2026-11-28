@@ -1,5 +1,7 @@
 extends "memory_session_suite.gd"
 
+const MODE := CogitoMovementState.Mode
+
 var _root: Node3D
 var _previous: Node
 var _server: Facade
@@ -118,6 +120,59 @@ func test_private_spawn_poses_renewal_and_takeover_dedicated() -> void:
 
 func test_private_spawn_poses_renewal_and_takeover_listen() -> void:
 	await _privacy(true)
+
+
+func test_remote_presentation_clock_through_mode_and_seat_boundaries() -> void:
+	_start(false)
+	var observer := _join(3, 1862)
+	await _ticks(12)
+	var endpoint := observer.player_world
+	var remote := endpoint.avatar_for(_id)
+	var frame := remote.timeline.latest().duplicate()
+	for mode in [
+		MODE.SLIDING,
+		MODE.JUMPING,
+		MODE.LADDER_CLIMBING,
+		MODE.SWIMMING,
+		MODE.LEDGE_CLIMBING,
+		MODE.FREE_FALL,
+		MODE.ROLLING,
+		MODE.SITTING,
+		MODE.WALKING
+	]:
+		var seated: bool = mode == MODE.SITTING
+		frame = frame.duplicate()
+		frame.revision += int(seated != frame.sitting)
+		frame.sitting = seated
+		frame.moving = mode
+		frame.tick += 12
+		frame.velocity = Vector3.RIGHT
+		endpoint._receive_pose(_id, remote.lifetime, frame)
+		frame = frame.duplicate()
+		frame.tick += 12
+		frame.position += Vector3.RIGHT * 0.2
+		endpoint._receive_pose(_id, remote.lifetime, frame)
+		var latest: Vector3 = frame.position
+		var half := remote.timeline.at_tick(frame.tick - 6, 60)
+		assert_vector(half.position).is_equal_approx(
+			latest - Vector3.RIGHT * 0.1, Vector3.ONE * 1e-5
+		)
+		assert_int(half.moving).is_equal(mode)
+		var cap := remote.timeline.at_tick(frame.tick + 60, 60)
+		assert_vector(cap.position).is_equal_approx(
+			latest + Vector3.RIGHT * 0.05, Vector3.ONE * 1e-5
+		)
+		var start_usec := Time.get_ticks_usec()
+		remote.timeline._arrival_usec = start_usec
+		remote.present(1.0 / 60)
+		var elapsed := (Time.get_ticks_usec() - start_usec) * 0.000001
+		var lagged_tick := float(frame.tick) - 6.0
+		assert_float(remote.timeline._render_tick).is_greater_equal(lagged_tick)
+		assert_float(remote.timeline._render_tick).is_less_equal(lagged_tick + elapsed * 60 + 1e-6)
+		var displayed := remote.timeline.at_tick(remote.timeline._render_tick, 60)
+		assert_vector(remote.actor.position).is_equal(displayed.position)
+		assert_bool(remote.actor.is_sitting).is_equal(seated)
+		assert_object(remote.prediction).is_null()
 
 
 func _send(block: NetOwnerState, frame: Dictionary, life: int) -> void:

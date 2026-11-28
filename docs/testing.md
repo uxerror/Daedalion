@@ -240,3 +240,33 @@ and whether the received pose tick stayed fixed. The crouch row includes the rou
 correction statistics when prediction is active. Run the same command without
 `--file-transport` for ENet. The `latency` scenario runs all four RTT profiles and prints
 one `PR0` row per walk, jump and crouch trial. These timings end at headless presentation.
+
+## Prediction PR4 boundaries
+
+`tests/net/net_prediction_boundaries_test.gd` compares every replayed post to an independently
+advanced reference in a memory session. It exercises static stairs in both directions, a slide
+jump and slide expiry, a lost fallback pose, local volume and ledge detection, stamina
+exhaustion, an external spend, freeze/thaw and node reuse after death. The authority suite
+prints `PR4 CROSS` displacements. Travel tests cover failed preparation, a source checkpoint
+at the destination and a vehicle without a matching destination seat. The physics action
+suite checks a single throw with duplicated inputs and two owners exchanging the driver grant.
+The owner-session suite feeds accepted poses through the observer endpoint and checks its
+100 ms presentation clock and 50 ms extrapolation limit across movement and seat changes.
+
+Run the complete gdUnit and file-transport suites with both switches off, authority only and
+both on. Give each run a fresh XDG_DATA_HOME. The focused process run is
+`python3 tools/check_multiplayer.py --file-transport --scenario prediction_boundaries`.
+Omit `--file-transport` for ENet. In each topology Ada drives the real input sampler over a
+static test staircase in Lobby, slides, jumps, sits, stands and travels to Laboratory.
+`PR4 PROCESS` reports the climb, the observed mode changes, suspension counts at the seat and
+destination, and whether prediction resumed. The dedicated fixture includes a second client.
+The listen host runs its authority controller.
+
+For a GUI impairment check, start a server on port 7777 and run this in a separate terminal
+at the repository root. Join the printed loopback port with the owning client. The relay
+accepts one owner. Connect the observer directly to port 7777. Use `r.profile(100)` or
+`r.profile(150)` at the prompt to switch RTT, and `r.close()` to finish.
+
+```sh
+python3 -i -c 'import sys; sys.path.insert(0,"tools"); from check_multiplayer import DelayRelay; r=DelayRelay(7777); r.profile(150); print(r.port)'
+```

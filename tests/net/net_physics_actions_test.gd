@@ -6,10 +6,31 @@ var _server: Facade
 var _a: Facade
 var _b: Facade
 var _level_root: Node3D
+var _previous_scene: Node
+var _scene: Node3D
+
+
+class ThrowInput:
+	extends CogitoPlayerInputSource
+	var pressed := false
+	var issued := -1
+
+	func sample(actor: CogitoPlayer, sequence: int) -> CogitoPlayerCommand:
+		var cmd := super.sample(actor, sequence)
+		if pressed:
+			pressed = false
+			issued = sequence
+			cmd.add_edge(CogitoPlayerCommand.Action.PRIMARY)
+			cmd.held = 1 << CogitoPlayerCommand.Action.PRIMARY
+		return cmd
 
 
 func before_test() -> void:
-	_server = _branch(1)
+	_previous_scene = get_tree().current_scene
+	_scene = Node3D.new()
+	get_tree().root.add_child(_scene)
+	get_tree().current_scene = _scene
+	_server = _branch(1, _scene)
 	_server.start_server(
 		{"save_dir": create_temp_dir("physics-actions-%d" % Time.get_ticks_usec())}
 	)
@@ -17,6 +38,12 @@ func before_test() -> void:
 	_a = _observer(2)
 	_b = _observer(3)
 	await _ticks(10)
+
+
+func after_test() -> void:
+	super.after_test()
+	get_tree().current_scene = _previous_scene
+	_scene.free()
 
 
 func _stage(place: String) -> void:
@@ -183,9 +210,16 @@ func test_leaving_level_releases_carry_and_seat_once() -> void:
 	var changes: Array[bool] = []
 	body.carry_state_changed.connect(func(held: bool): changes.append(held))
 	_grab(_b)
+	var retired := _b.player_world.avatar_for(_b.local_player_id()).prediction
 	var host := _b.player_world.active_level().get_parent().get_parent() as CogitoLevelHost
 	host.unload_level(&"arena")
 	await _ticks(5)
+	if retired:
+		assert_bool(retired.active).is_false()
+		assert_object(retired.queued).is_null()
+		assert_object(retired.baseline).is_null()
+		assert_vector(retired.render_offset).is_equal(Vector3.ZERO)
+		assert_bool(is_instance_valid(retired._simulation_eye)).is_false()
 	assert_array(changes).contains_exactly([true, false])
 	assert_bool(seat.is_occupied).is_true()
 	host = _level_root.get_parent().get_parent() as CogitoLevelHost
@@ -215,3 +249,58 @@ func test_one_live_impact_and_silent_late_join() -> void:
 	var late := _observer(4)
 	copy = late.player_world.active_level().get_node("CarryBox/ImpactSounds")
 	assert_bool(copy.audio_stream_player_3d.playing).is_false()
+
+
+func test_live_throw_under_duplicated_inputs_and_lost_poses() -> void:
+	await _stage("carry")
+	var component: CogitoCarryableComponent = _level_root.get_node("CarryBox/CarryableComponent")
+	component.attribute_check = InteractionComponent.AttributeCheck.NONE
+	var actor := _a.local_player() as CogitoPlayerAdvanced
+	var driver := ThrowInput.new()
+	actor.input_source = driver
+	InputRouter.push(actor.on_input)
+	_grab(_a)
+	var impulses: Array[Vector3] = []
+	component.thrown.connect(impulses.append)
+	_network[1].configure(2, 1, {"dup": 1.0, "delay_ms": 35, "seed": 14})
+	_network[2].configure(1, 1, {"loss": 1.0})
+	driver.pressed = true
+	await _ticks(1)
+	assert_bool(actor.current_command.is_held(CogitoPlayerCommand.Action.PRIMARY)).is_false()
+	assert_int(driver.issued).is_greater_equal(0)
+	assert_bool(CogitoPlayerCommand.Action.PRIMARY in actor.current_command.edges).is_false()
+	await _ticks(8)
+	_network[2].configure(1, 1, {"loss": 0.0, "dup": 1.0})
+	await _ticks(16)
+	assert_int(impulses.size()).is_equal(1)
+	assert_bool(actor.player_interaction_component.carrying.is_carrying).is_false()
+	if actor.owner_prediction and _actor(_a).authority_movement:
+		var prediction := actor.owner_prediction
+		assert_bool(prediction.active).is_true()
+		assert_int(prediction.baseline.ack).is_greater(driver.issued)
+
+
+func test_two_owners_exchange_the_driver_grant() -> void:
+	await _stage("vehicle")
+	var vehicle: CogitoVehicle = _level_root.get_node("Vehicle")
+	var target: Node = vehicle.vehicle_node if vehicle.vehicle_node else vehicle
+	for driver in [_a, _b]:
+		_use(driver, "Vehicle/BasicInteraction")
+		await _ticks(12)
+		assert_str(vehicle.occupant_id).is_equal(driver.local_player_id())
+		assert_object(target.get_meta(&"net_driver")).is_same(vehicle)
+		var actor := driver.local_player() as CogitoPlayerAdvanced
+		assert_bool(actor.is_sitting).is_true()
+		if actor.owner_prediction:
+			assert_bool(actor.owner_prediction.active).is_false()
+			assert_vector(actor.owner_prediction.render_offset).is_equal(Vector3.ZERO)
+		_use(driver, "Vehicle/BasicInteraction")
+		await _ticks(20)
+		assert_str(vehicle.occupant_id).is_empty()
+		assert_bool(target.has_meta(&"net_driver")).is_false()
+		for peer in [_a, _b]:
+			var view := peer.local_player() as CogitoPlayerAdvanced
+			assert_bool(view.is_sitting).is_false()
+			if view.owner_prediction and _actor(peer).authority_movement:
+				assert_bool(view.owner_prediction.active).is_true()
+				assert_bool(view.owner_prediction.state.is_sitting).is_false()
