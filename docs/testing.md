@@ -169,3 +169,24 @@ For process coverage run `python3 tools/check_multiplayer.py --file-transport`
 with `COGITO_AUTHORITY_MOVEMENT=0` and again with `COGITO_AUTHORITY_MOVEMENT=1`.
 The child processes inherit the switch. Compare the `PR0 file` rows using
 `consume_tick`, `effect_tick` and `screen_ms`.
+
+
+## Prediction PR2 owner checkpoint
+
+Run the net gdUnit suites with the authority switch off and on. The codec tests enumerate
+the stored movement fields independently of the wire schema. The authority trace runner
+prints `PR2 TRACE` for seven checkpoints, each followed by 60 commands on a fresh collision
+adapter and fixed-tick stepper. It compares contacts, timers, permissions, posture, hull,
+stamina, position, velocity and simulation head height on every tick.
+
+`net_owner_session_test.gd` checks dedicated and listen owner privacy on serialized RPCs,
+reliable life renewal, takeover, explicit pose acceptance and protocol 14 rejection.
+The movement source test covers repeated, skipped, expired and wrapped sequences. The
+authority and travel suites check mode generations across handoffs and room bindings.
+
+The dedicated process scenario samples the same avatar's delivered Variant pose row
+payload on its owner and observer for at least one second each. The two `PR2` lines
+report bytes per simulated second, excluding the enclosing batch, RPC and transport
+headers. Each process also records its local decoded mode in `NET POS`. Run
+`nice -n 19 python3 tools/check_multiplayer.py --file-transport` for the socket-free
+suite and repeat with `COGITO_AUTHORITY_MOVEMENT=1`.

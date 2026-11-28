@@ -59,6 +59,7 @@ func _run(enabled: bool) -> Dictionary:
 	var solves := 0
 	var bad_counts := 0
 	var summaries := 0
+	var checkpoints := {}
 	var log_text := "\n".join(output)
 	assert_int(status).override_failure_message(log_text.right(2000)).is_zero()
 	assert_bool("SCRIPT ERROR" in log_text).is_false()
@@ -67,6 +68,19 @@ func _run(enabled: bool) -> Dictionary:
 			var fields := line.split(" ", false, 2)
 			rows.get_or_add(fields[1], []).append(JSON.parse_string(fields[2]))
 			raw.get_or_add(fields[1], []).append(fields[2])
+		elif line.begins_with("PR2 TRACE "):
+			var fields := line.split(" ", false, 3)
+			var report: Dictionary = JSON.parse_string(fields[3])
+			checkpoints.get_or_add(fields[2], []).append(int(report.k))
+			print(line)
+			assert_int(int(report.n)).is_equal(60)
+			assert_float(report.pos).is_less_equal(0.02)
+			assert_float(report.vel).is_less_equal(0.10)
+			assert_float(report.eye).is_less_equal(0.01)
+			assert_float(report.stamina).is_less_equal(0.000001)
+			assert_dict(report.mismatches).is_empty()
+			if fields[2] == "crouch":
+				assert_bool(report.blocked).is_true()
 		elif line.begins_with("WRITERS "):
 			var fields := line.split(" ")
 			var expected := fields[3].to_int() if enabled else 0
@@ -83,6 +97,8 @@ func _run(enabled: bool) -> Dictionary:
 	assert_int(solves).is_equal(1442)
 	assert_int(bad_counts).is_zero()
 	assert_int(rows.size()).is_equal(APPROVED.size())
+	if enabled:
+		assert_dict(checkpoints).is_equal(preload("owner_checkpoint_trace.gd").LANES)
 	if not enabled:
 		for lane: String in raw:
 			assert_str("\n".join(raw[lane]).sha256_text()).is_equal(APPROVED[lane])

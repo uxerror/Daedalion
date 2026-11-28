@@ -1,6 +1,7 @@
 extends Node
 ## Fixed 60 Hz authority traces use the same room, sampler and prefab in each process.
 
+const OwnerTrace := preload("owner_checkpoint_trace.gd")
 const Footsteps := preload("../player/golden_footsteps.gd")
 const Driver := preload("../player/golden_input.gd")
 const MemorySuite := preload("memory_session_suite.gd")
@@ -97,9 +98,21 @@ func _lane(lane: String) -> void:
 	var slides := 0
 	var sliding := false
 	var total := actor.authority_solve_count
+	var shadows: Array[OwnerTrace] = []
 	for tick: int in Driver.LENGTH.get(lane, 120):
 		await get_tree().physics_frame
 		await get_tree().process_frame
+		if actor.authority_movement:
+			for shadow in shadows.duplicate():
+				shadow.advance(actor.current_command)
+				var reference := NetOwnerState.new()
+				actor.authority_movement.capture_checkpoint(actor, reference)
+				shadow.compare_to(reference.state)
+				if shadow.compared == 60:
+					shadow.report(lane)
+					shadows.erase(shadow)
+			if tick in OwnerTrace.LANES.get(lane, []):
+				shadows.append(OwnerTrace.new(actor, tick))
 		var row := [
 			actor.last_consumed_sequence,
 			actor.position.x,

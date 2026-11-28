@@ -1,6 +1,8 @@
 extends RefCounted
 ## A short server-tick timeline per avatar. All samples use server level coordinates.
 
+enum Acceptance { REJECTED, ACCEPTED, RESET }
+
 const DELAY := 0.1
 const MAX_EXTRAPOLATION := 0.05
 const TELEPORT_DISTANCE := 4.0
@@ -43,22 +45,25 @@ static func discontinuous(last: Dictionary, frame: Dictionary) -> bool:
 	)
 
 
-## Returns true when the renderer must reset position and local look immediately.
-func push(frame: Dictionary) -> bool:
+## Only an accepted reset replaces position and local look immediately.
+func push(frame: Dictionary) -> Acceptance:
 	var reset := _frames.is_empty()
 	if not reset:
 		var last := _frames.back() as Dictionary
-		if frame.tick <= last.tick:
-			return false
+		if frame.tick <= last.tick or frame.revision < last.revision:
+			return Acceptance.REJECTED
 		reset = discontinuous(last, frame)
 	if reset:
 		_frames.clear()
 		_render_tick = -1.0
+	if frame.has("owner_state"):
+		frame = frame.duplicate()
+		frame.erase("owner_state")
 	_frames.append(frame)
 	if _frames.size() > 32:
 		_frames.pop_front()
 	_arrival_usec = Time.get_ticks_usec()
-	return reset
+	return Acceptance.RESET if reset else Acceptance.ACCEPTED
 
 
 ## Latest authoritative frame for owner smoothing and acknowledgement.

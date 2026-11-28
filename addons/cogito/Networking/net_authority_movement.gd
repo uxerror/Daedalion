@@ -24,6 +24,8 @@ var contacts: Collision.Contact
 var pending_force := Vector3.ZERO
 var force_requested := false
 var solves := 0
+var committed_tick := -1
+var _committed_clearance := false
 var _chart_root: Node
 var _fixed := false
 var _teleported := false
@@ -49,6 +51,7 @@ func _clock(actor: CogitoPlayerAdvanced, fixed: bool) -> void:
 
 
 func invalidate() -> void:
+	committed_tick = -1
 	_teleported = true
 	contacts = null
 	pending_force = Vector3.ZERO
@@ -84,6 +87,38 @@ func _supported(actor: CogitoPlayerAdvanced) -> bool:
 			]
 		)
 	)
+
+
+## True only for a committed static solve still in a supported mode at publication.
+func owns_checkpoint(actor: CogitoPlayerAdvanced, server_tick: int) -> bool:
+	return (
+		committed_tick == server_tick
+		and contacts != null
+		and not actor.is_dead
+		and _supported(actor)
+	)
+
+
+func capture_checkpoint(actor: CogitoPlayerAdvanced, block: NetOwnerState) -> void:
+	block.state = actor.capture_movement_state()
+	# The authored ShapeCast can still describe the previous physics frame.
+	block.state.cast_blocked = _committed_clearance
+	block.pending_force = pending_force
+	block.force_requested = force_requested
+	block.teleported = _teleported
+	block.input_blocked = actor.network_input_blocked
+	var stamina := actor.stamina_attribute as CogitoStaminaAttribute
+	if stamina:
+		block.stamina_locked = stamina.is_locked
+		block.use_floor_slope_for_run_exhaustion = stamina.use_floor_slope_for_run_exhaustion
+		block.value_max = stamina.value_max
+		block.stamina_regen_speed = stamina.stamina_regen_speed
+		block.run_exhaustion_speed = stamina.run_exhaustion_speed
+		block.uphill_run_exhaustion_max_speed = stamina.uphill_run_exhaustion_max_speed
+		block.downhill_run_exhaustion_max_speed = stamina.downhill_run_exhaustion_max_speed
+		block.step_slope_multiplier = stamina.step_slope_multiplier
+		block.regenerate_after = stamina.regenerate_after
+		block.jump_cost = profile.jump_cost
 
 
 func advance(actor: CogitoPlayerAdvanced, dt: float) -> void:
@@ -143,6 +178,8 @@ func advance(actor: CogitoPlayerAdvanced, dt: float) -> void:
 	if parent and not actor.top_level:
 		room_from_world = parent.global_transform.affine_inverse()
 	tick.finish(s, profile, actor.current_command, hit, dt, room_from_world)
+	committed_tick = Engine.get_physics_frames()
+	_committed_clearance = s.cast_blocked
 	contacts = hit
 	solves += 1
 	actor.authority_solve_count += 1

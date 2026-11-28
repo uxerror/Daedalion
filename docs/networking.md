@@ -155,7 +155,7 @@ respawn_delay=10.0
 | `respawn_delay` | Finite, nonnegative seconds, default `10.0`. Zero enables immediate requests. | `--respawn-delay 1.5` |
 | `display_name` | `Host` for the listen player. Clients supply their own name in join credentials, default `Player`. | Config file |
 
-The protocol version is 14. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
+The protocol version is 15, including sessions with the authority movement switch off. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
 
 The dedicated level starts empty and simulates admitted remote avatars. Their first-person cameras, HUDs and light-meter cameras are omitted. The default demo boot prevents the menu subtree from entering the tree. Dedicated startup skips solo save recovery and cleanup, the fade panel, game options, graphics and input-map setup by Cogito's menu autoload. The engine still loads project resources, Cogito settings and the existing autoload nodes, including InputHelper, DebugLine, InputRouter, audio and quest services. The dedicated export configures a simulation main scene and strips authored presentation when packing. Room physics uses a non-rendering SubViewport. The operator guide describes the pack and service installation.
 
@@ -454,6 +454,84 @@ The project uses 60 physics ticks per second by default. Commands use unreliable
 
 Use `CogitoNet.player_world.travel.endpoint_for(player_id)` to find the room hosting a live identity, then call its `avatar_for(player_id)`. Its `actor` is the Advanced node. On a replica, `timeline.latest()` exposes the last received pose including `tick` and `ack`. On the server, `actor.last_consumed_sequence` records the last applied command.
 
+### Protocol 15 owner checkpoint
+
+The reliable channel 0 spawn and in-place respawn include a packed `owner_state` field
+in the owner's pose dictionary. At 25 Hz the authority sends each ready client a single
+unreliable channel 1 batch. For the recipient's own row it copies the public frame and
+adds the same field. The row is `[player_id, life, private_frame, wield_accepted_sequence]`.
+Every other row is `[player_id, life, public_frame]`. The listen host simulates its own
+actor directly. A dedicated server has no local presenter.
+
+Advanced samples the receive window and completes its solve, chart handoff and movement
+effects. NetPlayers at physics priority 100 records ownership on every authority tick,
+including ticks between publications. The public frame and the private post-state describe
+the same room simulation tick T. A full checkpoint requires a committed static kernel solve
+on T and a supported mode at capture. With the switch off, before the first solve, after a
+forced reset, and in legacy modes, the same wire header identifies a fallback checkpoint.
+A session-wide serial supplies a new generation on crossing, rebind, forced revision and
+new life. This also identifies transitions that occurred between two delivered poses.
+
+Ack is the extended last fresh command consumed in this life. The first application of 40
+is FRESH. Reusing 40 on a later tick is HELD and can move the actor again. Consuming 42
+after skipping 41 is GAP, with ack 42 and the new last-fresh tick. A null sample is NEUTRAL
+and retains both ack and last-fresh tick. Each forward skip and each entry into HELD or
+NEUTRAL increments the discontinuity count. The independent weapon acceptance number
+continues to describe the last accepted weapon action.
+
+**Block layout v1.** All multibyte fields are little-endian. Every offset is measured
+from the start of the PackedByteArray. The exact lengths are **68 B fallback** and
+**507 B eligible**. The client rejects an unknown version, size mismatch, reserved bits,
+invalid alignment or enum, and non-finite movement data before installing any state.
+
+| Offset | Field, in wire order | Type | Bytes | Precision |
+|---:|---|---|---:|---|
+| 0 | Layout version | u8 | 1 | Exact, 1 |
+| 1 | Disposition bits 0–1 (fresh 0, held 1, neutral 2, gap 3), eligible bit 7 | u8 | 1 | Exact |
+| 2 | Authority physics rate | u16 | 2 | Integer Hz |
+| 4 | Client room binding, avatar life, pose revision, movement generation | 4 × i64 | 32 | Exact serials |
+| 36 | T, ack, last-fresh T, discontinuity count | 4 × i64 | 32 | Exact, −1 denotes no fresh command in this life |
+| 68 | Moving mode, posture | 2 × u8 | 2 | State enum values |
+| 70 | State flags, low bit first in the order below | u32 | 4 | Exact booleans |
+| 74 | Force requested, teleported, stamina locked, slope exhaustion enabled, authority input blocked | u8 | 1 | Bits 0–4 |
+| 75 | Level-local origin, transform basis columns, body basis columns | 7 × vec3f | 84 | Engine vector precision |
+| 159 | Requested, resolved, main and last velocity, direction, gravity direction and accumulator, floor and wall normals, step head offset, head and eye positions | 12 × vec3f | 144 | Binary32 per component |
+| 303 | Input direction, slide vector | 2 × vec2f | 16 | Binary32 per component |
+| 319 | Body yaw, neck yaw, head pitch, speed, lerp speed, gravity, jump target speed, bunny-hop speed, speed multiplier, stamina, previous world Y | 11 × f64 | 88 | Native scalar precision |
+| 407 | Remaining slide, jump cooldown and regen delay | 3 × f64 | 24 | Physics ticks, including fractional phase |
+| 431 | Pending force | vec3f | 12 | Binary32 per component |
+| 443 | Stamina max, regen rate, run/uphill/downhill exhaustion rates, step slope multiplier, regen delay duration in seconds, kernel jump cost | 8 × f64 | 64 | Native scalar precision |
+
+The 29 state bits in order are floor, wall, ceiling, air steps, standing shape, crouching
+shape, cast enabled, cast blocked, crouch latch, jump started, in air, was in air, was
+jumping, was sprinting, sprinting in air, was standing, was sliding, jumped from slide,
+jumped from crouch, slide stopped, jump stopped, sitting, on ladder, has control, jump
+allowed, posture locked, has stamina, regen active and regen stopped.
+
+The position uses the same binary32 components as the shipped Godot Vector3 build.
+At a level-local coordinate of 100 km the spacing is 7.8125 mm. Encoding introduces
+no further rounding of that coordinate. Both bases preserve their three columns.
+Fixed-clock timers carry fractional ticks to preserve the phase of a live Timer on a
+handoff. The reader divides by the transmitted rate. The sweep already folded the stair
+result into momentum and head offset. Floor/wall normals, ceiling and committed
+clearance describe its contacts. Eligible support is static. Geometry, masks and other
+constant tuning come from the matched prefab.
+
+`avatar.latest_owner_baseline()` returns the latest accepted NetOwnerState or null.
+Its `state` is a decoded CogitoMovementState on eligible ticks and null on fallback.
+Consumers treat it as read-only. Reception checks binding, life, revision, generation,
+envelope tick/ack and a strictly newer timeline tick before wield reconciliation.
+A new life seeds a fresh timeline. Despawn, disconnect and room retirement release the
+holder. A newer forced revision atomically replaces the old checkpoint. PR2 has no owner
+prediction or command ring. Rendering continues to follow the published server pose.
+
+In the dedicated two-client file-transport check, Ada's delivered pose rows measured
+11,542 B/s at the owner and 8,580 B/s at the observer with the switch off. With a kernel
+checkpoint they measured 22,680 and 8,910 B/s respectively. The fixture sizes the received
+Variant row over a window of at least one simulated second. Publication phase accounts for
+variation in the number of rows sampled. Batch, RPC and ENet overhead are outside this
+measurement.
+
 ### Movement sounds
 
 Each client plays movement sounds for its own avatar and for other players in its room.
@@ -484,7 +562,7 @@ The development switch defaults to OFF. Launch the authority with the environmen
 `COGITO_AUTHORITY_MOVEMENT=1 nice -n 19 godot --path .` and host from the multiplayer menu.
 For dedicated add `--headless -- --server` to that command. The spawner checks the switch and
 the prefab's movement profile after an authority avatar enters its room. Both topologies use
-the same controller. Owners still send protocol 14 commands and follow the published poses.
+the same controller. Owners send the existing four-frame command packets and follow the published poses.
 
 After input sampling and ordered edge dispatch, the authority reads movement permissions,
 posture clearance and the previous contact summary. It samples crouch and eligible jump,

@@ -113,6 +113,8 @@ func test_concurrent_entries_grace_restore_and_old_packets() -> void:
 	var travel := _server.player_world.travel
 	var epoch: int = source.world.entities.epoch
 	var old_life: int = source.avatar_for(b.local_player_id()).lifetime
+	var previous_view = b.player_world.travel.levels[A].avatar_for(b.local_player_id())
+	var old_block: NetOwnerState = previous_view.latest_owner_baseline()
 	var server_root: Node3D = source.active_level()
 	var guard: CogitoNPC = server_root.get_node("Guard")
 	guard.health.value_current = 7.0
@@ -133,6 +135,16 @@ func test_concurrent_entries_grace_restore_and_old_packets() -> void:
 	assert_bool(await _arrive(a, B)).is_true()
 	assert_bool(await _arrive(b, B)).is_true()
 	var dest := _room(a)
+	var client_dest: Node = b.player_world.travel.levels[B]
+	var new_view = client_dest.avatar_for(b.local_player_id())
+	var arrived: NetOwnerState = new_view.latest_owner_baseline()
+	assert_object(previous_view.latest_owner_baseline()).is_null()
+	assert_int(arrived.generation).is_greater(old_block.generation)
+	assert_int(arrived.binding).is_not_equal(old_block.binding)
+	var stale: Dictionary = new_view.timeline.latest().duplicate()
+	stale.owner_state = NetOwnerState.encode(old_block)
+	client_dest._receive_pose(b.local_player_id(), arrived.life, stale)
+	assert_object(new_view.latest_owner_baseline()).is_same(arrived)
 	var actor: CogitoPlayer = dest.avatar_for(a.local_player_id()).actor
 	var other: CogitoPlayer = dest.avatar_for(b.local_player_id()).actor
 	assert_float(actor.position.distance_to(other.position)).is_greater(1.25)

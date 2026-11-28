@@ -73,6 +73,7 @@ var _ready_levels: Dictionary[int, String] = {}
 var _peer_by_id: Dictionary[String, int] = {}
 var _serial := 0
 var _tick := 0
+var _physics_frame := -1
 var _elapsed := 0.0
 
 
@@ -321,12 +322,14 @@ func _level_ready(key: String, nonce: int) -> void:
 
 ## Install only this observer after admission or a validated travel acknowledgement.
 func accept_ready(peer: int, key: String, nonce: int) -> void:
-	if key != _level_key or not _avatars.has(_session.for_peer(peer).player_id):
+	var owner_id: String = _session.for_peer(peer).player_id
+	if key != _level_key or not _avatars.has(owner_id):
 		return
-	_peer_by_id[_session.for_peer(peer).player_id] = peer
+	_peer_by_id[owner_id] = peer
 	if _bindings.has(peer):
 		_release_subscription(peer)
 	_bindings[peer] = nonce
+	_avatars[owner_id].mode_generation = travel.next_serial()
 	_ready_levels[peer] = key
 	quests.baseline(peer)
 	for id in _avatars:
@@ -408,9 +411,16 @@ func _clear_position(point: Vector3, id: String) -> bool:
 	return true
 
 
-func _create(id: String, life: int, start: Transform3D, initial_pose: Dictionary = {}) -> void:
+func _create(
+	id: String,
+	life: int,
+	start: Transform3D,
+	initial_pose: Dictionary = {},
+	checkpoint: NetOwnerState = null
+) -> void:
 	var avatar := AVATAR.new()
 	avatar.lifetime = life
+	avatar.mode_generation = life
 	_avatars[id] = avatar
 	_peer_by_id[id] = _session.for_id(id).peer_id
 	var local := id == _session.local_id
@@ -425,12 +435,14 @@ func _create(id: String, life: int, start: Transform3D, initial_pose: Dictionary
 	avatar.wield.life = life
 	avatar.wield.owner_peer = _peer_by_id[id]
 	avatar.actor.set_meta(&"net_wield", avatar.wield)
+	if avatar.source:
+		avatar.source.next_server_tick = _tick + 1
 	if persistence:
 		avatar.actor.set_meta(&"profile_name", _session.for_id(id).display_name)
 		persistence.mark_dirty(_level_key)
 	inventory.attach(avatar.actor, id, _peer_by_id[id], life)
 	if not initial_pose.is_empty():
-		avatar.receive(initial_pose)
+		avatar.receive(initial_pose, checkpoint)
 	if local:
 		command_channel.clear()
 		local_actor = avatar.actor
@@ -443,9 +455,54 @@ func _create(id: String, life: int, start: Transform3D, initial_pose: Dictionary
 		avatar.health_fraction = Attributes.health_fraction(avatar.actor)
 
 
+## Check every simulated tick, including handoffs between two 25 Hz publications.
+func _observe_mode(avatar: AVATAR, tick: int) -> void:
+	var kernel := avatar.actor.authority_movement
+	var eligible := kernel != null and kernel.owns_checkpoint(avatar.actor, tick)
+	if eligible != avatar.checkpoint_eligible:
+		avatar.mode_generation = travel.next_serial()
+		avatar.checkpoint_eligible = eligible
+
+
+func _private_frame(avatar: AVATAR, public_frame: Dictionary, peer: int) -> Dictionary:
+	var frame := public_frame.duplicate()
+	var block := NetOwnerState.new()
+	block.binding = _bindings[peer]
+	block.life = avatar.lifetime
+	block.revision = avatar.revision
+	block.tick = frame.tick
+	block.rate = Engine.physics_ticks_per_second
+	var source := avatar.source
+	block.ack = source.last_fresh_sequence
+	block.last_fresh_tick = source.last_fresh_tick
+	block.discontinuities = source.discontinuities
+	block.disposition = source.disposition
+	block.generation = avatar.mode_generation
+	if avatar.checkpoint_eligible:
+		avatar.actor.authority_movement.capture_checkpoint(avatar.actor, block)
+	frame.ack = block.ack
+	frame.owner_state = NetOwnerState.encode(block)
+	return frame
+
+
+func _owner_checkpoint(frame: Dictionary, life: int) -> NetOwnerState:
+	var wire: Variant = frame.get("owner_state")
+	if not wire is PackedByteArray:
+		return null
+	var block := NetOwnerState.decode(wire)
+	if block and block.binding == world.binding() and block.life == life:
+		if block.revision == frame.revision and block.tick == frame.tick and block.ack == frame.ack:
+			return block
+	return null
+
+
 func _send_spawn(peer: int, id: String) -> void:
 	var avatar := _avatars[id]
-	var frame := SNAPSHOT.capture(avatar.actor, _tick, avatar.revision)
+	var tick := maxi(_tick, avatar.source.sample_tick) if avatar.source else _tick
+	var frame := SNAPSHOT.capture(avatar.actor, tick, avatar.revision)
+	if peer == _peer_by_id[id]:
+		_observe_mode(avatar, Engine.get_physics_frames() if tick > _tick else _physics_frame)
+		frame = _private_frame(avatar, frame, peer)
 	var wield := avatar.wield
 	frame.wield = [wield.public_item, wield.light_on, wield.aiming]
 	var private := Attributes.capture(avatar.actor) if peer == _peer_by_id[id] else {}
@@ -459,17 +516,23 @@ func _spawn(key: String, binding: int, id: String, life: int, frame: Dictionary)
 		return
 	if _level_key != key or _session.for_id(id).is_empty():
 		return
+	var checkpoint: NetOwnerState
+	if id == _session.local_id:
+		checkpoint = _owner_checkpoint(frame, life)
+		if not checkpoint:
+			return
 	var avatar := avatar_for(id)
 	if avatar:
 		if life <= avatar.lifetime:
 			return
 		_install_life(avatar, life)
 		avatar.timeline = SNAPSHOT.new()
-		avatar.receive(frame)
+		avatar.revision = 0
+		avatar.receive(frame, checkpoint)
 		if avatar.actor == local_actor:
 			_life_ready.rpc_id(1, life)
 	else:
-		_create(id, life, Transform3D(Basis.IDENTITY, frame.position), frame)
+		_create(id, life, Transform3D(Basis.IDENTITY, frame.position), frame, checkpoint)
 	_apply_vitals(id, life, frame.vitals)
 	_wield_state(id, life, frame.wield[0], frame.wield[1], frame.wield[2])
 
@@ -542,6 +605,8 @@ func mark_teleport(id: String) -> void:
 		if avatar.movement_audio:
 			avatar.movement_audio.reset()
 		avatar.revision += 1
+		avatar.mode_generation = travel.next_serial()
+		avatar.checkpoint_eligible = false
 		if avatar.source:
 			avatar.source.clear()
 
@@ -615,8 +680,12 @@ func _physics_process(delta: float) -> void:
 				var avatar := _avatars[_session.local_id]
 				_commands.rpc_id(1, avatar.lifetime, avatar.revision, packet)
 		return
+	_tick += 1
+	_physics_frame = Engine.get_physics_frames()
 	for id in _avatars:
 		var avatar := _avatars[id]
+		if avatar.source:
+			avatar.source.finish_tick(_tick)
 		flush_attributes(id)
 		if avatar.actor.is_dead:
 			death.check_automatic(id, avatar.lifetime)
@@ -630,11 +699,13 @@ func _physics_process(delta: float) -> void:
 			)
 	var positions := {}
 	for id in _avatars:
-		positions[_peer_by_id[id]] = _avatars[id].actor.global_position
+		var avatar := _avatars[id]
+		if avatar.source:
+			_observe_mode(avatar, _physics_frame)
+		positions[_peer_by_id[id]] = avatar.actor.global_position
 	var peers := observers()
 	bodies.advance(delta, positions, peers)
 	elements.advance(delta, positions, peers)
-	_tick += 1
 	_elapsed += delta
 	var interval := 1.0 / clampi(snapshot_hz, 1, Engine.physics_ticks_per_second)
 	if _elapsed < interval:
@@ -657,7 +728,13 @@ func _physics_process(delta: float) -> void:
 			if _visible(peer, id):
 				var pose: Array = poses[id]
 				if _peer_by_id[id] == peer:
-					pose = pose + [_avatars[id].wield.accepted_sequence]
+					var avatar := _avatars[id]
+					pose = [
+						id,
+						avatar.lifetime,
+						_private_frame(avatar, pose[2], peer),
+						avatar.wield.accepted_sequence
+					]
 				batch.append(pose)
 		if not batch.is_empty():
 			_poses.rpc_id(peer, batch)
@@ -686,8 +763,14 @@ func _poses(batch: Array) -> void:
 func _receive_pose(id: String, life: int, frame: Dictionary, accepted := -1) -> void:
 	var avatar := avatar_for(id)
 	if avatar and avatar.timeline and avatar.lifetime == life:
+		var checkpoint: NetOwnerState
+		if avatar.actor == local_actor:
+			checkpoint = _owner_checkpoint(frame, life)
+			if not checkpoint or (avatar.actor.is_dead and checkpoint.state):
+				return
 		var previous_revision := avatar.revision
-		avatar.receive(frame)
+		if not avatar.receive(frame, checkpoint):
+			return
 		if avatar.actor == local_actor:
 			avatar.wield.reconcile(frame.ack, accepted)
 		if avatar.actor == local_actor and avatar.revision != previous_revision:
@@ -702,6 +785,9 @@ func _process(delta: float) -> void:
 
 
 func _install_life(avatar: AVATAR, life: int) -> void:
+	avatar.clear_baseline()
+	if avatar.source:
+		avatar.source.renew_life()
 	avatar.lifetime = life
 	avatar.wield.life = life
 	avatar.actor.set_meta(&"inventory_life", life)
@@ -744,6 +830,7 @@ func _vitals(id: String, peer: int, changes: Dictionary) -> Dictionary:
 		fields.attributes = changes
 		if avatar.actor.is_dead:
 			fields.remaining = death.remaining(id)
+			fields.revision = avatar.revision
 	return fields
 
 
@@ -772,6 +859,10 @@ func _apply_vitals(id: String, life: int, fields: Dictionary) -> void:
 	avatar.health_fraction = fields.health_fraction
 	if avatar.actor.is_local_presentation:
 		Attributes.apply(avatar.actor, fields.get("attributes", {}))
+		if fields.dead and fields.get("revision", 0) > avatar.revision:
+			avatar.clear_baseline()
+			avatar.revision = fields.revision
+			command_channel.clear()
 	if fields.dead and avatar.movement_audio:
 		avatar.movement_audio.reset()
 	death.present(avatar.actor, fields.dead, fields.get("remaining", 0.0))

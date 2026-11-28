@@ -24,6 +24,9 @@ var timeline: SNAPSHOT
 ## Receive buffer on a server simulating a remote owner.
 var source: INPUT
 var movement_audio: MovementAudio
+var mode_generation := 0
+var checkpoint_eligible := false
+var _baseline: NetOwnerState
 var _seated_pose := false
 
 
@@ -142,17 +145,36 @@ func spawn(
 
 
 ## Received on the authority-only spawn or pose endpoint.
-func receive(frame: Dictionary) -> void:
+func receive(frame: Dictionary, checkpoint: NetOwnerState = null) -> bool:
 	var last := timeline.latest()
-	if timeline.push(frame):
+	if frame.revision < revision:
+		return false
+	if checkpoint and _baseline and checkpoint.generation < _baseline.generation:
+		return false
+	var result := timeline.push(frame)
+	if result == SNAPSHOT.Acceptance.REJECTED:
+		return false
+	if checkpoint or revision != frame.revision:
+		_baseline = checkpoint
+	if result == SNAPSHOT.Acceptance.RESET:
 		movement_audio.reset()
 		var force_look: bool = (
-			last.is_empty() or revision != frame.revision or last.sitting != frame.sitting
+			last.is_empty() or last.revision != frame.revision or last.sitting != frame.sitting
 		)
 		revision = frame.revision
 		apply_pose(frame, 1.0, force_look)
 		actor.reset_physics_interpolation()
 	movement_audio.observe(timeline.latest())
+	return true
+
+
+## Latest validated private post-state, owned by this replica. Treat as read-only.
+func latest_owner_baseline() -> NetOwnerState:
+	return _baseline
+
+
+func clear_baseline() -> void:
+	_baseline = null
 
 
 ## Updates visible pose only. The owner keeps its event-frequency look between resets.
@@ -218,6 +240,7 @@ func present_seat(seated: bool) -> void:
 
 ## Release locally held objects and remove the name immediately so reconnect can reuse it.
 func despawn() -> void:
+	clear_baseline()
 	if not is_instance_valid(actor):
 		return
 	actor.player_interaction_component.release_held_actions()

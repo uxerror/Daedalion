@@ -286,3 +286,53 @@ func test_ledge_climb_and_return_to_ground() -> void:
 func test_hard_landing_roll_and_return_to_ground() -> void:
 	await _stage()
 	await _cross_animated_mode(Vector3(0, 6, 0), MODE.ROLLING)
+
+
+func _crossing(previous: NetOwnerState, eligible: bool) -> NetOwnerState:
+	await _ticks(7)
+	var view := _owner.player_world.avatar_for(_owner.local_player_id())
+	var current := view.latest_owner_baseline()
+	assert_bool(current.state != null).is_equal(eligible)
+	assert_int(current.generation).is_greater(previous.generation)
+	return current
+
+
+func test_owner_checkpoint_changes_generation_on_legacy_crossings() -> void:
+	await _stage(false)
+	var id := _owner.local_player_id()
+	var view := _owner.player_world.avatar_for(id)
+	var block := view.latest_owner_baseline()
+	assert_object(block.state).is_not_null()
+	_actor.enter_ladder(_room.get_node("Ladder/ClimbArea"), Vector3.BACK)
+	block = await _crossing(block, false)
+	_actor.exit_ladder()
+	block = await _crossing(block, true)
+	var pool: Area3D = _room.get_node("Pool")
+	var original := pool.position
+	pool.position = _actor.position
+	block = await _crossing(block, false)
+	pool.position = original
+	block = await _crossing(block, true)
+	var seat := Seat.instantiate() as CogitoSittable
+	seat.sit_area_behaviour = CogitoSittable.SitAreaBehaviour.NONE
+	seat.placement_on_leave = CogitoSittable.PlacementOnLeave.ORIGINAL
+	seat.prompt_pos_mode = CogitoSittable.PromptPositionMode.MARKER
+	seat.prompt_marker = seat.get_node("Look Marker")
+	seat.position = Vector3(4, 1, -1)
+	_room.add_child(seat)
+	var players := _server.player_world
+	assert_bool(players.seats.use(seat, _actor.player_interaction_component).ok).is_true()
+	block = await _crossing(block, false)
+	players.seats.release(_actor)
+	block = await _crossing(block, true)
+	players.death.die(_actor)
+	_pump()
+	assert_object(view.latest_owner_baseline()).is_null()
+	block = await _crossing(block, false)
+	assert_str(players.death.try_respawn(id, block.life)).is_empty()
+	_pump()
+	var renewed := view.latest_owner_baseline()
+	assert_int(renewed.life).is_greater(block.life)
+	assert_int(renewed.generation).is_greater(block.generation)
+	assert_object(renewed.state).is_null()
+	await _crossing(renewed, true)

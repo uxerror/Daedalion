@@ -26,6 +26,31 @@ var _burn_removals := 0
 var _quest_events := 0
 
 
+## Count delivered Variant row payload, excluding the shared batch and transport headers.
+class PoseMeter:
+	extends "res://addons/cogito/Networking/net_snapshot.gd"
+	var id: String
+	var life: int
+	var received := 0
+	var private_rows := 0
+
+	func _init(previous: RefCounted, player_id: String, lifetime: int) -> void:
+		id = player_id
+		life = lifetime
+		_frames = previous._frames
+		_arrival_usec = previous._arrival_usec
+		_render_tick = previous._render_tick
+
+	func push(frame: Dictionary) -> Acceptance:
+		var row := [id, life, frame]
+		if frame.has("owner_state"):
+			# The wield acceptance is an int32-sized Variant throughout this scenario.
+			row.append(-1)
+			private_rows += 1
+		received += var_to_bytes(row).size()
+		return super.push(frame)
+
+
 class LossChannel:
 	extends CHANNEL
 
@@ -147,11 +172,25 @@ func _physics_process(_delta: float) -> void:
 	if not CogitoNet.is_online():
 		return
 	var actors := {}
+	var pose_bytes := {}
+	var private_rows := {}
+	var owner_mode := ""
 	for record in CogitoNet.players():
 		var avatar := CogitoNet.player_world.avatar_for(record.player_id)
 		if avatar:
 			var pos := avatar.actor.position
 			actors[record.display_name] = [pos.x, pos.y, pos.z]
+			if avatar.timeline:
+				if not avatar.timeline is PoseMeter:
+					avatar.timeline = PoseMeter.new(
+						avatar.timeline, record.player_id, avatar.lifetime
+					)
+				var meter := avatar.timeline as PoseMeter
+				pose_bytes[record.display_name] = meter.received
+				private_rows[record.display_name] = meter.private_rows
+				var baseline := avatar.latest_owner_baseline()
+				if baseline:
+					owner_mode = "eligible" if baseline.state else "fallback"
 	var count := 0
 	for child in get_children():
 		if child is CogitoPlayer:
@@ -159,6 +198,9 @@ func _physics_process(_delta: float) -> void:
 	var data := {
 		"tick": _clock,
 		"actors": actors,
+		"pose_bytes": pose_bytes,
+		"private_rows": private_rows,
+		"owner_mode": owner_mode,
 		"count": count,
 		"drive": _generation,
 		"progress": _driver.progress,

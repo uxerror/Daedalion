@@ -78,16 +78,16 @@ func _frame(tick: int, x: float) -> Dictionary:
 
 func test_interpolation_extrapolation_and_discontinuities() -> void:
 	var timeline := SNAPSHOT.new()
-	assert_bool(timeline.push(_frame(40, 1))).is_true()
-	assert_bool(timeline.push(_frame(50, 2))).is_false()
+	assert_int(timeline.push(_frame(40, 1))).is_equal(SNAPSHOT.Acceptance.RESET)
+	assert_int(timeline.push(_frame(50, 2))).is_equal(SNAPSHOT.Acceptance.ACCEPTED)
 	assert_vector(timeline.at_tick(45, 60).position).is_equal(Vector3.RIGHT * 1.5)
 	assert_vector(timeline.at_tick(200, 60).position).is_equal(Vector3.RIGHT * 2.05)
-	assert_bool(timeline.push(_frame(49, 100))).is_false()
-	assert_bool(timeline.push(_frame(51, 100))).is_true()
+	assert_int(timeline.push(_frame(49, 100))).is_equal(SNAPSHOT.Acceptance.REJECTED)
+	assert_int(timeline.push(_frame(51, 100))).is_equal(SNAPSHOT.Acceptance.RESET)
 	assert_vector(timeline.at_tick(40, 60).position).is_equal(Vector3.RIGHT * 100)
 	var forced := _frame(52, 101)
 	forced.revision = 1
-	assert_bool(timeline.push(forced)).is_true()
+	assert_int(timeline.push(forced)).is_equal(SNAPSHOT.Acceptance.RESET)
 
 
 func test_wield_command_has_generation_and_rejects_forged_aim() -> void:
@@ -104,3 +104,43 @@ func test_wield_command_has_generation_and_rejects_forged_aim() -> void:
 		var forged := packet.duplicate()
 		forged.encode_float(offset, 20.0)
 		assert_array(CHANNEL.decode(forged)).is_empty()
+
+
+func test_alignment_apply_hold_skip_expire_and_wrap() -> void:
+	var source := SOURCE.new()
+	source.receive(CHANNEL.new().packet(_command(40)))
+	assert_object(source.sample(null, 0)).is_null()
+	source.sample(null, 0)
+	assert_int(source.last_fresh_sequence).is_equal(40)
+	assert_int(source.last_fresh_tick).is_equal(2)
+	assert_int(source.disposition).is_equal(SOURCE.DISPOSITION.FRESH)
+	source.sample(null, 0)
+	assert_int(source.last_fresh_sequence).is_equal(40)
+	assert_int(source.last_fresh_tick).is_equal(2)
+	assert_int(source.disposition).is_equal(SOURCE.DISPOSITION.HELD)
+	assert_int(source.discontinuities).is_equal(1)
+	source.receive(CHANNEL.new().packet(_command(42)))
+	source.sample(null, 0)
+	source.sample(null, 0)
+	assert_int(source.last_fresh_sequence).is_equal(42)
+	assert_int(source.disposition).is_equal(SOURCE.DISPOSITION.GAP)
+	assert_int(source.discontinuities).is_equal(2)
+	source.clear()
+	assert_int(source.disposition).is_equal(SOURCE.DISPOSITION.GAP)
+	assert_int(source.last_fresh_tick).is_equal(5)
+	source.receive(CHANNEL.new().packet(_command(41)))
+	for i in SOURCE.STALE_TICKS:
+		source.sample(null, 0)
+	assert_int(source.disposition).is_equal(SOURCE.DISPOSITION.NEUTRAL)
+	assert_int(source.last_fresh_sequence).is_equal(42)
+	assert_int(source.last_fresh_tick).is_equal(5)
+	for base: int in [0x7fffffff, 0xffffffff]:
+		var wrapped := SOURCE.new()
+		wrapped._ack = base - 1
+		wrapped.receive(CHANNEL.new().packet(_command(base)))
+		wrapped.receive(CHANNEL.new().packet(_command(base + 1)))
+		for i in 3:
+			wrapped.sample(null, 0)
+		assert_int(wrapped.last_fresh_sequence).is_equal(base + 1)
+		assert_int(wrapped.discontinuities).is_zero()
+	assert_int(SOURCE.unwrap(0x80000000, 0)).is_equal(-0x80000000)

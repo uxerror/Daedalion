@@ -55,12 +55,11 @@ class ArrivalTimeline:
 		_arrival_usec = previous._arrival_usec
 		_render_tick = previous._render_tick
 
-	func push(frame: Dictionary) -> bool:
-		var previous := latest()
-		var reset := super.push(frame)
-		if previous.is_empty() or frame.tick > previous.tick:
+	func push(frame: Dictionary) -> Acceptance:
+		var result := super.push(frame)
+		if result != Acceptance.REJECTED:
 			arrived.emit(frame, _arrival_usec)
-		return reset
+		return result
 
 
 func attach(branch: Facade, owner_id: String) -> void:

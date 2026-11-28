@@ -770,6 +770,22 @@ class Scenario:
         self.elements(a, b, "Ada")
         print("PASS dedicated friendly_fire=false: protected rifle target, fire damage, burnout, late join")
 
+    def owner_baseline(self, owner, observer, roster):
+        expected = "eligible" if os.getenv("COGITO_AUTHORITY_MOVEMENT") == "1" else "fallback"
+        for role, own_name in ((owner, "Ada"), (observer, "Ben")):
+            start = self.sample(role, lambda s: set(s["pose_bytes"]) == set(roster)
+                                and s["owner_mode"] == expected)
+            end = self.pose(role, roster, start["tick"] + 60)
+            if (end["private_rows"][own_name] <= start["private_rows"][own_name]
+                    or any(v for k, v in end["private_rows"].items() if k != own_name)):
+                raise CheckFailed(f"owner row privacy: {end['private_rows']}")
+            size = end["pose_bytes"]["Ada"] - start["pose_bytes"]["Ada"]
+            rate = size * 60 / (end["tick"] - start["tick"])
+            if rate <= 0:
+                raise CheckFailed("no pose rows delivered")
+            view = "owner" if role is owner else "observer"
+            print(f"PR2 {view} Ada {rate:.0f} pose payload B/s; local baseline {expected}", flush=True)
+
     def dedicated(self):
         self.start(dedicated=True)
         first = self.fixture("Ada", "client")
@@ -783,6 +799,7 @@ class Scenario:
         arrival = self.pose(second, roster)
         if math.dist(arrival["actors"]["Ada"], settled) > 0.2:
             raise CheckFailed(f"late-join pose {arrival} vs {settled}")
+        self.owner_baseline(first, second, roster)
         self.drive(first, "Ada", roster, [self.server, second])
         self.drive(second, "Ben", roster, [self.server, first])
         self.panels(first, second, "Ada", "Ben")
