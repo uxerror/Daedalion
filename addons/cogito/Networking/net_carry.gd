@@ -20,7 +20,9 @@ func grab(component: CogitoCarryableComponent, pic: PlayerInteractionComponent) 
 	if not multiplayer.is_server() or not peer or pic.player.is_sitting or pic.carrying.is_carrying:
 		return {"ok": false, "reason": "Actor busy"}
 	var body := component.get_parent()
-	if body.has_meta(&"net_carrier") or component.is_being_carried or _grants.has(peer):
+	var address: Dictionary = players.world.entities.address(component)
+	var entity: Node = players.world.entities.objects[address.entity_id]
+	if entity.has_meta(&"net_carrier") or component.is_being_carried or _grants.has(peer):
 		return {"ok": false, "reason": "In use"}
 	var wield: Variant = pic.player.get_meta(&"net_wield")
 	var previous: InventorySlotPD
@@ -28,18 +30,25 @@ func grab(component: CogitoCarryableComponent, pic: PlayerInteractionComponent) 
 		previous = wield.stack
 		wield.equip(previous)
 	_serial = players.travel.next_serial()
-	_grants[peer] = {"component": component, "token": _serial, "tick": -1, "stack": previous}
+	_grants[peer] = {
+		"component": component,
+		"token": _serial,
+		"tick": -1,
+		"stack": previous,
+		"id": address.entity_id
+	}
 	component.player_interaction_component = pic
-	body.set_meta(&"net_carrier", peer)
+	entity.set_meta(&"net_carrier", peer)
+	if body is PhysicalBone3D:
+		PhysicsServer3D.body_set_state(body.get_rid(), PhysicsServer3D.BODY_STATE_SLEEPING, false)
 	body.set_meta(&"net_damage_owner", wield.player_id)
 	if body.has_meta(&"net_snap_slot"):
 		body.get_meta(&"net_snap_slot").release_body(body)
 	var token := _serial
 	component.carry_state_changed.connect(_changed.bind(peer))
-	players.world.publish_holder(players.world.entities.id_for(body), wield.player_id)
+	players.world.publish_holder(address.entity_id, wield.player_id)
 	component.hold()
 	component.was_interacted_with.emit(component.interaction_text, component.input_map_action)
-	var address: Dictionary = players.world.entities.address(component)
 	if _grants.get(peer, {}).get("token") == token:
 		_notify(peer, token, address)
 	return {"ok": true}
@@ -92,10 +101,12 @@ func _changed(held: bool, peer: int) -> void:
 	var grant: Dictionary = _grants[peer]
 	_grants.erase(peer)
 	var component: CogitoCarryableComponent = grant.component
-	component.get_parent().remove_meta(&"net_carrier")
-	component.carry_state_changed.disconnect(_changed.bind(peer))
 	var world: Node = get_parent().world
-	world.publish_holder(world.entities.id_for(component.get_parent()), "")
+	var entity: Node = world.entities.objects.get(grant.id)
+	if is_instance_valid(entity):
+		entity.remove_meta(&"net_carrier")
+	component.carry_state_changed.disconnect(_changed.bind(peer))
+	world.publish_holder(grant.id, "")
 	var actor := component.player_interaction_component.player
 	if grant.stack and grant.stack in actor.inventory_data.inventory_slots:
 		var wield: Variant = actor.get_meta(&"net_wield")
@@ -194,7 +205,7 @@ func apply_input(peer: int, token: int, op: StringName, motion: Vector2) -> void
 
 
 ## Server collision query also works for headless avatars with a disabled targeting ray.
-func clamp_anchor(pic: PlayerInteractionComponent, body: RigidBody3D, end: Vector3) -> Vector3:
+func clamp_anchor(pic: PlayerInteractionComponent, body: PhysicsBody3D, end: Vector3) -> Vector3:
 	var eye := pic.player.get_aim_transform().origin
 	var query := PhysicsRayQueryParameters3D.create(eye, end)
 	query.exclude = [pic.player.get_rid(), body.get_rid()]

@@ -85,23 +85,66 @@ func test_replica_has_no_gameplay_and_death_is_silent_for_late_join() -> void:
 	assert_int(_a.player_world.world.revisions[id]).is_equal(
 		_server.player_world.world.revisions[id]
 	)
-	var corpse := _server.player_world.world.entities.live_object("runtime:1") as RigidBody3D
-	for tick in 240:
-		if corpse.sleeping:
+	var corpse := _server.player_world.world.entities.live_object("runtime:1") as NetNpcCorpse
+	for tick in 650:
+		if corpse.sample_rest(0.0):
 			break
 		await _ticks(1)
-	assert_bool(corpse.sleeping).is_true()
+	assert_bool(corpse.sample_rest(0.0)).is_true()
 	var late := _observer(4)
 	await _ticks(6)
 	var late_guard: CogitoNPC = late.player_world.active_level().get_node("Guard")
 	assert_bool(late_guard.network_state.dead).is_true()
 	for branch in [_server, _a, _b, late]:
 		var entities: Variant = branch.player_world.world.entities
-		var proxy: Node3D = entities.live_object("runtime:1")
-		assert_object(proxy).is_instanceof(CogitoBodyDrag)
-		assert_float(proxy.global_position.distance_to(corpse.global_position)).is_less(0.04)
+		var proxy: NetNpcCorpse = entities.live_object("runtime:1")
+		assert_object(proxy).is_instanceof(NetNpcCorpse)
+		for i in corpse.bones.size():
+			var part := proxy.bones[i]
+			var original := corpse.bones[i]
+			assert_float(part.global_position.distance_to(original.global_position)).is_less(0.02)
+			var angle := part.global_basis.get_rotation_quaternion().angle_to(
+				original.global_basis.get_rotation_quaternion()
+			)
+			assert_float(angle).is_less(deg_to_rad(3))
+			assert_bool(part.is_simulating_physics()).is_equal(branch == _server)
 		assert_object(entities.live_object("runtime:2")).is_instanceof(CogitoObject)
 		assert_object(entities.live_object("runtime:3")).is_null()
+
+
+@warning_ignore("unused_parameter")
+func test_drag_grips_share_one_grant_and_move_observer(
+	bone_name: String, _test_parameters := [["DEF-hips"], ["DEF-neck"]]
+) -> void:
+	_guard.damage_received.emit(100.0, _ada, Vector3.FORWARD, _guard.position)
+	await _ticks(12)
+	var players := _server.player_world
+	var corpse := players.world.entities.live_object("runtime:1") as NetNpcCorpse
+	var grips := corpse.find_children("*", "CogitoCarryableComponent", true, false)
+	var grip := grips[0] as CogitoCarryableComponent
+	var other := grips[1] as CogitoCarryableComponent
+	if grip.get_parent().bone_name != bone_name:
+		grip = grips[1]
+		other = grips[0]
+	var selected := grip.get_parent() as PhysicalBone3D
+	var root := corpse.frame_root()
+	var bytes := NetNpcCorpse.Codec.encode(corpse.bones, root)
+	var aim := _ada.get_aim_transform()
+	root.origin += aim.origin - aim.basis.z * 1.0 - selected.global_position
+	corpse.restore_frame(root, bytes)
+	var origin := selected.global_position
+	var grant := players.carry.grab(grip, _ada.player_interaction_component)
+	assert_bool(grant.ok).is_true()
+	assert_str(players.world.holders["runtime:1"]).is_equal(_a.local_player_id())
+	var denied := players.carry.grab(other, _ben.player_interaction_component)
+	assert_bool(denied.ok).is_false()
+	await _ticks(24)
+	var observer := _b.player_world.world.entities.live_object("runtime:1") as NetNpcCorpse
+	var index := corpse.bones.find(selected)
+	assert_float(selected.global_position.distance_to(origin)).is_greater(0.1)
+	assert_float(observer.bones[index].global_position.distance_to(origin)).is_greater(0.1)
+	players.carry.release(2)
+	assert_bool(players.world.holders.has("runtime:1")).is_false()
 
 
 func test_global_policy_and_npc_override() -> void:

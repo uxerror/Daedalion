@@ -40,9 +40,10 @@ static func supported(node: Node, component: InteractionComponent) -> bool:
 		)
 		or (
 			component is CogitoCarryableComponent
-			# Includes the rigid CogitoBodyDrag pelvis created for a network corpse.
-			and node is RigidBody3D
-			and component.get_parent() == node
+			and (
+				(node is RigidBody3D and component.get_parent() == node)
+				or _corpse_grip(node, component)
+			)
 		)
 		or (node is CogitoSittable and component == node.BasicInteraction)
 		or component is BackpackComponent
@@ -70,6 +71,14 @@ static func supported(node: Node, component: InteractionComponent) -> bool:
 	)
 
 
+static func _corpse_grip(node: Node, component: InteractionComponent) -> bool:
+	var bone := component.get_parent() as PhysicalBone3D
+	if bone and "cogito_ragdoll" in bone:
+		var corpse: Variant = bone.get("cogito_ragdoll")
+		return corpse is NetNpcCorpse and (node == corpse or node == bone)
+	return false
+
+
 ## Check a server-authored schema before interpreting the optional wire value.
 static func valid_payload(
 	component: InteractionComponent, action: StringName, value: Variant, supplied: bool
@@ -90,6 +99,8 @@ static func valid_payload(
 
 ## Query actual server collision geometry from the acting avatar's eye.
 static func geometry(actor: CogitoPlayer, node: Node3D, component: InteractionComponent) -> String:
+	if node is NetNpcCorpse:
+		node = component.get_parent()
 	var pic := actor.player_interaction_component
 	var eye := actor.get_aim_transform().origin
 	var reach := pic.targeting.get_reach() + REACH_MARGIN

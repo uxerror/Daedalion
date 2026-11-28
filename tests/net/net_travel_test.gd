@@ -103,6 +103,54 @@ func _enter(client: Facade, offset := 0.0) -> void:
 	endpoint.mark_teleport(client.local_player_id())
 
 
+func test_resting_corpse_baseline_after_travel_and_reconnect() -> void:
+	_boot()
+	var client := _join(2, 2890)
+	var stayed := _join(3, 2891)
+	assert_bool(await _arrive(client, A)).is_true()
+	assert_bool(await _arrive(stayed, A)).is_true()
+	var west := _room(client)
+	var guard := west.active_level().get_node("Guard") as CogitoNPC
+	var actor: CogitoPlayer = west.avatar_for(client.local_player_id()).actor
+	guard.damage_received.emit(200.0, actor, Vector3.FORWARD, guard.position)
+	await _ticks(20)
+	var corpse := west.world.entities.live_object("runtime:1") as NetNpcCorpse
+	assert_object(corpse).is_not_null()
+	# Save a recognizable mid-fall pose asleep, as for a world restored on restart.
+	corpse.restore_frame(
+		corpse.frame_root(), NetNpcCorpse.Codec.encode(corpse.bones, corpse.frame_root())
+	)
+	await _ticks(6)
+	_enter(client)
+	assert_bool(await _arrive(client, B)).is_true()
+	_enter(client)
+	assert_bool(await _arrive(client, A)).is_true()
+	await _ticks(8)
+	_check_rest_pose(client, corpse)
+	var identity := client.local_player_id()
+	client.disconnect_session()
+	_pump()
+	var returned := _join(4, 2890)
+	assert_bool(await _arrive(returned, A)).is_true()
+	assert_str(returned.local_player_id()).is_equal(identity)
+	await _ticks(8)
+	_check_rest_pose(returned, corpse)
+
+
+func _check_rest_pose(client: Facade, corpse: NetNpcCorpse) -> void:
+	var observer: Node = client.player_world.travel.levels[A]
+	var copy := observer.world.entities.live_object("runtime:1") as NetNpcCorpse
+	assert_bool(observer.bodies._timelines["runtime:1"].resting).is_true()
+	for i in corpse.bones.size():
+		var source := corpse.bones[i].global_transform
+		var target := copy.bones[i].global_transform
+		assert_float(target.origin.distance_to(source.origin)).is_less(0.02)
+		var angle := target.basis.get_rotation_quaternion().angle_to(
+			source.basis.get_rotation_quaternion()
+		)
+		assert_float(angle).is_less(deg_to_rad(3))
+
+
 func test_concurrent_entries_grace_restore_and_old_packets() -> void:
 	_boot()
 	var a := _join(2, 2811)

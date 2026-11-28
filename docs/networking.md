@@ -155,7 +155,7 @@ respawn_delay=10.0
 | `respawn_delay` | Finite, nonnegative seconds, default `10.0`. Zero enables immediate requests. | `--respawn-delay 1.5` |
 | `display_name` | `Host` for the listen player. Clients supply their own name in join credentials, default `Player`. | Config file |
 
-The protocol version is 15, including sessions with the authority movement switch off. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
+The protocol version is 16, including sessions with the authority movement switch off. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
 
 The dedicated level starts empty and simulates admitted remote avatars. Their first-person cameras, HUDs and light-meter cameras are omitted. The default demo boot prevents the menu subtree from entering the tree. Dedicated startup skips solo save recovery and cleanup, the fade panel, game options, graphics and input-map setup by Cogito's menu autoload. The engine still loads project resources, Cogito settings and the existing autoload nodes, including InputHelper, DebugLine, InputRouter, audio and quest services. The dedicated export configures a simulation main scene and strips authored presentation when packing. Room physics uses a non-rendering SubViewport. The operator guide describes the pack and service installation.
 
@@ -536,8 +536,8 @@ measurement.
 Launch the server with `COGITO_AUTHORITY_MOVEMENT=1` and the owning client with
 `COGITO_OWNER_PREDICTION=1`. Both switches default to off. The client reads its switch
 once into `net_config.gd`'s static `owner_prediction` field. A test can set it before
-spawn. Protocol 15, saves, 60 Hz default physics, 25 Hz publication and 100 ms remote
-interpolation are unchanged. A listen host runs its own authority movement once.
+spawn. Owner checkpoints retain the protocol 15 layout, 60 Hz default physics, 25 Hz
+publication and 100 ms remote interpolation. A listen host runs its own authority movement once.
 
 The latest accepted private checkpoint replaces the queued one. At the beginning of the
 next owner physics tick the client compares its stored post-state at the acknowledged
@@ -1088,7 +1088,52 @@ Derive the resource from `CogitoNpcTargetPolicy`. Override `eligible(npc, actor)
 
 Player hits use the server hitbox, including knockback and hit reactions. NPC attacks enter MP5 with an empty attacker player ID. Disabling friendly fire leaves NPC damage enabled. On death the authority publishes the dead actor, runs its death signal once, and spawns the configured pickup or loot component output through the runtime spawner.
 
-For the template mannequin, the server instantiates one draggable rigid torso with a prone, skinned mannequin and its authored hip grip. MP4 replicates the rigid transform, velocities and final sleeping pose. A bounded payload per awake corpse keeps bandwidth independent of the skeleton’s bone count. The prone limbs stay fixed relative to the torso. An observer joining during or after a drag resolves the corpse’s runtime ID and current pose through the existing body lifecycle. Games requiring articulated corpse physics need a matching bone representation on each peer.
+### NPC corpses
+
+On death the authority instantiates the NPC's authored ragdoll scene at the NPC's pose.
+The dedicated server and listen host start the same full physical-bone simulation as solo.
+The mannequin has 40 physical bodies. Their joints, shapes, damping, masses and collision
+filters come from the scene. The corpse has one runtime ID.
+
+Protocol 16 appends a bone payload to the MP4 row for a corpse. The batch envelope carries
+the level key, epoch and server physics tick.
+
+| Row index | Field | Representation |
+| --- | --- | --- |
+| 0 | Corpse ID | Runtime ID string |
+| 1 | Root frame | Global Transform3D centred on the hips, with the ragdoll root's orientation |
+| 2–3 | Linear and angular velocity | Two zero Vector3 values in the shared body header |
+| 4–6 | Reset, interest-entry tick, rest | Bool, int, bool |
+| 7 | Physical-body poses | One PackedByteArray, in physical simulator child order |
+| Per bone, bytes 0–11 | Body origin relative to the root frame | Three little-endian signed int32 millimetre coordinates. Maximum rounding error 0.87 mm in 3D. The range accommodates separated bones during long falls. |
+| Per bone, bytes 12–15 | Body orientation relative to the root | One little-endian uint32. Two high bits identify the largest quaternion component. The remaining three components use 10 bits each over ±1/√2. Reconstruction uses a positive omitted component. |
+
+Each mannequin pose takes 640 B. The standalone Variant row for `runtime:1` measures
+784 B. A falling mannequin adds 15,680 B/s per observer at 20 Hz when a player is within
+24 m, or 3,920 B/s at 5 Hz further away. Each observer's interest ends at 96 m. These
+figures exclude shared batch, RPC and transport overhead. A reliable final row records
+sleep. Subsequent corpse motion traffic is 0 B/s until a bone wakes or a viewer needs
+a new baseline. Unheld joints that remain awake for 10 seconds of simulated room time are
+put to sleep together. Carrying suspends this cap. In a headless Godot 4.7.2/Jolt run,
+12 separated mannequins falling onto a floor cost a median 0.31 ms of additional process
+CPU per awake corpse per 60 Hz physics step (five paired 144-step windows against the
+same empty floor, including scene updates, without observers).
+
+Clients use the MP4 100 ms interpolation clock for both the root and every physical pose.
+A baseline, teleport over 4 m or rest row snaps the whole skeleton. Invalidated subscriptions
+get a reliable entry pose on interest re-entry, room travel or reconnect, including when
+the corpse is asleep. The client removes the authored body offsets to place skeleton joints
+and moves kinematic collision shapes to the displayed physical poses. The interaction ray
+can select the authored hip and neck grips. Both use the corpse ID and their own component
+path. One exclusive carry grant covers both. The authority validates reach and sight to the
+selected bone, then the original carry component pulls that bone towards the player's
+anchor and applies the release impulse.
+
+A world snapshot stores the runtime spawn spec and the body stream's root and packed pose.
+Restart restores each bone and puts it to sleep. An old rigid-box record uses the former
+model offset and prone rotation, then settles under joint physics. For pre-MP10 records
+the spawner resolves the NPC ID and index using the archetypes cached before NPC removal.
+
 
 For a custom behaviour, add the server-side state processor and a chart transition from each state that can enter it. Extend `CogitoNPC.net_state()` and `apply_net_state(fields, silent)`, preserving the base fields and calling the base apply method. Store durable animation parameters in those fields, including any phase needed for joining midway. Replica apply must only install presentation values. Send transient cosmetics with `player_world.combat.npc_event(npc, event, point)` on the server and handle custom events on `npc_presented`. Keep damage, item spawns and navigation in server callbacks. NPC state and event payloads must be understood by both content builds.
 
@@ -1234,7 +1279,7 @@ Baselines only install state. Award gameplay rewards from the server-only
 - Resident levels consume memory until shutdown. Auto-discovery sees targets present on mounted zones at startup. List procedural or script-only routes explicitly. Game code using an autoload, a raw SceneTreeTimer or a wall-clock deadline must bind that work to room time.
 - Scenes and controllers attach on the Godot main thread. Cold room activation and synchronous capture can exceed a 60 Hz frame budget. Client movement prediction, lag compensation and transport tuning are separate from independent travel.
 - There is no lag compensation. The server tests targets where they are when the command is consumed. A moving target may have left the crosshair by then. Ballistic replicas can briefly overshoot until the authoritative impact arrives.
-- Recovered projectiles become independent rigid pickups. Attachment to moving hit targets and procedural debris need their own lifecycle. Online corpses use the single-torso approximation described above.
+- Recovered projectiles become independent rigid pickups. Attachment to moving hit targets and procedural debris need their own lifecycle.
 - Living NPCs are bound from each level scene. A game that creates new living NPCs at runtime needs an archetype and spawn adapter. Authored mannequin corpses and loot already have runtime records.
 - Custom debris and fragment spawns still need a network archetype. Authored elemental burnout has a level-scoped removal record.
 - The synchronous save API can block for a full generation. Normal autosave, leave checkpoints, operator requests and pause-menu saves stage and verify on a worker. A running rebind checks both identities again before the main thread seals the move.
@@ -1294,7 +1339,7 @@ GODOT_BIN=/usr/bin/godot NICE='nice -n 19' bash tools/check.sh multiplayer
 
 The loopback ENet harness runs a dedicated server with two clients, then a listen host with one client. Separate temporary user directories preserve the MP0 identity, rejection, disconnect and restart checks. In a small arena it also checks stationary avatars, forward and turning distances, observation by the opposite peer, the late-join pose and removal. Clients drop every tenth command datagram after encoding its redundant history. A jump tap lands on a dropped datagram and the server and observer must see the jump height. The interaction checks also exercise a closed and open collision doorway, duplicate requests, rejection at distance, a button-linked door, wrong/right keypad codes a turnwheel-linked door, a lockpick-locked door and movement by another player during an owner-only cutscene. A third client verifies a silent baseline. In the listen topology the host opens the first door and the client opens the linked door. The same scenarios race an authored pickup, move a runtime drop between players, trade through a shared container and purchase from a vendor. The dedicated scenario also reopens the container on a late joiner and checks inventory after reconnect. The combat fixture checks bounded automatic shots against hitboxes, owner-private magazines, observed fire, projectile impact and recovery, light state and a silent late join. In the listen topology both players shoot the opposite player’s target. The MP4 scenario races the same box, carries it through the open doorway, throws it and checks the final position within 3.5 cm on both peers. It contests and releases a seat, drives a chair and snaps the box for a late joiner. Listen mode repeats the carry in both directions. MP5 adds overlapping hazards, rifle kills, owner-only countdown and Esc, early request rejection, retained inventory and snap-to-marker respawn. A late client checks the surviving player’s public health and the respawned player’s pose. Listen players also kill and respawn each other. A separate friendly-fire-off run fires the rifle at another player and checks health. Each scenario has a 103 s deadline. Select `--scenario dedicated`, `--scenario listen` or `--scenario friendly_fire_off` with `python tools/check_multiplayer.py`. Use `--survival-only` to run the MP5 stages independently. Add `--file-transport` to exercise the same RPCs in separate processes with a local file queue.
 
-The additional `npc_dedicated` and `npc_listen` scenarios stage the arena guard, patrol and occluder. They check listener-specific detection, target loss and reacquisition, fire count against MP5 health, a single death and loot drop, corpse agreement within 4 cm, and a server-authorized drag. Dedicated also checks a silent late join. The harness prints received file-transport payload bytes per second, including other game traffic. The playing clients measure from the split through corpse settlement. The late client measures from its restored baseline through the first observed drag. For a visual Laboratory check, split up near its two authored NPCs, break sight, compare indicators and music, then kill the armed guard and drag the corpse from each peer.
+The additional `npc_dedicated` and `npc_listen` scenarios stage the arena guard, patrol and occluder. They check listener-specific detection, target loss and reacquisition, fire count against MP5 health, a single death and loot drop, all 40 corpse poses within 2 cm and 3 degrees, zero corpse rows over a second at rest, and a server-authorized drag by the hips (dedicated) or neck (listen). Dedicated also checks a silent late join. The harness prints received file-transport payload bytes per second, including other game traffic. The playing clients measure from the split through corpse settlement. The late client measures from its restored baseline through the first observed drag. For a visual Laboratory check, split up near its two authored NPCs, break sight, compare indicators and music, then kill the armed guard and drag the corpse from each peer.
 
 The regular gdUnit run includes the socket-free codec, jitter, wrap, interpolation, level interest, role, actor-lifecycle, entity identity, validation, concurrent commits, private interfaces, plate and baseline tests in `tests/net/`.
 

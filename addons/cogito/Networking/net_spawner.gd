@@ -259,10 +259,10 @@ func spawn_npc_remains(npc: CogitoNPC) -> void:
 			var spec := {
 				"corpse": entity,
 				"index": index,
-				"basis": npc.global_basis,
+				"basis": Basis.from_euler(npc.global_rotation),
 				"scene": scene.resource_path,
 			}
-			_spawn(spec, npc.global_position + Vector3.UP * 0.4)
+			_spawn(spec, npc.global_position)
 
 
 func _spawn(spec: Dictionary, pos: Vector3) -> Node3D:
@@ -315,7 +315,7 @@ func _instantiate(id: String, spec: Dictionary) -> Node3D:
 		return null
 	var instance: Node
 	if spec.has("corpse"):
-		instance = Corpse.create(scene, not CogitoNet.is_dedicated())
+		instance = Corpse.create(scene, not multiplayer.is_server())
 	else:
 		instance = scene.instantiate()
 	if not instance is Node3D:

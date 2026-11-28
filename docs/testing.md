@@ -31,6 +31,29 @@ nice -n 19 timeout 1500 bash addons/gdUnit4/runtest.sh --headless --ignoreHeadle
 
 Check the overall summary and the runner's exit code. The HTML reports go under `reports/`. After the run, the temporary data directory can be removed.
 
+## Network ragdolls
+
+`net_npc_corpse_test.gd` checks the authored solver, the 16-byte bone codec, presented
+skeleton joints, the kinematic grip ray, interpolation, interest baselines and silence
+after rest. `net_npc_test.gd` kills the arena guard and checks its pose on the original
+clients and a late joiner. It exercises exclusive grabs on both grips. The restart suite
+checks every bone after a save in motion and loads old prone-box records with and without
+a scene path. The travel suite compares the sleeping pose after room re-entry and reconnect.
+
+Run the separate-process checks from the project root after importing the project.
+
+```sh
+python3 tools/check_multiplayer.py --file-transport --scenario npc_dedicated
+python3 tools/check_multiplayer.py --file-transport --scenario npc_listen
+```
+
+Each scenario compares all 40 positions and rotations at rest against the authority
+(2 cm / 3°), counts received corpse-row bytes through the fall and checks another second
+of silence. The drag must move the body on an observer. The dedicated scenario adds a
+late joiner. Run the harness without the scenario selector for the full matrix and repeat
+with `COGITO_AUTHORITY_MOVEMENT=1 COGITO_OWNER_PREDICTION=1`. Omit `--file-transport`
+on a machine with loopback UDP to exercise ENet.
+
 ## Baselines and CI
 
 After fixing existing findings, run `python3 tools/lint.py --update` or `nice -n 19 python3 tools/gd_warnings.py --update` with the same tool versions. Review the baseline diff to make sure it reflects the fixes. Format an individual script with `python3 tools/lint.py --format path/to/script.gd`.

@@ -28,6 +28,11 @@ func capture() -> Dictionary:
 			row.angular = body.angular_velocity
 			row.sleeping = body.sleeping
 			row.frozen = body.freeze and not body.has_meta(&"net_carrier")
+		if body is NetNpcCorpse:
+			var root: Transform3D = body.frame_root()
+			row.transform = body.get_parent_node_3d().global_transform.affine_inverse() * root
+			row.bones = NetNpcCorpse.Codec.encode(body.bones, root)
+			row.sleeping = true
 		records[id] = row
 	return records
 
@@ -39,6 +44,14 @@ func restore(records: Dictionary) -> void:
 		if body and not CogitoPersistentId.is_disappearing(body):
 			var row: Dictionary = records[id]
 			body.transform = row.transform
+			if body is NetNpcCorpse:
+				if row.has("bones"):
+					body.restore_frame(body.global_transform, row.bones)
+				else:
+					# Old MP4 saves store the box centre. Its skin had this local transform.
+					body.transform *= Transform3D(
+						Basis(Vector3.RIGHT, -PI / 2), Vector3.BACK * 0.85
+					)
 			if body is RigidBody3D and row.has("linear"):
 				body.freeze = row.get("frozen", body.freeze)
 				body.linear_velocity = row.linear
@@ -110,9 +123,13 @@ func advance(delta: float, players: Dictionary, peers: Array[int]) -> void:
 		var rigid := body as RigidBody3D
 		var driven := body.has_meta(&"net_driver")
 		var rest: bool = not driven and (rigid == null or rigid.freeze or rigid.sleeping)
+		var pose := body.global_transform
+		if body is NetNpcCorpse:
+			pose = body.frame_root()
+			rest = body.resting
 		var nearby := false
 		for point: Vector3 in players.values():
-			if point.distance_squared_to(body.global_position) <= NEAR * NEAR:
+			if point.distance_squared_to(pose.origin) <= NEAR * NEAR:
 				nearby = true
 				break
 		var linear := rigid.linear_velocity if rigid and not rest else Vector3.ZERO
@@ -125,7 +142,7 @@ func advance(delta: float, players: Dictionary, peers: Array[int]) -> void:
 			var vehicle: CogitoVehicle = body.get_meta(&"net_driver")
 			linear = vehicle.velocity
 			angular = body.global_basis.y.normalized() * vehicle.rotation_momentum
-		samples[id] = [body.global_transform, linear, angular, rest, nearby or driven]
+		samples[id] = [pose, linear, angular, rest, nearby or driven]
 	var entities: Variant = get_parent().world.entities
 	for peer in peers:
 		var session := get_parent().get_parent()
@@ -153,15 +170,24 @@ func batch_for(peer: int, viewer: Vector3, samples: Dictionary) -> Dictionary:
 		var last: Array = seen.get(id, [])
 		var rest: bool = sample[3]
 		var reset := last.is_empty()
+		var corpse := _bodies.get(id) as NetNpcCorpse
 		if not reset and rest and last[1] and pose.is_equal_approx(last[0]):
 			continue
 		if not reset and not rest and not sample[4] and _batch_number % 4:
+			if corpse:
+				# Even a wake shorter than the far cadence needs a final joint pose.
+				last[1] = false
 			continue
 		var entry_tick: int = _tick if reset else last[2]
 		seen[id] = [pose, rest, entry_tick]
 		reset = reset or rest
 		reliable = reliable or reset
-		rows.append([id, pose, sample[1], sample[2], reset, entry_tick, rest])
+		var row := [id, pose, sample[1], sample[2], reset, entry_tick, rest]
+		if corpse:
+			if sample.size() == 5:
+				sample.append(NetNpcCorpse.Codec.encode(corpse.bones, pose))
+			row.append(sample[5])
+		rows.append(row)
 	return {"rows": rows, "reliable": reliable}
 
 
@@ -186,7 +212,18 @@ func _receive(key: String, epoch: int, tick: int, rows: Array) -> void:
 			_timelines[id] = TIMELINE.new()
 		if _bodies[id] is CogitoNPC and tick > _timelines[id].tick:
 			_bodies[id].network_state.motion(row[2])
+		var corpse := _bodies[id] as NetNpcCorpse
+		if corpse:
+			if tick <= _timelines[id].tick or row.size() != 8:
+				continue
+			var bytes: PackedByteArray = row[7]
+			if bytes.size() != corpse.bones.size() * NetNpcCorpse.Codec.STRIDE:
+				continue
 		if _timelines[id].push(tick, row):
+			if corpse:
+				_timelines[id].snap_corpse(corpse)
+				corpse.reset_physics_interpolation()
+				continue
 			_bodies[id].global_transform = row[1]
 			_bodies[id].reset_physics_interpolation()
 
@@ -194,8 +231,11 @@ func _receive(key: String, epoch: int, tick: int, rows: Array) -> void:
 ## Apply client presentation only. Gameplay collisions keep their server geometry.
 func present() -> void:
 	for id in _timelines:
-		if not _timelines[id].resting:
-			_bodies[id].global_transform = _timelines[id].pose(Engine.physics_ticks_per_second)
+		if _timelines[id].tick >= 0 and not _timelines[id].resting:
+			var corpse := _bodies[id] as NetNpcCorpse
+			var pose := _timelines[id].pose(Engine.physics_ticks_per_second, corpse)
+			if not corpse:
+				_bodies[id].global_transform = pose
 
 
 ## Publish a live sound selected by the registered body's authored ImpactSounds component.

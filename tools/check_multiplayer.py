@@ -669,6 +669,17 @@ class Scenario:
             rate = (end["rx"] - start["rx"]) * 60 / (end["tick"] - start["tick"])
             print(f"NPC {role.directory.name} received {rate:.0f} B/s (all game traffic)")
 
+    @staticmethod
+    def same_corpse(sample, reference):
+        bones, expected = sample["corpse_bones"], reference["corpse_bones"]
+        if not sample["corpse_rest"] or len(bones) != len(expected) or len(bones) != 40:
+            return False
+        for bone, target in zip(bones, expected):
+            dot = abs(sum(a * b for a, b in zip(bone[3:], target[3:])))
+            if math.dist(bone[:3], target[:3]) >= 0.02 or dot < math.cos(math.radians(1.5)):
+                return False
+        return True
+
     def npc(self, listen):
         self.start(dedicated=not listen, friendly_fire=False)
         first = "Host" if listen else "Ada"
@@ -694,8 +705,12 @@ class Scenario:
         settled = self.sample(self.server, lambda s: s["npc_dead"] and s["corpse_rest"])
         for v, start in starts:
             end = self.sample(v, lambda s: s["npc_deaths"] == 1 and s["npc_loot"] == 1
-                              and s["corpse"] and math.dist(s["corpse"], settled["corpse"]) < 0.04)
+                              and self.same_corpse(s, settled))
             self.npc_bandwidth(v, start, end)
+            quiet = self.sample(v, lambda s: s["tick"] >= end["tick"] + 60)
+            if quiet["corpse_bytes"] != end["corpse_bytes"]:
+                raise CheckFailed("received corpse rows after final rest")
+            print(f"CORPSE {v.directory.name} falling {end['corpse_moving_rate']:.0f} B/s, rest 0 B/s")
         expected = 102 - settled["vitals"][first]["health"]
         for v in viewers:
             if v.samples[-1]["npc_shots"] != expected:
@@ -706,12 +721,15 @@ class Scenario:
             late = self.fixture("Cy", "client")
             self.state(late, [first, "Ben", "Cy"])
             baseline = self.sample(late, lambda s: s["npc_dead"] and s["npc_loot"] == 1
-                                   and s["corpse"] and math.dist(s["corpse"], settled["corpse"]) < 0.04)
+                                   and self.same_corpse(s, settled))
             if baseline["npc_deaths"] or baseline["npc_shots"] or baseline["indicator"]:
                 raise CheckFailed("NPC baseline replayed live effects")
-        self.order(self.server, op="npc_stage", place="drag", first=first)
-        self.order(a, op="drag_corpse")
+        grip = "DEF-neck" if listen else "DEF-hips"
+        self.order(self.server, op="npc_stage", place="drag", first=first, grip=grip)
+        self.order(a, op="aim_at_grip")
+        self.order(a, op="drag_corpse", grip=grip)
         self.sample(a, lambda s: s["carrying"])
+        self.order(a, op="lift_grip")
         self.sample(b, lambda s: math.dist(s["corpse"], settled["corpse"]) > 0.25)
         if not listen:
             dragged = self.sample(late, lambda s: s["tick"] > baseline["tick"]

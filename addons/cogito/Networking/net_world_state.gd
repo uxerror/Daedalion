@@ -37,7 +37,7 @@ func capture() -> Dictionary:
 		if node is CogitoNPC:
 			records[id].swing = -1
 		if id.begins_with("runtime:") and get_parent().spawner.owns(id):
-			records[id].pose = node.global_transform
+			records[id].pose = node.frame_root() if node is NetNpcCorpse else node.global_transform
 	return records
 
 
@@ -97,7 +97,7 @@ func _runtime_registered(id: String, node: Node) -> void:
 	revisions.get_or_add(id, 0)
 	_watch_area(id, node)
 	get_parent().elements.track(id, node)
-	if node is RigidBody3D:
+	if node is RigidBody3D or node is NetNpcCorpse:
 		get_parent().bodies.track(id, node)
 
 
@@ -220,7 +220,7 @@ func subscribe(peer: int, nonce: int) -> void:
 		# Authored adapters (the spinner's local knob pose) keep their own meaning.
 		if node is Node3D and state.has("pose") and get_parent().spawner.owns(id):
 			state = state.duplicate()
-			state.pose = node.global_transform
+			state.pose = node.frame_root() if node is NetNpcCorpse else node.global_transform
 		var row := [id, revisions[id], state]
 		if holders.has(id):
 			row.append(holders[id])

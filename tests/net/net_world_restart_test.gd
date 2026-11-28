@@ -205,24 +205,56 @@ func test_corpse_loot_and_container_restored_once() -> void:
 	stock.inventory_item = Rifle
 	Grid.insert(box.inventory_data, stock, 1, false)
 	var world := _server.player_world.world
-	assert_object(world.entities.live_object("runtime:1")).is_instanceof(CogitoBodyDrag)
+	assert_object(world.entities.live_object("runtime:1")).is_instanceof(NetNpcCorpse)
 	assert_object(world.entities.live_object("runtime:2")).is_instanceof(CogitoObject)
+	var corpse := world.entities.live_object("runtime:1") as NetNpcCorpse
+	var saved: Array[Transform3D] = []
+	for bone in corpse.bones:
+		saved.append(bone.global_transform)
 	assert_int(_server.save_world()).is_equal(OK)
 	_restart()
+	var authority := _server.player_world.world.entities.live_object("runtime:1") as NetNpcCorpse
+	var skin: Array[Transform3D] = []
+	authority.skeleton.skeleton_updated.connect(
+		_record_skin.bind(authority, skin), CONNECT_ONE_SHOT
+	)
 	a = _join(8, 1901)
-	await _ticks(4)
+	await _ticks(12)
+	assert_int(skin.size()).is_equal(saved.size())
+	for i in skin.size():
+		_check_pose(skin[i], saved[i])
 	for branch in [_server, a]:
 		var entities: Variant = branch.player_world.world.entities
+		var restored := entities.live_object("runtime:1") as NetNpcCorpse
+		for i in restored.bones.size():
+			_check_pose(restored.bones[i].global_transform, saved[i])
+		if branch == _server:
+			assert_bool(restored.sample_rest(0.0)).is_true()
 		var npc: CogitoNPC = branch.player_world.active_level().get_node("Guard")
 		assert_bool(npc.network_state.dead).is_true()
 		assert_bool(npc.can_process()).is_false()
-		assert_object(entities.live_object("runtime:1")).is_instanceof(CogitoBodyDrag)
+		assert_object(entities.live_object("runtime:1")).is_instanceof(NetNpcCorpse)
 		assert_object(entities.live_object("runtime:2")).is_instanceof(CogitoObject)
 		assert_object(entities.live_object("runtime:3")).is_null()
 	box = _root.get_node("SharedBox") as CogitoContainer
 	assert_int(box.inventory_data.find_slots("Laser Rifle").size()).is_equal(1)
 	var extra := _server.player_world.spawner.spawn_item(stock, 1, Vector3.UP)
 	assert_object(_server.player_world.world.entities.live_object("runtime:3")).is_same(extra)
+
+
+func _record_skin(corpse: NetNpcCorpse, poses: Array[Transform3D]) -> void:
+	for part in corpse.bones:
+		var index := corpse.skeleton.find_bone(part.bone_name)
+		var joint := corpse.skeleton.get_bone_global_pose(index)
+		poses.append(corpse.skeleton.global_transform * joint * part.body_offset)
+
+
+func _check_pose(pose: Transform3D, saved: Transform3D) -> void:
+	assert_float(pose.origin.distance_to(saved.origin)).is_less(0.02)
+	var angle := pose.basis.get_rotation_quaternion().angle_to(
+		saved.basis.get_rotation_quaternion()
+	)
+	assert_float(angle).is_less(deg_to_rad(3))
 
 
 # A removed NPC frees its archetype source before restore. Pre-MP10 rows lack "scene".
@@ -238,7 +270,7 @@ func test_corpse_of_removed_npc_restored(
 		guard.damage_received.emit(25.0, actor, Vector3.FORWARD, guard.position)
 	await _ticks(5)
 	var world := _server.player_world.world
-	assert_object(world.entities.live_object("runtime:1")).is_instanceof(CogitoBodyDrag)
+	assert_object(world.entities.live_object("runtime:1")).is_instanceof(NetNpcCorpse)
 	assert_str(world._states["runtime:1"].get("scene", "")).is_not_empty()
 	if legacy:
 		world._states["runtime:1"].erase("scene")
@@ -246,13 +278,28 @@ func test_corpse_of_removed_npc_restored(
 	guard.queue_free()
 	await _ticks(2)
 	assert_int(_server.save_world()).is_equal(OK)
+	var files := _server.player_world.persistence.files
+	var scene: Dictionary = files.scenes.arena.duplicate(true)
+	var box_pose := Transform3D(Basis(Vector3.UP, 0.4), Vector3(4, 3, 5))
+	scene.objects["runtime:1"].pose = box_pose
+	scene.bodies["runtime:1"] = {
+		"transform": box_pose,
+		"linear": Vector3.ZERO,
+		"angular": Vector3.ZERO,
+		"sleeping": true,
+		"frozen": false
+	}
+	assert_int(files.commit(files.manifest, {"arena": scene}, {})).is_equal(OK)
 	_restart()
+	var corpse := _server.player_world.world.entities.live_object("runtime:1") as NetNpcCorpse
+	var offset := Transform3D(Basis(Vector3.RIGHT, -PI / 2), Vector3.BACK * 0.85)
+	assert_that(corpse.transform).is_equal(box_pose * offset)
 	a = _join(8, 1901)
 	await _ticks(4)
 	for branch in [_server, a]:
 		var entities: Variant = branch.player_world.world.entities
 		assert_object(branch.player_world.active_level().get_node_or_null("Guard")).is_null()
-		assert_object(entities.live_object("runtime:1")).is_instanceof(CogitoBodyDrag)
+		assert_object(entities.live_object("runtime:1")).is_instanceof(NetNpcCorpse)
 
 
 func test_first_visit_unloaded_before_first_commit() -> void:

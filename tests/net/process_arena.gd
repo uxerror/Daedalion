@@ -25,6 +25,27 @@ var _npc_shots := 0
 var _npc_deaths := 0
 var _burn_removals := 0
 var _quest_events := 0
+var _corpse_stream: CorpseMeter
+
+
+class CorpseMeter:
+	extends "res://addons/cogito/Networking/net_body_timeline.gd"
+
+	var first_tick := -1
+	var moving_bytes := 0
+	var total_bytes := 0
+	var rest_tick := -1
+
+	func push(stamp: int, row: Array) -> bool:
+		var count := var_to_bytes(row).size()
+		total_bytes += count
+		if not row[6] and rest_tick < 0:
+			if first_tick < 0:
+				first_tick = stamp
+			moving_bytes += count
+		elif rest_tick < 0:
+			rest_tick = stamp
+		return super.push(stamp, row)
 
 
 ## Sample and send are two ordinary entry points in the same client physics tick.
@@ -125,6 +146,7 @@ class Driver:
 	var doorway_ticks := 0
 	var combat_lane := false
 	var trigger_ticks := 0
+	var aim_pitch := 0.0
 	var throwing := false
 	var crouch_tap := false
 	var probe: PredictionProbe
@@ -147,7 +169,7 @@ class Driver:
 		if combat_lane and doorway_ticks == 0:
 			command.yaw = 0
 			command.neck_yaw = 0
-			command.pitch = 0
+			command.pitch = aim_pitch
 			if trigger_ticks:
 				command.add_edge(CogitoPlayerCommand.Action.PRIMARY)
 				command.held = 1 << CogitoPlayerCommand.Action.PRIMARY
@@ -206,6 +228,7 @@ func _ready() -> void:
 		func(_id: int, impact: bool): _impacts += int(impact)
 	)
 	if not CogitoNet.is_server():
+		CogitoNet.player_world.world.entities.registered.connect(_meter_corpse)
 		_loss = LossChannel.new()
 		if "--prediction-probe" in OS.get_cmdline_user_args():
 			_driver.probe = PredictionProbe.new()
@@ -535,24 +558,32 @@ func _combat_stage(first: String) -> void:
 		players.inventory.flush_actor(actor)
 
 
+func _meter_corpse(id: String, node: Node) -> void:
+	if node is NetNpcCorpse:
+		_corpse_stream = CorpseMeter.new()
+		CogitoNet.player_world.bodies._timelines[id] = _corpse_stream
+
+
 func _npc_sample() -> Dictionary:
 	var guard := $Guard as CogitoNPC
 	var world := CogitoNet.player_world.world
 	var target: String = guard.network_state.target_id
 	var corpse: Array = []
+	var joints := []
 	var loot := 0
 	var rest := false
 	for id: String in world.entities.objects:
 		if not id.begins_with("runtime:"):
 			continue
-		var body := world.entities.live_object(id) as RigidBody3D
-		if (
-			body
-			and body.get_script() == preload("res://addons/cogito/CogitoNPC/cogito_body_drag.gd")
-		):
-			var p := body.global_position
+		var body := world.entities.live_object(id) as Node3D
+		if body is NetNpcCorpse:
+			var p: Vector3 = body.anchor.global_position
 			corpse = [p.x, p.y, p.z]
-			rest = body.sleeping
+			rest = _corpse_stream.resting if _corpse_stream else body.resting
+			for bone: PhysicalBone3D in body.bones:
+				var t := bone.global_transform
+				var q := t.basis.get_rotation_quaternion()
+				joints.append([t.origin.x, t.origin.y, t.origin.z, q.x, q.y, q.z, q.w])
 		elif body and body.scene_file_path.ends_with("/pickup_coins.tscn"):
 			loot += 1
 	return {
@@ -562,10 +593,21 @@ func _npc_sample() -> Dictionary:
 		"npc_shots": _npc_shots,
 		"npc_deaths": _npc_deaths,
 		"corpse": corpse,
+		"corpse_bones": joints,
+		"corpse_bytes": _corpse_stream.total_bytes if _corpse_stream else 0,
+		"corpse_moving_rate": _corpse_rate(),
 		"corpse_rest": rest,
 		"npc_loot": loot,
 		"indicator": guard.sight_detection.sight_suspicion_indicator.visible,
 	}
+
+
+func _corpse_rate() -> float:
+	if _corpse_stream and _corpse_stream.first_tick >= 0:
+		var ticks := _corpse_stream.rest_tick - _corpse_stream.first_tick
+		if ticks > 0:
+			return float(_corpse_stream.moving_bytes) * Engine.physics_ticks_per_second / ticks
+	return 0.0
 
 
 func _stage_npc(order: Dictionary) -> void:
@@ -604,11 +646,19 @@ func _stage_npc(order: Dictionary) -> void:
 			"drag":
 				if not first:
 					continue
-				var corpse := players.world.entities.live_object("runtime:1") as RigidBody3D
-				actor.position = corpse.global_position + Vector3(0, 0, 0.9)
+				var corpse := players.world.entities.live_object("runtime:1") as NetNpcCorpse
+				var grip := _corpse_grip(corpse, order.grip)
+				actor.position = grip.global_position + Vector3(0, 0, 0.9)
 				actor.position.y = 0.91
 		actor.velocity = Vector3.ZERO
 		players.mark_teleport(record.player_id)
+
+
+func _corpse_grip(corpse: NetNpcCorpse, grip_name: String) -> CogitoCarryableComponent:
+	for grip in corpse.find_children("*", "CogitoCarryableComponent", true, false):
+		if grip.get_parent().bone_name == grip_name:
+			return grip
+	return null
 
 
 func _result(result: Dictionary) -> void:
@@ -654,10 +704,14 @@ func _execute(order: Dictionary) -> void:
 				)
 		"npc_stage":
 			_stage_npc(order)
+		"aim_at_grip":
+			_driver.aim_pitch = -0.75
+		"lift_grip":
+			_driver.aim_pitch = -0.36
 		"drag_corpse":
 			var players := CogitoNet.player_world
 			var corpse := players.world.entities.live_object("runtime:1")
-			var grip: CogitoCarryableComponent = corpse.interaction_nodes[0]
+			var grip := _corpse_grip(corpse, order.grip)
 			players.interactions.submit(grip, &"interact2")
 		"survival":
 			_survival_stage(order)
