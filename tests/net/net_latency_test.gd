@@ -59,7 +59,10 @@ func _measure(rtt: int) -> void:
 		assert_int(_server.stamps.seq).is_equal(stamps.seq)
 		assert_int(stamps.pose_tick).is_greater_equal(_server.stamps.capture_tick)
 		assert_int(_server.stamps.capture_tick).is_greater_equal(_server.stamps.consume_tick)
-		assert_int(stamps.render_us).is_greater_equal(stamps.arrival_us)
+		if stamps.predicted:
+			assert_int(stamps.render_us).is_greater_equal(stamps.sample_us)
+		else:
+			assert_int(stamps.render_us).is_greater_equal(stamps.arrival_us)
 		assert_int(stamps.arrival_us).is_greater_equal(stamps.sample_us)
 		stamps.merge(_server.stamps)
 		stamps.up_ms = _network[1].schedule.mean_delay_ms(2, 1, ORDERED)
@@ -70,27 +73,64 @@ func _measure(rtt: int) -> void:
 		print("PR0 MEMORY ", rtt, " ", JSON.stringify(stamps))
 
 
-## Pending PR3 gate. Sample exactly one forward command with both directions held.
-func _owner_forward_displacement_on_sample_tick() -> float:
-	var pose: int = _owner.avatar.timeline.latest().tick
+func _expect_prediction() -> bool:
+	return (
+		preload("res://addons/cogito/Networking/net_config.gd").owner_prediction
+		and OS.get_environment("COGITO_AUTHORITY_MOVEMENT") == "1"
+	)
+
+
+func _sample_undelivered(action: String) -> Vector3:
+	var tick: int = _owner.avatar.timeline.latest().tick
 	var start := _owner.avatar.actor.position
 	_network[1].configure(2, 1, {"delay_ms": 250})
 	_network[2].configure(1, 1, {"delay_ms": 250})
-	_owner.arm("walk", 1)
+	_owner.arm(action, 1)
 	await _owner.physics_finished
 	assert_int(_owner.driver.remaining).is_zero()
 	assert_int(_owner.stamps.sample_tick).is_equal(Engine.get_physics_frames())
-	assert_int(_owner.avatar.timeline.latest().tick).is_equal(pose)
+	assert_int(_owner.avatar.timeline.latest().tick).is_equal(tick)
 	assert_int(_server.avatar.source._latest_received).is_less(_owner.stamps.seq)
-	return start.distance_to(_owner.avatar.actor.position)
+	return _owner.avatar.actor.position - start
 
 
-func test_pr3_pending_owner_waits_for_pose(_timeout := 6000) -> void:
+func test_owner_walk_and_stop_on_sample_tick(_timeout := 6000) -> void:
 	await _ticks(85)
-	var displacement := await _owner_forward_displacement_on_sample_tick()
-	assert_float(displacement).is_zero()  # PR3 flips this to > 0.001 m forward.
+	var displacement := await _sample_undelivered("walk")
+	if _expect_prediction():
+		assert_float(-displacement.z).is_greater(0.001)
+		var speed := _owner.avatar.actor.velocity.length()
+		var pose: int = _owner.avatar.timeline.latest().tick
+		await _owner.physics_finished
+		assert_float(_owner.avatar.actor.velocity.length()).is_less(speed)
+		assert_int(_owner.avatar.timeline.latest().tick).is_equal(pose)
+		assert_int(_server.avatar.source._latest_received).is_less(_owner.stamps.seq)
+	else:
+		assert_vector(displacement).is_equal(Vector3.ZERO)
+	print("PR3 SAME TICK walk ", displacement, " predicted=", _expect_prediction())
 	await _owner.phase_complete
-	assert_int(_owner.stamps.pose_ack).is_greater_equal(_owner.stamps.seq)
+
+
+func test_owner_jump_on_sample_tick() -> void:
+	await _ticks(85)
+	var displacement := await _sample_undelivered("jump")
+	if _expect_prediction():
+		assert_float(displacement.y).is_greater(0)
+	else:
+		assert_vector(displacement).is_equal(Vector3.ZERO)
+	print("PR3 SAME TICK jump ", displacement)
+
+
+func test_owner_crouch_on_sample_tick() -> void:
+	await _ticks(85)
+	var height := _owner.avatar.actor.head.position.y
+	await _sample_undelivered("crouch")
+	var change := _owner.avatar.actor.head.position.y - height
+	if _expect_prediction():
+		assert_float(change).is_less(0)
+	else:
+		assert_float(change).is_zero()
+	print("PR3 SAME TICK crouch ", change)
 
 
 func test_owner_latency_0_ms(_timeout := 15000) -> void:

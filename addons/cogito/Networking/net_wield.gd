@@ -388,3 +388,9 @@ func reconcile(ack: int, accepted: int) -> void:
 		if is_instance_valid(_predicted_beam):
 			_predicted_beam.queue_free()
 	_pending_sequence = -1
+
+
+func cancel_prediction() -> void:
+	if _pending_sequence >= 0:
+		reconcile(_pending_sequence, -1)
+	_prediction_delay = 0

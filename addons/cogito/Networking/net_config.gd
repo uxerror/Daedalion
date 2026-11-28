@@ -29,6 +29,8 @@ const CLI_FLAGS := [
 	"--respawn-delay",
 ]
 
+static var owner_prediction := OS.get_environment("COGITO_OWNER_PREDICTION") == "1"
+
 
 ## Default content version: the bundled plugin.cfg `version` (a test keeps them equal).
 ## Not read from plugin.cfg at run time: exports omit non-resource files unless a preset

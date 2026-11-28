@@ -21,14 +21,7 @@ func clear() -> void:
 
 ## Remembers this tick even when the caller drops the resulting datagram.
 func packet(command: CogitoPlayerCommand) -> PackedByteArray:
-	var frame := command.encode().slice(0, CogitoPlayerCommand.HEADER_SIZE)
-	var flags := CogitoPlayerCommand.TOGGLE_CROUCH | CogitoPlayerCommand.SUPPRESSED
-	frame.encode_u32(24, frame.decode_u32(24) & (WIRE_MASK | flags))
-	frame.encode_float(12, wrapf(command.yaw, -PI, PI))
-	frame.append_array(_wire_edges(command.edges))
-	var end := frame.size()
-	frame.resize(end + GENERATION_BYTES)
-	frame.encode_u32(end, command.wield_generation)
+	var frame := _encode_frame(command)
 	_history.append(frame)
 	if _history.size() > REDUNDANCY:
 		_history.pop_front()
@@ -37,6 +30,28 @@ func packet(command: CogitoPlayerCommand) -> PackedByteArray:
 		data.append(item.size())
 		data.append_array(item)
 	return data
+
+
+## Freeze a private movement command with precisely the same wire representation.
+static func freeze(command: CogitoPlayerCommand) -> CogitoPlayerCommand:
+	var frame := _encode_frame(command)
+	var decoded := decode(PackedByteArray([frame.size()]) + frame)
+	if decoded.is_empty():
+		return null
+	decoded[0].sequence = command.sequence
+	return decoded[0]
+
+
+static func _encode_frame(command: CogitoPlayerCommand) -> PackedByteArray:
+	var frame := command.encode().slice(0, CogitoPlayerCommand.HEADER_SIZE)
+	var flags := CogitoPlayerCommand.TOGGLE_CROUCH | CogitoPlayerCommand.SUPPRESSED
+	frame.encode_u32(24, frame.decode_u32(24) & (WIRE_MASK | flags))
+	frame.encode_float(12, wrapf(command.yaw, -PI, PI))
+	frame.append_array(_wire_edges(command.edges))
+	var end := frame.size()
+	frame.resize(end + GENERATION_BYTES)
+	frame.encode_u32(end, command.wield_generation)
+	return frame
 
 
 ## Rejects malformed packets atomically and limits wire input to movement and wield actions.

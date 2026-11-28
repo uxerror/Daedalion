@@ -522,8 +522,7 @@ Its `state` is a decoded CogitoMovementState on eligible ticks and null on fallb
 Consumers treat it as read-only. Reception checks binding, life, revision, generation,
 envelope tick/ack and a strictly newer timeline tick before wield reconciliation.
 A new life seeds a fresh timeline. Despawn, disconnect and room retirement release the
-holder. A newer forced revision atomically replaces the old checkpoint. PR2 has no owner
-prediction or command ring. Rendering continues to follow the published server pose.
+holder. A newer forced revision replaces the old checkpoint and starts a new command history.
 
 In the dedicated two-client file-transport check, Ada's delivered pose rows measured
 11,542 B/s at the owner and 8,580 B/s at the observer with the switch off. With a kernel
@@ -532,11 +531,68 @@ Variant row over a window of at least one simulated second. Publication phase ac
 variation in the number of rows sampled. Batch, RPC and ENet overhead are outside this
 measurement.
 
+### Owner prediction and replay (PR3)
+
+Launch the server with `COGITO_AUTHORITY_MOVEMENT=1` and the owning client with
+`COGITO_OWNER_PREDICTION=1`. Both switches default to off. The client reads its switch
+once into `net_config.gd`'s static `owner_prediction` field. A test can set it before
+spawn. Protocol 15, saves, 60 Hz default physics, 25 Hz publication and 100 ms remote
+interpolation are unchanged. A listen host runs its own authority movement once.
+
+The latest accepted private checkpoint replaces the queued one. At the beginning of the
+next owner physics tick the client compares its stored post-state at the acknowledged
+sequence. The thresholds are 2 cm for position, 0.10 m/s for velocity and 1 cm for eye
+and head displacement. The remaining integration state, timers, contacts, posture,
+permissions and tuning must agree. A newer server tick can repeat an ack. A held,
+expired or skipped input, changed generation or discontinuity counter requires a restore.
+
+On a match the owner retires the acknowledged commands. On a mismatch it restores the
+checkpoint and advances the contiguous pending commands through the shared movement tick,
+replacing their post-states. Each uses the authority rate. The player samples live input
+once. The endpoint filters carry input, freezes the wire values, steps and publishes the
+result, predicts the live wield cue and passes the command to the ordinary packet policy.
+A dropped datagram still has a local history entry. Replay uses private movement stamina,
+without changing the HUD attribute, playing audio, issuing gameplay requests, moving
+physics bodies, firing weapons or advancing input sequence numbers.
+
+The 128-slot ring is separate from the four-command send buffer. The replay budget is
+24 commands per correction. The controller records suspension counts in `reasons`.
+Set `COGITO_PREDICTION_DEBUG=1` on the client to print transitions and their sequences.
+
+| Reason | Condition |
+|---|---|
+| `fallback` | Authority supplied a legacy checkpoint, including server-driven ladders, water, ledges, rolls, moving supports and seats. |
+| `unsupported_mode`, `unsupported_contact` | Pending force, invalidated pose, unsupported mode, local ladder/water volume or dynamic obstruction. |
+| `missing_history`, `replay_budget` | A command or required post-state has expired, the tail has a hole or replay needs more than 24 ticks. |
+| `impossible_ack`, `physics_rate` | The ack exceeds the live sequence, regresses within the scope or the physics rates differ. |
+| `travel` | A room transfer is loading. |
+
+During suspension the owner follows the published position and head with the usual PR2
+smoothing and continues sending input while alive. An eligible checkpoint with a complete
+tail resumes prediction. After a local unsupported contact the ack must also cover the
+boundary command. Revision and life changes clear both histories, old effects and the
+visual offset. In-place respawn preserves the actor's sequence watermark. Removing an
+avatar releases the query bodies and its scoped history.
+
+Each solve uses the standing or crouching prefab hull in the bound room's physics space.
+Their query bodies stay on layer zero. Sweeps use the movement mask captured before
+spawn clears the replica collider (33 in Advanced). The clearance query retains the
+prefab cast mask (3). Both exclude the actor and its held body. Replaying updates
+value states. The replica receives only the final live transform, and the physical
+carried object continues following the server anchor.
+
+Gameplay aims from the simulation head. Interaction and carry markers follow this eye.
+The camera and wieldable model share the rendered eye. A correction preserves visual
+continuity with a world-space offset capped at 0.25 m, decaying with a 50 ms half-life.
+A swept eye clearance sphere shortens the offset at obstructions. An error over 1 m,
+unsafe clearance or a forced pose, seat, room or life change clears the offset. Live
+look remains on the actor through ordinary corrections.
+
 ### Movement sounds
 
 Each client plays movement sounds for its own avatar and for other players in its room.
-`NetAvatar` feeds each accepted pose to `net_movement_audio.gd`. The difference in server
-ticks advances the walking, sprinting, sneaking or swimming wiggle clock. A rising
+For snapshot playback, `NetAvatar` feeds accepted poses to `net_movement_audio.gd`.
+The difference in server ticks advances the walking, sprinting, sneaking or swimming wiggle clock. A rising
 crossing of 0.9 triggers a step or swim stroke. The footstep detector casts at the
 pose's feet and selects the surface profile at the gait's authored volume.
 
@@ -551,9 +607,9 @@ same presenter for remote players in its audible viewport. Dedicated avatars hav
 movement audio players. NPC hearing on both authorities still uses `_network_footstep()`
 and the room's NPC listeners. Playing a sound on a replica creates no hearing areas.
 
-For PR3, feed the owner's forward predicted poses to `movement_audio.observe(frame)` in
-place of its snapshot feed. Reset the presenter at a timeline discontinuity. Reconciliation
-replay must never emit sounds. Observers continue to use authoritative snapshots.
+The predicting owner feeds one live frame per movement tick to `movement_audio.observe(frame)`.
+Replay is silent. Entering or leaving prediction resets the audio clock. The first sample
+on the new clock seeds its cadence. Observers continue to use authoritative snapshots.
 
 ### Fixed-tick authority movement (PR1b)
 
@@ -562,7 +618,7 @@ The development switch defaults to OFF. Launch the authority with the environmen
 `COGITO_AUTHORITY_MOVEMENT=1 nice -n 19 godot --path .` and host from the multiplayer menu.
 For dedicated add `--headless -- --server` to that command. The spawner checks the switch and
 the prefab's movement profile after an authority avatar enters its room. Both topologies use
-the same controller. Owners send the existing four-frame command packets and follow the published poses.
+the same controller. Owners send the existing four-frame command packets. With owner prediction disabled they follow the published poses.
 
 After input sampling and ordered edge dispatch, the authority reads movement permissions,
 posture clearance and the previous contact summary. It samples crouch and eligible jump,
@@ -897,7 +953,7 @@ the ordinary push impulse. Buoyancy, impact damage, hearing stimuli and authored
 callbacks run on the server. Client rigid bodies are frozen in kinematic mode with contact
 reporting and their physics callbacks disabled. Their shapes and layers remain available
 to local rays. The owning player collides with simulated bodies during server movement
-and displays the resulting translation on the client. There is no client movement prediction.
+and displays the resulting translation on the client. A dynamic contact suspends owner speculation.
 
 | Body and observer | Delivery |
 | --- | --- |

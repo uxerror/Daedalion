@@ -45,14 +45,16 @@ class StaminaBody:
 		return state.floor_normal
 
 
-func _init(actor: CogitoPlayerAdvanced, k: int) -> void:
+func _init(actor: CogitoPlayerAdvanced, k: int, checkpoint: NetOwnerState = null) -> void:
 	first = k
-	var source := NetOwnerState.new()
-	source.binding = 1
-	source.life = 1
-	source.generation = 1
-	source.tick = k
-	actor.authority_movement.capture_checkpoint(actor, source)
+	var source := checkpoint
+	if not source:
+		source = NetOwnerState.new()
+		source.binding = 1
+		source.life = 1
+		source.generation = 1
+		source.tick = k
+		actor.authority_movement.capture_checkpoint(actor, source)
 	var block := NetOwnerState.decode(NetOwnerState.encode(source))
 	state = block.state
 	profile = actor.capture_movement_profile()
@@ -84,6 +86,8 @@ func _init(actor: CogitoPlayerAdvanced, k: int) -> void:
 func advance(cmd: CogitoPlayerCommand) -> void:
 	var step := Tick.new()
 	state.has_control = cmd.has_control
+	state.neck_yaw = cmd.neck_yaw
+	state.head_pitch = cmd.pitch
 	state.body_yaw = cmd.yaw
 	state.body_basis = state.transform.basis * Basis(Vector3.UP, cmd.yaw)
 	if cmd.toggle_crouch and CogitoPlayerCommand.Action.CROUCH in cmd.edges:

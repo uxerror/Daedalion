@@ -1,6 +1,8 @@
 extends RefCounted
 ## One incarnation of an Advanced avatar. Only replicas have a pose timeline.
 
+const Config := preload("net_config.gd")
+const Prediction := preload("net_prediction.gd")
 const MovementAudio := preload("net_movement_audio.gd")
 const WIELD := preload("net_wield.gd")
 const INPUT := preload("net_input_source.gd")
@@ -23,6 +25,7 @@ var revision := 0
 var timeline: SNAPSHOT
 ## Receive buffer on a server simulating a remote owner.
 var source: INPUT
+var prediction: Prediction
 var movement_audio: MovementAudio
 var mode_generation := 0
 var checkpoint_eligible := false
@@ -106,6 +109,7 @@ func spawn(
 		skeleton.add_child(look)
 		var mesh := skeleton.get_node("Mannequin") as MeshInstance3D
 		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	var authored_mask := actor.collision_mask
 	if not server:
 		timeline = SNAPSHOT.new()
 		actor.get_node("StateChart").process_mode = Node.PROCESS_MODE_DISABLED
@@ -121,6 +125,11 @@ func spawn(
 	root.add_child(actor)
 	if not dedicated and (not server or not local):
 		movement_audio = MovementAudio.new(actor)
+	if local and not server and Config.owner_prediction:
+		var profile := actor.authority_movement_profile()
+		if profile:
+			prediction = Prediction.new(actor, profile, authored_mask, movement_audio)
+			actor.owner_prediction = prediction
 	if server and OS.get_environment("COGITO_AUTHORITY_MOVEMENT") == "1":
 		var profile := actor.authority_movement_profile()
 		if profile:
@@ -161,10 +170,18 @@ func receive(frame: Dictionary, checkpoint: NetOwnerState = null) -> bool:
 		var force_look: bool = (
 			last.is_empty() or last.revision != frame.revision or last.sitting != frame.sitting
 		)
+		if prediction and force_look:
+			clear_baseline()
+			_baseline = checkpoint
 		revision = frame.revision
-		apply_pose(frame, 1.0, force_look)
-		actor.reset_physics_interpolation()
-	movement_audio.observe(timeline.latest())
+		if not prediction or not prediction.active:
+			apply_pose(frame, 1.0, force_look)
+			actor.reset_physics_interpolation()
+	if prediction:
+		if checkpoint:
+			prediction.queued = checkpoint
+	if not prediction or not prediction.active:
+		movement_audio.observe(timeline.latest())
 	return true
 
 
@@ -174,11 +191,17 @@ func latest_owner_baseline() -> NetOwnerState:
 
 
 func clear_baseline() -> void:
+	if prediction:
+		prediction.reset()
+		wield.cancel_prediction()
 	_baseline = null
 
 
 ## Updates visible pose only. The owner keeps its event-frequency look between resets.
 func present(delta: float) -> void:
+	if prediction and prediction.active:
+		prediction.render(delta)
+		return
 	var frame := timeline.latest()
 	if not actor.is_local_presentation:
 		frame = timeline.presentation(Engine.physics_ticks_per_second)
@@ -241,6 +264,10 @@ func present_seat(seated: bool) -> void:
 ## Release locally held objects and remove the name immediately so reconnect can reuse it.
 func despawn() -> void:
 	clear_baseline()
+	if prediction:
+		prediction.close()
+		actor.owner_prediction = null
+		prediction = null
 	if not is_instance_valid(actor):
 		return
 	actor.player_interaction_component.release_held_actions()

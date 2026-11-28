@@ -1112,6 +1112,47 @@ class Scenario:
         self.stop(client)
         print("PASS menu rejoin, live roster, host kick, host restart, solo, tree shutdown and dedicated kick")
 
+    @staticmethod
+    def prediction_enabled():
+        return all(os.getenv(key) == "1" for key in ("COGITO_AUTHORITY_MOVEMENT", "COGITO_OWNER_PREDICTION"))
+
+    def prediction(self):
+        for dedicated in (True, False):
+            self.start(dedicated)
+            driver = self.fixture("Ada", "client", extra=("--prediction-probe", "true"))
+            self.state(driver, ["Ada"] if dedicated else ["Host", "Ada"])
+            viewers = [self.server, driver]
+            names = ["Host", "Ada"]
+            if dedicated:
+                other = self.fixture("Ben", "client")
+                names = ["Ada", "Ben"]
+                self.state(other, names)
+                viewers.append(other)
+            self.stationary(driver, names)
+            self.drive(driver, "Ada", names, viewers)
+            self.order(driver, op="probe_crouch")
+            for action in ("walk", "crouch"):
+                line = self.wait_line(driver, lambda s: s.startswith("NET PREDICTION "))
+                result = json.loads(line.removeprefix("NET PREDICTION "))
+                moved = result["delta"] > 0.001
+                if result["action"] != action or not result["same_pose"] or moved != self.prediction_enabled():
+                    raise CheckFailed(f"same-tick {action} in process arena: {result}")
+                print("PR3 PROCESS", "dedicated" if dedicated else "listen", json.dumps(result))
+            sample = self.pose(driver, names)
+            if sample["predicted"] != self.prediction_enabled():
+                raise CheckFailed(f"owner prediction at destination {sample['predicted']}")
+            if self.pose(self.server, names)["predicted"]:
+                raise CheckFailed("authority allocated owner prediction")
+            for role in reversed(viewers):
+                if role is self.server and dedicated and not self.file_transport:
+                    # A real --server has no fixture stop file; stop it like the other ENet scenarios.
+                    role.kill()
+                    while not role.exited:
+                        self.next_line()
+                else:
+                    self.stop(role)
+        print("PASS prediction: dedicated and listen, dropped jump tap, movement and observer agreement")
+
     def latency(self):
         self.timeout_seconds = 60
         self.deadline = time.monotonic() + self.timeout_seconds
@@ -1150,7 +1191,9 @@ class Scenario:
                             or authority["seq"] != client["seq"] or client["pose_ack"] < client["seq"]
                             or not authority["consume_tick"] <= authority["effect_tick"]
                             <= authority["capture_tick"] <= client["pose_tick"]
-                            or not client["sample_us"] <= client["arrival_us"] <= client["render_us"]):
+                            or client["sample_us"] > min(client["arrival_us"], client["render_us"])
+                            or (not client["predicted"] and client["render_us"] < client["arrival_us"])
+                            or client["predicted"] != self.prediction_enabled()):
                         raise CheckFailed(f"invalid latency phases {phases}")
                     up, down = ([total / count for total, count in relay.link[3]] if relay
                                 else [phase["delivered_ms"] for phase in phases])
@@ -1247,7 +1290,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     scenarios = ("dedicated", "listen", "friendly_fire_off", "npc_dedicated", "npc_listen",
                  "persistent_dedicated", "persistent_listen", "travel_dedicated", "travel_listen",
-                 "residency_dedicated", "menus", "latency")
+                 "residency_dedicated", "menus", "latency", "prediction")
     parser.add_argument("--scenario", choices=scenarios)
     parser.add_argument("--file-transport", action="store_true", help="use a socket-free packet bus")
     parser.add_argument("--survival-only", action="store_true", help="run only MP5 scenarios")

@@ -4,6 +4,7 @@ class_name CogitoPlayerAdvanced
 extends CogitoPlayer
 
 const Movement := preload("cogito_movement_step.gd")
+const Prediction := preload("../Networking/net_prediction.gd")
 const AuthorityMovement := preload("../Networking/net_authority_movement.gd")
 const ACTION := CogitoPlayerCommand.Action
 
@@ -169,6 +170,7 @@ var input_source: CogitoPlayerInputSource
 var current_command := CogitoPlayerCommand.new()
 ## Acknowledgement hook for the last accepted sequence.
 var last_consumed_sequence: int = -1
+var owner_prediction: Prediction
 var authority_movement: AuthorityMovement
 var authority_solve_count := 0
 var _input_suspended := false
@@ -347,6 +349,8 @@ func neutral_command(sequence: int) -> CogitoPlayerCommand:
 
 ## The animated eye transform is also available on an avatar without a viewport camera.
 func get_aim_transform() -> Transform3D:
+	if owner_prediction and owner_prediction.active:
+		return owner_prediction.aim_transform()
 	return _aim.global_transform
 
 
@@ -440,12 +444,16 @@ func capture_movement_state() -> CogitoMovementState:
 
 
 func movement_grounded() -> bool:
+	if owner_prediction and owner_prediction.active:
+		return owner_prediction.state.on_floor
 	if authority_movement and authority_movement.contacts:
 		return authority_movement.contacts.floor_normal != Vector3.ZERO
 	return is_on_floor()
 
 
 func movement_floor_normal() -> Vector3:
+	if owner_prediction and owner_prediction.active:
+		return owner_prediction.state.floor_normal
 	if authority_movement and authority_movement.contacts:
 		return authority_movement.contacts.floor_normal
 	return get_floor_normal()
@@ -882,6 +890,8 @@ func _on_player_state_loaded():
 
 
 func _physics_process(delta):
+	if owner_prediction and not is_dead:
+		owner_prediction.begin_tick()
 	var next_sequence := last_consumed_sequence + 1
 	var command: CogitoPlayerCommand
 	if _input_suspended:
@@ -905,6 +915,8 @@ func _physics_process(delta):
 		body.rotation.y = command.yaw
 		head.rotation.x = clampf(command.pitch, -PI / 2.0, PI / 2.0)
 		neck.rotation.y = command.neck_yaw
+		if owner_prediction:
+			owner_prediction.sync_eye()
 		if network_movement_only and current_seat:
 			player_interaction_component.network_interactions.get_parent().seats.clamp_look(self)
 		for index in command.edges.size():

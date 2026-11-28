@@ -670,8 +670,13 @@ func _physics_process(delta: float) -> void:
 	if local_actor:
 		carry.filter_trigger(local_actor.current_command)
 	if local_actor and inventory.local:
-		var own := _avatars[_session.local_id].wield
 		local_actor.current_command.wield_generation = inventory.local.snapshot.get("generation", 0)
+	if local_actor and local_actor.owner_prediction and not local_actor.is_dead:
+		if local_actor.current_command.sequence <= local_actor.owner_prediction.newest:
+			return
+		local_actor.owner_prediction.live(local_actor.current_command)
+	if local_actor and inventory.local:
+		var own := _avatars[_session.local_id].wield
 		own.predict(local_actor.current_command, delta)
 	if not multiplayer.is_server():
 		if local_actor and not local_actor.is_dead and local_actor.last_consumed_sequence >= 0:
@@ -863,6 +868,8 @@ func _apply_vitals(id: String, life: int, fields: Dictionary) -> void:
 			avatar.clear_baseline()
 			avatar.revision = fields.revision
 			command_channel.clear()
+	if fields.dead and avatar.prediction:
+		avatar.clear_baseline()
 	if fields.dead and avatar.movement_audio:
 		avatar.movement_audio.reset()
 	death.present(avatar.actor, fields.dead, fields.get("remaining", 0.0))

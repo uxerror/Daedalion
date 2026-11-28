@@ -16,6 +16,7 @@ var driver := Driver.new()
 var action := ""
 var origin: float
 var stamps := {}
+var _completed := false
 var _pre_render_position := 0.0
 
 
@@ -78,6 +79,7 @@ func attach(branch: Facade, owner_id: String) -> void:
 
 
 func arm(label: String, duration := 8) -> void:
+	_completed = false
 	action = label
 	stamps = {"action": action}
 	origin = coordinate()
@@ -115,6 +117,7 @@ func _arrived(frame: Dictionary, usec: int) -> void:
 		stamps.arrival_us = usec
 		stamps.pose_tick = frame.tick
 		stamps.pose_ack = frame.ack
+		_complete()
 
 
 func _physics_process(delta: float) -> void:
@@ -145,15 +148,33 @@ func _before_render() -> void:
 
 func _process(_delta: float) -> void:
 	if (
-		not stamps.has("arrival_us")
+		not stamps.has("sample_us")
 		or stamps.has("render_us")
 		or not is_instance_valid(avatar.actor)
 	):
 		return
+	var predicted := avatar.prediction != null and avatar.prediction.active
 	var rendered := coordinate()
-	if rendered > origin + EPSILON and rendered > _pre_render_position:
-		stamps.render_delta = rendered - _pre_render_position
+	if predicted and avatar.actor.camera:
+		# The settled trial starts with a zero visual offset.
+		rendered += _render_axis(avatar.prediction.render_offset)
+	var changed := predicted or (stamps.has("arrival_us") and rendered > _pre_render_position)
+	if rendered > origin + EPSILON and changed:
+		stamps.predicted = predicted
+		stamps.render_delta = rendered - (origin if predicted else _pre_render_position)
 		stamps.render_us = Time.get_ticks_usec()
 		stamps.render_frame = Engine.get_process_frames()
 		stamps.screen_ms = (int(stamps.render_us) - int(stamps.sample_us)) / 1000.0
+		_complete()
+
+
+func _render_axis(offset: Vector3) -> float:
+	if action == "walk":
+		return -offset.z
+	return offset.y if action == "jump" else -offset.y
+
+
+func _complete() -> void:
+	if not _completed and stamps.has("arrival_us") and stamps.has("render_us"):
+		_completed = true
 		phase_complete.emit(stamps)

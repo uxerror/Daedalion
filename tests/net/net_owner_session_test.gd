@@ -67,8 +67,11 @@ func _privacy(listen: bool) -> void:
 	assert_bool(_wire_contains(2, spawn)).is_true()
 	assert_bool(_wire_contains(3, spawn)).is_false()
 	assert_object(remote.latest_owner_baseline()).is_null()
+	assert_object(remote.prediction).is_null()
+	assert_object(_server.player_world.avatar_for(_id).prediction).is_null()
 	if listen:
 		var host_id := _server.local_player_id()
+		assert_object(_server.player_world.avatar_for(host_id).prediction).is_null()
 		assert_object(_server.player_world.avatar_for(host_id).latest_owner_baseline()).is_null()
 		assert_object(_owner.player_world.avatar_for(host_id).latest_owner_baseline()).is_null()
 	_server.player_world.renew_life(_id)

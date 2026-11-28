@@ -39,6 +39,17 @@ exports before spawn. On-foot integrators can use `movement_grounded()` and
 `movement_floor_normal()` for the committed contacts. The environment switch and
 authority lifecycle are described in [Networking](networking.md#fixed-tick-authority-movement-pr1b).
 
+On a predicting network owner, `get_aim_transform()` returns the simulation head's
+world transform with current body, neck and head look. After a restore, the interaction
+ray, carry marker and drop cast already follow the corrected eye when the next command
+is sampled and its edges dispatched. The actor receives its final pose after the live
+movement step. Movement checks the checkpoint's active hull and
+clearance in the bound physics space. `movement_grounded()` and `movement_floor_normal()`
+expose the predicted contacts. The camera and its viewmodel receive a decaying position
+offset after reconciliation. Mouse motion received between samples keeps its current
+orientation. On suspension the authored camera paths and server-pose presentation resume.
+Offline aim continues to use the animated eye.
+
 ## Per-actor input and presentation
 
 Advanced samples one `CogitoPlayerInputSource` at the start of each physics tick, before its child

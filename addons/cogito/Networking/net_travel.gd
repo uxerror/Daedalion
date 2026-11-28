@@ -504,6 +504,9 @@ func _present(key: String) -> void:
 
 
 func _show_loading() -> void:
+	var actor := local_actor()
+	if actor and actor.owner_prediction:
+		actor.owner_prediction.transfer(true)
 	if _overlay or _facade().menu.pending:
 		return
 	_overlay = CanvasLayer.new()
@@ -530,6 +533,9 @@ func _finished(token: int) -> void:
 
 
 func _hide_loading() -> void:
+	var actor := local_actor()
+	if actor and actor.owner_prediction:
+		actor.owner_prediction.transfer(false)
 	if _overlay:
 		var layer := _overlay
 		_overlay = null
@@ -609,6 +615,8 @@ func _error(id: String, reason: String) -> void:
 	failed.emit(id, reason)
 	var actor := local_actor()
 	if actor and id == _session().local_id:
+		if actor.owner_prediction and actor.owner_prediction.in_transfer:
+			_hide_loading()
 		actor.player_interaction_component.hint_prompt.emit(null, reason)
 	push_warning(reason)
 

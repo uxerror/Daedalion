@@ -89,10 +89,13 @@ and the server tick numbers use independent origins. `up_ms` and `down_ms` are m
 delivered scheduling delays, including poll quantization. The recorded results are in
 [the prediction plan](dev/prediction-plan.md#measured-pr0).
 
-The pending PR3 test holds both directions for 250 ms, samples one forward command
-on a settled owner, then checks the transform at the end of that same physics tick.
-PR0 requires zero displacement, an unchanged received pose tick and a command sequence
-the server has yet to receive. It subsequently waits for visible movement backed by a pose.
+The same-tick gate delays both directions by 250 ms and samples a settled owner. With
+prediction off it requires zero movement. With both movement switches enabled it requires
+forward movement over 1 mm, upward travel on jump, a descending crouch eye and reduced
+speed on stop. Each observation precedes authority receipt and any new pose.
+A predicted `render_us` can precede `arrival_us`. The probe waits for both events
+before emitting the row and records the initial visible displacement in `render_delta` on
+this path.
 PR3 will require more than 1 mm forward on the sampled tick.
 
 ### Offline movement goldens
@@ -190,3 +193,27 @@ report bytes per simulated second, excluding the enclosing batch, RPC and transp
 headers. Each process also records its local decoded mode in `NET POS`. Run
 `nice -n 19 python3 tools/check_multiplayer.py --file-transport` for the socket-free
 suite and repeat with `COGITO_AUTHORITY_MOVEMENT=1`.
+
+
+## Prediction PR3
+
+Run the full gdUnit and file-transport suites with both switches off, authority only,
+and both `COGITO_AUTHORITY_MOVEMENT=1` and `COGITO_OWNER_PREDICTION=1`. The dedicated
+prediction fixture opts into both switches locally for its lifecycle and correction
+tests. The latency and normal session fixtures inherit the process settings.
+
+`net_prediction_test.gd` prints the ack, replayed sequences and independent shadow
+errors for a 0.30 m server push and a rejected jump. The fixture tracks weapon fire,
+movement audio, live input samples and packets. An Area monitors the trigger layer in
+the owner's room. Further cases exercise a lost tap, held and expired input, a sequence
+gap, wrap, exhausted history, duplicate packets, clock limits, camera clearance and the
+simulation ray. `PR3 LANE` reports p50, p95 and maximum matched-ack position error in
+metres, maximum replay depth, suspended ticks and backwards camera steps after warm-up.
+
+`python3 tools/check_multiplayer.py --file-transport --scenario prediction` drives a
+dedicated server with two clients and a listen host with one client. The encoder drops
+the datagram containing a jump tap. `PR3 PROCESS` reports the sample-to-send displacement
+and whether the received pose tick stayed fixed. The crouch row includes the route's
+correction statistics when prediction is active. Run the same command without
+`--file-transport` for ENet. The `latency` scenario runs all four RTT profiles and prints
+one `PR0` row per walk, jump and crouch trial. These timings end at headless presentation.

@@ -1,6 +1,7 @@
 extends Node3D
 ## The process harness observes actual Advanced bodies. Each drive file requests another lap.
 
+const Avatar := preload("res://addons/cogito/Networking/net_avatar.gd")
 const GRID := preload("res://addons/cogito/Networking/net_grid.gd")
 const CHANNEL := preload("res://addons/cogito/Networking/net_command_channel.gd")
 const RIFLE := preload("res://addons/cogito/InventoryPD/Items/Cogito_LaserRifle.tres")
@@ -24,6 +25,52 @@ var _npc_shots := 0
 var _npc_deaths := 0
 var _burn_removals := 0
 var _quest_events := 0
+
+
+## Sample and send are two ordinary entry points in the same client physics tick.
+class PredictionProbe:
+	var avatar: Avatar
+	var action := ""
+	var start := Vector3.ZERO
+	var height := 0.0
+	var tick := 0
+	var latest := -1
+	var errors: Array[float] = []
+	var depth := 0
+
+	func begin(label: String) -> void:
+		avatar = CogitoNet.player_world.avatar_for(CogitoNet.local_player_id())
+		action = label
+		start = avatar.actor.position
+		height = avatar.actor.head.position.y
+		tick = avatar.timeline.latest().tick
+
+	func sent() -> void:
+		if not avatar:
+			return
+		var prediction := avatar.prediction
+		if prediction and prediction.active and prediction.baseline.tick != latest:
+			latest = prediction.baseline.tick
+			errors.append(prediction.last_position_error)
+			if prediction.last_restore_tick == latest:
+				depth = maxi(depth, prediction.last_replay.size())
+		if action:
+			var distance := start.z - avatar.actor.position.z
+			if action == "crouch":
+				distance = height - avatar.actor.head.position.y
+			var sample := {
+				"action": action,
+				"delta": distance,
+				"same_pose": tick == avatar.timeline.latest().tick
+			}
+			if action == "crouch" and not errors.is_empty():
+				errors.sort()
+				sample.p50 = errors[errors.size() >> 1]
+				sample.p95 = errors[ceili(errors.size() * 0.95) - 1]
+				sample.max = errors.back()
+				sample.depth = depth
+			print("NET PREDICTION ", JSON.stringify(sample))
+			action = ""
 
 
 ## Count delivered Variant row payload, excluding the shared batch and transport headers.
@@ -55,11 +102,14 @@ class LossChannel:
 	extends CHANNEL
 
 	var muted := true
+	var probe: PredictionProbe
 
 	func packet(command: CogitoPlayerCommand) -> PackedByteArray:
 		if muted:
 			return PackedByteArray()
 		var data := super.packet(command)
+		if probe:
+			probe.sent()
 		if command.sequence % 10 == 9:
 			if CogitoPlayerCommand.Action.JUMP in command.edges:
 				print("NET DROPPED JUMP ", command.sequence)
@@ -76,9 +126,19 @@ class Driver:
 	var combat_lane := false
 	var trigger_ticks := 0
 	var throwing := false
+	var crouch_tap := false
+	var probe: PredictionProbe
 
 	func sample(actor: CogitoPlayer, sequence: int) -> CogitoPlayerCommand:
 		var command := super.sample(actor, sequence)
+		if probe and progress == 0:
+			probe.begin("walk")
+		if crouch_tap:
+			crouch_tap = false
+			command.held = 1 << CogitoPlayerCommand.Action.CROUCH
+			command.toggle_crouch = false
+			probe.begin("crouch")
+			return command
 		if throwing:
 			throwing = false
 			command.add_edge(CogitoPlayerCommand.Action.PRIMARY)
@@ -147,6 +207,10 @@ func _ready() -> void:
 	)
 	if not CogitoNet.is_server():
 		_loss = LossChannel.new()
+		if "--prediction-probe" in OS.get_cmdline_user_args():
+			_driver.probe = PredictionProbe.new()
+			_loss.probe = _driver.probe
+			_loss.muted = false
 		CogitoNet.player_world.command_channel = _loss
 
 
@@ -201,6 +265,12 @@ func _physics_process(_delta: float) -> void:
 		"pose_bytes": pose_bytes,
 		"private_rows": private_rows,
 		"owner_mode": owner_mode,
+		"predicted":
+		(
+			local_actor != null
+			and local_actor.owner_prediction != null
+			and local_actor.owner_prediction.active
+		),
 		"count": count,
 		"drive": _generation,
 		"progress": _driver.progress,
@@ -686,6 +756,8 @@ func _execute(order: Dictionary) -> void:
 					actor.position = $Cutscene.position
 					actor.velocity = Vector3.ZERO
 					CogitoNet.player_world.mark_teleport(record.player_id)
+		"probe_crouch":
+			_driver.crouch_tap = true
 		"walk":
 			if _loss:
 				_loss.muted = false

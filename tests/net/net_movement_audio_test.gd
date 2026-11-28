@@ -166,6 +166,14 @@ func test_listen_remote_and_both_clients(_timeout := 20000) -> void:
 
 
 # Publish controlled contacts through the normal authority capture and both replica endpoints.
+func _start_pose_playback() -> void:
+	_server.player_world.snapshot_hz = Engine.physics_ticks_per_second
+	var avatar := _owner.player_world.avatar_for(_id)
+	if avatar.prediction and avatar.prediction.active:
+		_server.player_world.mark_teleport(_id)
+		_pose(MODE.IDLE, Vector3.ZERO)
+
+
 func _pose(mode: int, velocity: Vector3, height := 0.81) -> void:
 	_authority.actor.current_moving_state = mode as CogitoPlayerAdvanced.MovingState
 	_authority.actor.velocity = velocity
@@ -176,7 +184,7 @@ func _pose(mode: int, velocity: Vector3, height := 0.81) -> void:
 
 func test_surface_modes_strokes_and_slide_edges() -> void:
 	await _stage(true)
-	_server.player_world.snapshot_hz = Engine.physics_ticks_per_second
+	_start_pose_playback()
 	for mode: int in [MODE.SPRINTING, MODE.SNEAKING]:
 		for tick in 100:
 			_pose(mode, Vector3.RIGHT * 3)
@@ -251,7 +259,7 @@ func test_stairs_ledge_landing_and_discontinuities() -> void:
 
 func test_hidden_listen_room_is_silent_and_reopens_silently() -> void:
 	await _stage(true)
-	_server.player_world.snapshot_hz = Engine.physics_ticks_per_second
+	_start_pose_playback()
 	var host: CogitoLevelHost = _server.player_world.travel.host
 	host.present(&"")
 	_pose(MODE.JUMPING, Vector3.UP)
