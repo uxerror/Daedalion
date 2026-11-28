@@ -76,7 +76,7 @@ func test_static_stairs_replay_both_directions() -> void:
 	_assert_rest()
 
 
-func test_lost_impulse_fallback_snaps_generation_and_replays_pending_walk() -> void:
+func test_lost_impulse_fallback_smooths_generation_and_replays_pending_walk() -> void:
 	await _ticks(45)
 	_driver.walking = true
 	await _ticks(12)
@@ -93,10 +93,11 @@ func test_lost_impulse_fallback_snaps_generation_and_replays_pending_walk() -> v
 		if block and block.generation > generation:
 			assert_object(block.state).is_not_null()
 			var z := _owner.actor.camera.global_position.z
-			prediction.render_offset = Vector3.RIGHT * 0.2
+			var resets := prediction.hard_resets
 			prediction.begin_tick()
 			assert_bool(prediction.active).is_true()
-			assert_vector(prediction.render_offset).is_equal(Vector3.ZERO)
+			assert_float(prediction.render_offset.length()).is_between(0.001, prediction.OFFSET_CAP)
+			assert_int(prediction.hard_resets).is_equal(resets)
 			assert_bool(_owner.movement_audio._previous.is_empty()).is_true()
 			var pending := range(block.ack + 1, prediction.newest + 1)
 			assert_array(prediction.last_replay).contains_exactly(pending)

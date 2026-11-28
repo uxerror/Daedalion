@@ -1,5 +1,6 @@
 extends "memory_session_suite.gd"
 
+const Config := preload("res://addons/cogito/Networking/net_config.gd")
 const MODE := CogitoMovementState.Mode
 
 var _root: Node3D
@@ -49,6 +50,23 @@ func _start(listen: bool) -> void:
 	_id = _owner.local_player_id()
 
 
+func test_prediction_client_uses_authoritative_poses_with_kernel_off() -> void:
+	var previous := OS.get_environment("COGITO_AUTHORITY_MOVEMENT")
+	var owner_setting := Config.owner_prediction
+	OS.set_environment("COGITO_AUTHORITY_MOVEMENT", "0")
+	Config.owner_prediction = true
+	_start(false)
+	OS.set_environment("COGITO_AUTHORITY_MOVEMENT", previous)
+	Config.owner_prediction = owner_setting
+	var view := _owner.player_world.avatar_for(_id)
+	var spawn_tick := view.latest_owner_baseline().tick
+	await _ticks(36)
+	assert_object(view.prediction).is_null()
+	assert_object(view.actor.owner_prediction).is_null()
+	assert_object(view.latest_owner_baseline().state).is_null()
+	assert_int(view.timeline.latest().tick).is_greater(spawn_tick)
+
+
 func _wire_contains(peer: int, block: NetOwnerState) -> bool:
 	var header := NetOwnerState.encode(block).slice(0, NetOwnerState.HEADER_BYTES).hex_encode()
 	for i in _network[1].sent.size():
@@ -88,7 +106,7 @@ func _privacy(listen: bool) -> void:
 	await _ticks(36)
 	var latest := view.latest_owner_baseline()
 	assert_int(latest.tick).is_greater(renewed.tick)
-	var enabled := OS.get_environment("COGITO_AUTHORITY_MOVEMENT") == "1"
+	var enabled := OS.get_environment("COGITO_AUTHORITY_MOVEMENT") != "0"
 	assert_bool(latest.state != null).is_equal(enabled)
 	assert_bool(_wire_contains(2, latest)).is_true()
 	assert_bool(_wire_contains(3, latest)).is_false()

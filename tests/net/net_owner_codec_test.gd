@@ -109,3 +109,24 @@ func test_every_stored_field_and_adapter_latch_round_trips() -> void:
 		assert_object(Codec.decode(bad_target)).is_null()
 		wire.encode_double(wire.size() - 8, NAN)
 		assert_object(Codec.decode(wire)).is_null()
+
+
+func test_codec_reuse_preserves_retained_state_and_wire_bytes() -> void:
+	var reader := Codec.Reader.new()
+	var writer := StreamPeerBuffer.new()
+	var block := _block()
+	block.state = CogitoMovementState.new()
+	var original := Codec.encode(block, writer)
+	var held := reader.read(original).state
+	var position := Vector3(3, 2, 1)
+	block.state.transform.origin = position
+	var changed := Codec.encode(block, writer)
+	var next := reader.read(changed)
+	assert_vector(held.transform.origin).is_equal(Vector3.ZERO)
+	assert_vector(next.state.transform.origin).is_equal(position)
+	block.state = null
+	var fallback := Codec.encode(block, writer)
+	assert_int(fallback.size()).is_equal(Codec.HEADER_BYTES)
+	assert_object(reader.read(fallback).state).is_null()
+	assert_vector(reader.read(original).state.transform.origin).is_equal(Vector3.ZERO)
+	assert_vector(next.state.transform.origin).is_equal(position)

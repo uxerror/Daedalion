@@ -4,6 +4,7 @@ extends Node
 ## Emitted on a replica after a live presentation event for this revision.
 signal presented(entity: String, revision: int, event: StringName)
 
+const Config := preload("net_config.gd")
 const ANIMATION := preload("net_animation.gd")
 const ENTITIES := preload("net_entities.gd")
 const Support := preload("net_support_motion.gd")
@@ -168,12 +169,15 @@ func bind(root: Node, key: String) -> void:
 	_client_binding = _generation
 	entities.registered.connect(_runtime_registered)
 	entities.bind(root, key, _generation if multiplayer.is_server() else 0)
-	var enabled := (
-		multiplayer.is_server() and OS.get_environment("COGITO_AUTHORITY_MOVEMENT") == "1"
-	)
+	var enabled := multiplayer.is_server() and Config.movement_enabled("COGITO_AUTHORITY_MOVEMENT")
 	for id in entities.objects:
 		var node := entities.objects[id]
 		node.set_meta(&"cogito_net_world", self)
+		# A room-mounted, unanimated switch (e.g. a Laboratory lamp) only
+		# changes lights/meshes. A child of a moving mechanism has no such contract.
+		if node is CogitoSwitch and node is AnimatableBody3D:
+			if node.get_parent() == root and not node.animation_player:
+				node.set_meta(&"cogito_fixed_switch_pose", node.global_transform)
 		if enabled and node is CogitoDoor and Support.accepts(node):
 			node.net_support = bind_support(node, id)
 		revisions[id] = 0

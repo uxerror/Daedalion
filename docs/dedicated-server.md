@@ -58,6 +58,13 @@ For a foreground run, use `nice -n 19 /opt/daedalion/daedalion-server --headless
 
 ## Config and reachability
 
+Fixed-tick movement is enabled on dedicated and listen servers. To use chart-driven
+movement, set `COGITO_AUTHORITY_MOVEMENT=0` in the server process environment. For the
+systemd unit, add `Environment=COGITO_AUTHORITY_MOVEMENT=0` under `[Service]` in an
+override and restart the service. All clients then follow authoritative movement.
+Owners can also opt out individually with `COGITO_OWNER_PREDICTION=0` on their client.
+Omitting either variable or setting it to `1` selects the enabled default.
+
 The binary reads `server.cfg` beside the executable. An explicit
 `-- --config /path/to/server.cfg` selects another file. CLI flags after `--`
 override the file. The sample documents every key and default. The unit sets

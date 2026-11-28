@@ -353,9 +353,65 @@ func test_matched_ack_thresholds_and_discrete_state() -> void:
 		assert_bool(prediction._matches(block, block, post)).is_false()
 		post.set(key, block.state.get(key))
 	for key: String in NetOwnerState.TIMERS:
-		post.set(key, block.state.get(key) + 0.000001)
+		post.set(key, block.state.get(key) + 0.5 / block.rate)
+		assert_bool(prediction._matches(block, block, post)).is_true()
+		post.set(key, block.state.get(key) + 1.1 / block.rate)
 		assert_bool(prediction._matches(block, block, post)).is_false()
 		post.set(key, block.state.get(key))
+
+
+func test_drift_accumulates_at_matching_ack_until_restore() -> void:
+	await _ticks(45)
+	var prediction := _owner.prediction
+	var reference := NetOwnerState.decode(NetOwnerState.encode(prediction.baseline))
+	reference.disposition = NetOwnerState.Disposition.FRESH
+	var anchor := prediction.state.transform.origin.x
+	var prior := prediction.last_restore_tick
+	for i in 4:
+		# Introduce 6 mm into the actual running simulation each tick. Its next
+		# history post includes every earlier tolerated increment.
+		prediction.state.transform.origin.x += 0.006
+		var seq := prediction.newest + 1
+		prediction.live(_owner.actor.neutral_command(seq))
+		reference.ack = seq
+		reference.tick += 1
+		reference.last_fresh_tick = reference.tick
+		reference.state.copy_from(prediction.post_at(seq))
+		reference.state.transform.origin.x = anchor
+		prediction.queued = NetOwnerState.decode(NetOwnerState.encode(reference))
+		prediction.begin_tick()
+		assert_int(prediction.last_restore_tick).is_equal(prior if i < 3 else reference.tick)
+	assert_float(prediction.state.transform.origin.x).is_equal_approx(anchor, 0.00001)
+	var permission_sequence := prediction.newest + 1
+	prediction.live(_owner.actor.neutral_command(permission_sequence))
+	reference.state.copy_from(prediction.post_at(permission_sequence))
+	reference.state.jump_allowed = not reference.state.jump_allowed
+	reference.ack = permission_sequence
+	reference.tick += 1
+	reference.last_fresh_tick = reference.tick
+	prediction.queued = NetOwnerState.decode(NetOwnerState.encode(reference))
+	prediction.begin_tick()
+	assert_int(prediction.last_restore_tick).is_equal(reference.tick)
+	assert_bool(prediction.state.jump_allowed).is_equal(reference.state.jump_allowed)
+
+
+func test_cosmetic_bob_wrapped_look_and_stamina_gate() -> void:
+	await _ticks(45)
+	var prediction := _owner.prediction
+	var block := NetOwnerState.decode(NetOwnerState.encode(prediction.baseline))
+	block.disposition = NetOwnerState.Disposition.FRESH
+	block.state.body_yaw = PI - 0.0001
+	block.state.stamina = 5.0000002
+	var post := block.state.duplicate() as CogitoMovementState
+	post.eye_position += Vector3(0.03, 0.03, 0)
+	post.body_yaw = -PI + 0.0001
+	assert_bool(prediction._matches(block, block, post)).is_true()
+	post.stamina -= 0.0000004
+	assert_bool(prediction._matches(block, block, post)).is_false()
+	post.stamina = block.state.stamina
+	block.state.mode = CogitoMovementState.Mode.SWIMMING
+	post.mode = block.state.mode
+	assert_bool(prediction._matches(block, block, post)).is_false()
 
 
 func test_forced_revision_and_life_clear_history_preserve_watermark() -> void:

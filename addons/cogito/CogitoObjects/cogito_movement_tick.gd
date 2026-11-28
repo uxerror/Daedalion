@@ -30,6 +30,18 @@ func request(
 	dt: float,
 	volume: Collision.Volumes = null
 ) -> void:
+	jump = false
+	landed = false
+	landing = Step.Landing.NONE
+	damage = 0
+	ground_effects = false
+	entered_ledge = false
+	exited_ledge = false
+	finished_roll = false
+	entered_ladder = false
+	left_volume_on_floor = false
+	cadence_mode = MODE.UNDEFINED
+	_enter_swim = false
 	s.input_direction = cmd.move
 	s.jump_remaining = maxf(0, s.jump_remaining - dt)
 	s.slide_remaining = maxf(0, s.slide_remaining - dt)

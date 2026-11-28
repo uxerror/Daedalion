@@ -25,20 +25,29 @@ static func roll_phase(actor: CogitoPlayerAdvanced) -> float:
 
 ## Captures the simulated pose after movement. Revision changes force even a small teleport.
 static func capture(actor: CogitoPlayerAdvanced, tick: int, revision: int) -> Dictionary:
-	var frame := {
-		"tick": tick,
-		"revision": revision,
-		"ack": actor.last_consumed_sequence,
-		"position": actor.position,
-		"velocity": actor.velocity,
-		"yaw": actor.body.rotation.y,
-		"pitch": actor.head.rotation.x,
-		"neck": actor.neck.rotation.y,
-		"height": actor.head.position.y,
-		"moving": int(actor.current_moving_state),
-		"posture": int(actor.current_body_posture_state),
-		"sitting": actor.is_sitting,
-	}
+	return capture_into(actor, tick, revision, {})
+
+
+static func capture_into(
+	actor: CogitoPlayerAdvanced, tick: int, revision: int, frame: Dictionary
+) -> Dictionary:
+	frame.tick = tick
+	frame.revision = revision
+	frame.ack = actor.last_consumed_sequence
+	frame.position = actor.position
+	frame.velocity = actor.velocity
+	frame.yaw = actor.body.rotation.y
+	frame.pitch = actor.head.rotation.x
+	frame.neck = actor.neck.rotation.y
+	frame.height = actor.head.position.y
+	frame.moving = int(actor.current_moving_state)
+	frame.posture = int(actor.current_body_posture_state)
+	frame.sitting = actor.is_sitting
+	frame.erase("support")
+	frame.erase("footing")
+	frame.erase("roll_phase")
+	frame.erase("seat")
+	frame.erase("basis")
 	var kernel := actor.authority_movement
 	if kernel and kernel.contacts and kernel.contacts.floor_support and actor.movement_grounded():
 		var support_motion := kernel.contacts.floor_support

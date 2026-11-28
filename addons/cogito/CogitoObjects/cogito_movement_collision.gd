@@ -7,6 +7,7 @@ const MODE := CogitoMovementState.Mode
 const LEDGE := CogitoMovementStep.Ledge
 const STAIRS := CogitoMovementStep.Stairs
 
+var boundary_collider_id := 0
 var _space: PhysicsDirectSpaceState3D
 var _actor: CogitoPlayerAdvanced
 var _areas := PhysicsShapeQueryParameters3D.new()
@@ -27,10 +28,13 @@ var _ledge: ShapeCast3D
 var _ledge_local: Transform3D
 var _live_cast: bool
 var _ledge_bodies := {}
+var _exclusions: Array[RID] = []
+var _carry_exclusions: Array[RID] = []
 var _climb_body: PhysicsBody3D
 
 
 class Volumes:
+	var observation := LEDGE.Observation.new()
 	var ledge: LEDGE.Observation
 	var ledge_key: int
 	var moving_ledge := false
@@ -139,6 +143,9 @@ func _body(space: RID, collider: CollisionShape3D) -> RID:
 
 
 func set_exclusions(bodies: Array[RID]) -> void:
+	if _exclusions == bodies:
+		return
+	_exclusions.assign(bodies)
 	_ledge.clear_exceptions()
 	for rid in bodies:
 		_ledge.add_exception_rid(rid)
@@ -176,6 +183,7 @@ func support(pose: Transform3D, standing: bool) -> Contact:
 	_climb_body = null
 	var result := Contact.new()
 	result.pose = pose
+	boundary_collider_id = 0
 	var body := _standing if standing else _crouching
 	PhysicsServer3D.body_set_collision_mask(body, _mask)
 	_params.margin = _margin
@@ -183,6 +191,8 @@ func support(pose: Transform3D, standing: bool) -> Contact:
 	# penetration recovery until this origin admits an ordinary support query.
 	if _sweep(body, pose, Vector3.ZERO, true):
 		result.legacy = _hit.get_collision_depth() > 2.0 * _margin
+		if result.legacy:
+			boundary_collider_id = _hit.get_collider_id()
 	if _sweep(body, pose, Vector3.DOWN * maxf(_snap, _margin), true):
 		var normal := _hit.get_collision_normal()
 		if normal.y >= _floor_cos:
@@ -195,8 +205,24 @@ func support(pose: Transform3D, standing: bool) -> Contact:
 
 
 ## Only the simulation hull and head enter these queries, including during replay.
-func volumes(pose: Transform3D, s: CogitoMovementState, cmd: CogitoPlayerCommand = null) -> Volumes:
-	var result := Volumes.new()
+func volumes(
+	pose: Transform3D,
+	s: CogitoMovementState,
+	cmd: CogitoPlayerCommand = null,
+	result: Volumes = null
+) -> Volumes:
+	if not result:
+		result = Volumes.new()
+	result.ledge = null
+	result.ledge_key = 0
+	result.moving_ledge = false
+	result.ladder_key = 0
+	result.outward = Vector3.ZERO
+	result.ladder_bounds = AABB()
+	result.water_bounds = AABB()
+	result.surface_height = 0.0
+	result.in_water = false
+	result.depth = 0.0
 	var hull := (
 		_actor.standing_collision_shape if s.standing_shape else _actor.crouching_collision_shape
 	)
@@ -256,7 +282,7 @@ func _observe_ledge(
 	if CogitoMovementStep.heading(s.body_basis, cmd.move).dot(forward) < 0.5:
 		return
 	_ledge.global_transform = pose * _ledge_local
-	var observation := LEDGE.Observation.new()
+	var observation := v.observation
 	if _actor.probe_ledge(_ledge, _ledge.position, forward, swim, false, observation):
 		v.ledge = observation
 		_climb_body = observation.collider
@@ -349,17 +375,43 @@ func _step_probe(
 
 func _dynamic_contact() -> bool:
 	var object := _hit.get_collider()
+	var dynamic := false
 	if _support_motion(object):
 		return false
 	if is_instance_valid(_climb_body) and object == _climb_body and not LEDGE.moving(_climb_body):
 		return false
 	if object is StaticBody3D:
-		return (
-			object is AnimatableBody3D
+		dynamic = (
+			(object is AnimatableBody3D and not _fixed_switch(object))
 			or object.constant_linear_velocity != Vector3.ZERO
 			or object.constant_angular_velocity != Vector3.ZERO
 		)
-	return object is PhysicsBody3D
+	else:
+		dynamic = object is PhysicsBody3D
+	if dynamic:
+		boundary_collider_id = object.get_instance_id()
+	return dynamic
+
+
+func _fixed_switch(body: AnimatableBody3D) -> bool:
+	if not body.has_meta(&"cogito_fixed_switch_pose"):
+		return false
+	var rest: Transform3D = body.get_meta(&"cogito_fixed_switch_pose")
+	# Jolt normalizes the authored lamp basis and reports about 4e-6 rad/s at rest.
+	# Compare to the absolute bind pose so slow accumulation still leaves this branch.
+	if not body.global_basis.is_equal_approx(rest.basis):
+		return false
+	var linear: Vector3 = PhysicsServer3D.body_get_state(
+		body.get_rid(), PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY
+	)
+	var angular: Vector3 = PhysicsServer3D.body_get_state(
+		body.get_rid(), PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY
+	)
+	return (
+		body.global_position.distance_squared_to(rest.origin) <= 1e-10
+		and linear.length_squared() <= 1e-10
+		and angular.length_squared() <= 1e-10
+	)
 
 
 func _stairs(
@@ -397,16 +449,15 @@ func _carry(body: RID, s: CogitoMovementState, result: Contact) -> void:
 		return
 	var delta := support_motion.displacement(world.support_tick, s.support_local)
 	if delta != Vector3.ZERO:
-		var previous := _params.exclude_bodies
-		var excluded := previous.duplicate()
-		excluded.append(support_motion.body.get_rid())
-		_params.exclude_bodies = excluded
+		_carry_exclusions.assign(_exclusions)
+		_carry_exclusions.append(support_motion.body.get_rid())
+		_params.exclude_bodies = _carry_exclusions
 		_params.margin = _margin
 		if _sweep(body, result.pose, delta):
 			result.legacy = _dynamic_contact()
 		result.carried = _hit.get_travel()
 		result.pose.origin += result.carried
-		_params.exclude_bodies = previous
+		_params.exclude_bodies = _exclusions
 
 
 func _attachment(s: CogitoMovementState, result: Contact, dt: float) -> void:
@@ -426,12 +477,28 @@ func _attachment(s: CogitoMovementState, result: Contact, dt: float) -> void:
 
 ## state.on_floor describes the previous solve. No CharacterBody contact cache is read.
 func solve(
-	origin: Transform3D, state: CogitoMovementState, profile: CogitoMovementProfile, dt: float
+	origin: Transform3D,
+	state: CogitoMovementState,
+	profile: CogitoMovementProfile,
+	dt: float,
+	result: Contact = null
 ) -> Contact:
 	if state.mode != MODE.LEDGE_CLIMBING:
 		_climb_body = null
-	var result := Contact.new()
+	if not result:
+		result = Contact.new()
+	result.floor_normal = Vector3.ZERO
+	result.wall_normal = Vector3.ZERO
+	result.ceiling = false
+	result.floor_support = null
+	result.carried = Vector3.ZERO
+	result.dynamic_floor = false
+	result.legacy = false
+	result.stair = Vector3.ZERO
+	result.stair_normal = Vector3.ZERO
+	result.step_up = false
 	result.pose = origin
+	boundary_collider_id = 0
 	result.velocity = state.requested_velocity
 	var body := _standing if state.standing_shape else _crouching
 	# Only a synchronous query sees the authored mask. A room physics step sees

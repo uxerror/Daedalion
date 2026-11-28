@@ -115,8 +115,29 @@ var regenerate_after: float
 var jump_cost: float
 
 
-static func encode(checkpoint: NetOwnerState) -> PackedByteArray:
-	var stream := StreamPeerBuffer.new()
+## Separate immutable deliveries can coexist while a caller holds an old checkpoint.
+class Reader:
+	var _stream := StreamPeerBuffer.new()
+	var _eligible: Array[NetOwnerState] = []
+	var _fallback: Array[NetOwnerState] = []
+
+	func read(data: PackedByteArray) -> NetOwnerState:
+		var pool := _eligible if data.size() == ELIGIBLE_BYTES else _fallback
+		for block in pool:
+			if block.get_reference_count() == 2:
+				if not block.state or block.state.get_reference_count() <= 2:
+					return NetOwnerState.decode(data, block, _stream)
+		var fresh := NetOwnerState.new()
+		if pool.size() < 4:
+			pool.append(fresh)
+		return NetOwnerState.decode(data, fresh, _stream)
+
+
+static func encode(checkpoint: NetOwnerState, stream: StreamPeerBuffer = null) -> PackedByteArray:
+	if not stream:
+		stream = StreamPeerBuffer.new()
+	stream.resize(ELIGIBLE_BYTES if checkpoint.state else HEADER_BYTES)
+	stream.seek(0)
 	stream.put_u8(VERSION)
 	var flags := 128 if checkpoint.state else (4 if checkpoint.dynamic_support else 0)
 	stream.put_u8(int(checkpoint.disposition) | flags)
@@ -173,13 +194,16 @@ static func _write_state(stream: StreamPeerBuffer, checkpoint: NetOwnerState) ->
 
 
 ## A malformed block has no usable prefix. Validate its full extent before reading the tail.
-static func decode(data: PackedByteArray) -> NetOwnerState:
+static func decode(
+	data: PackedByteArray, value: NetOwnerState = null, stream: StreamPeerBuffer = null
+) -> NetOwnerState:
 	if data.size() < HEADER_BYTES or data[0] != VERSION or (data[1] & 0x78) != 0:
 		return null
 	var eligible := (data[1] & 128) != 0
 	if data.size() != (ELIGIBLE_BYTES if eligible else HEADER_BYTES):
 		return null
-	var value := NetOwnerState.new()
+	if not value:
+		value = NetOwnerState.new()
 	value.dynamic_support = (data[1] & 4) != 0
 	if eligible and value.dynamic_support:
 		return null
@@ -190,7 +214,8 @@ static func decode(data: PackedByteArray) -> NetOwnerState:
 	if not value._valid_alignment():
 		return null
 	if eligible:
-		var stream := StreamPeerBuffer.new()
+		if not stream:
+			stream = StreamPeerBuffer.new()
 		stream.data_array = data
 		stream.seek(HEADER_BYTES)
 		if not _read_state(stream, value):
@@ -217,7 +242,7 @@ func _valid_alignment() -> bool:
 
 
 static func _read_state(stream: StreamPeerBuffer, value: NetOwnerState) -> bool:
-	var s := CogitoMovementState.new()
+	var s := value.state if value.state else CogitoMovementState.new()
 	var mode_value := stream.get_u8()
 	var posture_value := stream.get_u8()
 	var bits := stream.get_u32()

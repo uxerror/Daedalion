@@ -1,47 +1,86 @@
 extends RefCounted
 ## Owner-local command clock. RPC arrival only replaces queued; replay writes value states.
 
+signal measurement_event(kind: String, detail: String, sequence: int, collider_id: int)
+
 const Solver := preload("net_prediction_step.gd")
 const Channel := preload("net_command_channel.gd")
 const Audio := preload("net_movement_audio.gd")
-const Snapshot := preload("net_snapshot.gd")
 const CAPACITY := 128
 const REPLAY_BUDGET := 24
 const HALF_LIFE := 0.05
 const OFFSET_CAP := 0.25
 const SNAP_DISTANCE := 1.0
-const EXACT_STATE_FIELDS := [
-	"mode",
-	"posture",
-	"input_direction",
-	"slide_vector",
-	"ladder_contact",
-	"ladder_ticks",
-	"roll_ticks",
-	"ledge_stage",
-	"ledge_key",
-	"support_key",
-	"support_local",
-	"support_velocity",
-	"ledge_target",
-	"body_basis",
-	"requested_velocity",
-	"main_velocity",
-	"last_velocity",
-	"direction",
-	"gravity_vector",
-	"gravity_vec",
-	"floor_normal",
-	"wall_normal",
-	"head_offset",
+const EXACT_STATE_FIELDS := (
+	NetOwnerState.FLAGS
+	+ [
+		"mode",
+		"posture",
+		"ladder_contact",
+		"ladder_ticks",
+		"roll_ticks",
+		"ledge_stage",
+		"ledge_key",
+		"support_key",
+	]
+)
+# Both operands here are already decoded at wire precision. Configuration changes
+# and input discontinuities are server events, independent of the predicted pose.
+const CHECKPOINT_FIELDS := (
+	[
+		"generation",
+		"modifier_generation",
+		"discontinuities",
+		"disposition",
+		"stamina_locked",
+		"input_blocked",
+		"use_floor_slope_for_run_exhaustion",
+		"pending_force",
+	]
+	+ NetOwnerState.STAMINA_TUNING
+)
+const MOTION_EYE_MODES := [
+	Solver.MODE.LADDER_CLIMBING,
+	Solver.MODE.SWIMMING,
+	Solver.MODE.LEDGE_CLIMBING,
+	Solver.MODE.ROLLING,
 ]
-const ADAPTER_FIELDS := [
-	"stamina_locked", "input_blocked", "use_floor_slope_for_run_exhaustion", "pending_force"
-]
+const ANGLES := ["body_yaw", "neck_yaw", "head_pitch"]
+const ANGLE_EPSILON := 0.001
+const LENGTH_EPSILON := 0.01
+const SPEED_EPSILON := 0.10
+const FIELD_EPSILONS := {
+	"velocity": SPEED_EPSILON,
+	"main_velocity": SPEED_EPSILON,
+	"last_velocity": SPEED_EPSILON,
+	"requested_velocity": SPEED_EPSILON,
+	"support_velocity": SPEED_EPSILON,
+	"gravity_vec": SPEED_EPSILON,
+	"current_speed": SPEED_EPSILON,
+	"jump_target_speed": SPEED_EPSILON,
+	"bunny_hop_speed": SPEED_EPSILON,
+	"head_position": LENGTH_EPSILON,
+	"previous_y": LENGTH_EPSILON,
+	"head_offset": LENGTH_EPSILON,
+	"support_local": LENGTH_EPSILON,
+	"ledge_target": LENGTH_EPSILON,
+	"direction": ANGLE_EPSILON,
+	"floor_normal": ANGLE_EPSILON,
+	"wall_normal": ANGLE_EPSILON,
+	"gravity_vector": ANGLE_EPSILON,
+	"body_basis": ANGLE_EPSILON,
+	"input_direction": 0.001,
+	"slide_vector": 0.001,
+	"speed_multiplier": 0.001,
+	"gravity": 0.1,
+	"current_lerp_speed": 0.001,
+	"stamina": 0.000001,
+}
 
 var minimum_revision := 0
 var in_transfer := false
 var active := false
+var following_authority := false
 var queued: NetOwnerState
 var baseline: NetOwnerState
 var state: CogitoMovementState
@@ -53,16 +92,35 @@ var support_changed := false
 var presented_support_key := 0
 var presented_support_pose := Transform3D.IDENTITY
 var hard_resets := 0
+## Optional timing for the process measurement fixture, in microseconds per owner tick.
+var measure_replay := false
+var measured_resets := 0
+var measured_resumes := 0
+var measured_reasons := {}
+var restore_samples := {}
+var replay_step_times := PackedInt64Array()
+var replay_usec := 0
+var replay_steps := -1
 var corrections := 0
 var last_position_error := 0.0
+var compared_post := false
 var reasons := {}
 var render_offset := Vector3.ZERO
 var reason := ""
 var _commands: Array[CogitoPlayerCommand] = []
 var _posts: Array[CogitoMovementState] = []
+var _post_valid := PackedByteArray()
+var _working := CogitoMovementState.new()
+var _wire := PackedByteArray()
+var _sample_pool: Array[CogitoPlayerCommand] = [
+	CogitoPlayerCommand.new(), CogitoPlayerCommand.new()
+]
 var _floor_sequence := -1
 var _last_valid_ack := -1
 var _boundary_sequence := -1
+var _rig: Node3D
+var _rig_rest: Vector3
+var _rig_offset := Vector3.ZERO
 var _actor: CogitoPlayerAdvanced
 var _audio: Audio
 var _camera_clearance := PhysicsShapeQueryParameters3D.new()
@@ -74,6 +132,8 @@ var _debug := OS.get_environment("COGITO_PREDICTION_DEBUG") == "1"
 
 func _init(actor: CogitoPlayerAdvanced, p: CogitoMovementProfile, mask: int, audio: Audio) -> void:
 	_actor = actor
+	_rig = actor.get_node("Rig")
+	_rig_rest = _rig.position
 	_audio = audio
 	actor.head.add_child(_simulation_eye)
 	solver = Solver.new(actor, p, mask)
@@ -85,16 +145,41 @@ func _init(actor: CogitoPlayerAdvanced, p: CogitoMovementProfile, mask: int, aud
 	_queries.assign([pic.interaction_raycast, pic.carryable_position, actor.item_drop_shapecast])
 	_commands.resize(CAPACITY)
 	_posts.resize(CAPACITY)
+	_post_valid.resize(CAPACITY)
+	for slot in CAPACITY:
+		_commands[slot] = CogitoPlayerCommand.new()
+		_posts[slot] = CogitoMovementState.new()
 	reset()
+
+
+## A sampler or custom gameplay consumer can retain a command beyond its physics tick.
+func sample_command(sequence: int) -> CogitoPlayerCommand:
+	for cmd in _sample_pool:
+		# The pool and this loop variable own the two references.
+		if cmd.get_reference_count() == 2:
+			cmd.sequence = sequence
+			cmd.move = Vector2.ZERO
+			cmd.held = 0
+			cmd.edges = PackedByteArray()
+			cmd.has_control = true
+			cmd.wield_generation = 0
+			return cmd
+	var fresh := CogitoPlayerCommand.new()
+	fresh.sequence = sequence
+	return fresh
 
 
 func reset(crossing := false) -> void:
 	minimum_revision = 0
+	if active or following_authority:
+		_hard_reset("scope")
+	following_authority = false
 	_suspend("")
 	queued = null
 	baseline = null
-	_commands.fill(null)
-	_posts.fill(null)
+	for command in _commands:
+		command.sequence = -1
+	_post_valid.fill(0)
 	newest = _actor.last_consumed_sequence
 	_floor_sequence = newest
 	_last_valid_ack = -1
@@ -103,7 +188,6 @@ func reset(crossing := false) -> void:
 	last_restore_tick = -1
 	last_position_error = 0
 	corrections = 0
-	hard_resets = 0
 	support_changed = false
 	reasons.clear()
 
@@ -128,16 +212,27 @@ func _present_predicted(enabled: bool) -> void:
 		_audio.reset()
 
 
-func _suspend(why: String) -> void:
+func _suspend(why: String, collider_id := 0, seq := -1) -> void:
+	if measure_replay and why and (why != reason or active):
+		measurement_event.emit(
+			"suspend" if active else "wait", why, newest if seq < 0 else seq, collider_id
+		)
+		if active:
+			measured_reasons[why] = int(measured_reasons.get(why, 0)) + 1
 	presented_support_key = 0
 	presented_support_pose = Transform3D.IDENTITY
 	_eye_staged = false
 	_simulation_eye.transform = Transform3D.IDENTITY
 	if active:
-		hard_resets += 1
+		following_authority = why != "" and why != "travel"
+		if following_authority:
+			# Keep the current rendered eye (including any integrated swim height)
+			# while PR2 starts following the published root and head.
+			render_offset = _actor.head.global_basis * _actor.eyes.position
 		_actor.reset_roll_presentation()
-		render_offset = Vector3.ZERO
-		_actor.eyes.position = Vector3.ZERO
+	if not following_authority:
+		_clear_offsets()
+	_post_valid.fill(0)
 	_present_predicted(false)
 	state = null
 	if why and reason != why:
@@ -153,6 +248,9 @@ func transfer(loading: bool, revision := 0) -> void:
 	in_transfer = loading
 	queued = null
 	if loading:
+		if active or following_authority:
+			_hard_reset("travel")
+		following_authority = false
 		_suspend("travel")
 	else:
 		# Commands sampled during loading belong to the retired source interval.
@@ -164,7 +262,7 @@ func transfer(loading: bool, revision := 0) -> void:
 func post_at(sequence: int) -> CogitoMovementState:
 	var slot := posmod(sequence, CAPACITY)
 	var command := _commands[slot]
-	return _posts[slot] if command and command.sequence == sequence else null
+	return _posts[slot] if _post_valid[slot] and command.sequence == sequence else null
 
 
 func _problem(block: NetOwnerState, first: int) -> String:
@@ -178,7 +276,7 @@ func _problem(block: NetOwnerState, first: int) -> String:
 	elif block.force_requested or block.teleported or block.state.mode not in Solver.SUPPORTED:
 		problem = "unsupported_mode"
 	elif block.ack < _boundary_sequence:
-		problem = "unsupported_contact"
+		problem = "awaiting_boundary_ack"
 	elif newest - first + 1 > CAPACITY:
 		problem = "missing_history"
 	elif newest - first + 1 > REPLAY_BUDGET:
@@ -192,39 +290,96 @@ func _problem(block: NetOwnerState, first: int) -> String:
 	return problem
 
 
+func _miss(key: String, magnitude := 0.0) -> bool:
+	if measure_replay:
+		if not restore_samples.has(key):
+			restore_samples[key] = []
+		restore_samples[key].append(magnitude)
+	return false
+
+
+func _difference(a: Variant, b: Variant) -> float:
+	match typeof(a):
+		TYPE_FLOAT:
+			return absf(a - b)
+		TYPE_VECTOR2, TYPE_VECTOR3:
+			return a.distance_to(b)
+		TYPE_BASIS:
+			# Axis chords also detect changes of scale, and work on non-unit bases.
+			return maxf(a.x.distance_to(b.x), maxf(a.y.distance_to(b.y), a.z.distance_to(b.z)))
+	return 0.0
+
+
+func _stamina_gate(value: float, block: NetOwnerState) -> int:
+	var gates := int(CogitoMovementStep.Stamina.sprint(true, value))
+	gates |= int(CogitoMovementStep.Stamina.can_start_sprint(false, true, true, value)) << 2
+	gates |= int(CogitoMovementStep.Stamina.jump_affordable(true, value, block.jump_cost)) << 3
+	return gates | (int(value >= block.value_max) << 4)
+
+
 func _matches(block: NetOwnerState, previous: NetOwnerState, post: CogitoMovementState) -> bool:
+	if support_changed:
+		return _miss("support_changed")
+	if previous:
+		for key: String in CHECKPOINT_FIELDS:
+			if block.get(key) != previous.get(key):
+				return _miss(key, _difference(block.get(key), previous.get(key)))
 	if not post or not previous or not active:
-		return false
-	if (
-		block.generation != previous.generation
-		or block.modifier_generation != previous.modifier_generation
-		or block.discontinuities != previous.discontinuities
-		or block.disposition != previous.disposition
-		or block.disposition != NetOwnerState.Disposition.FRESH
-	):
-		return false
-	for key: String in ADAPTER_FIELDS + NetOwnerState.STAMINA_TUNING:
-		if block.get(key) != previous.get(key):
-			return false
+		return _miss("seed")
+	if block.disposition != NetOwnerState.Disposition.FRESH:
+		return _miss("disposition")
+	return _state_matches(block, post)
+
+
+func _state_matches(block: NetOwnerState, post: CogitoMovementState) -> bool:
 	var s := block.state
-	if (
-		last_position_error > 0.02
-		or post.velocity.distance_to(s.velocity) > 0.10
-		or post.head_position.distance_to(s.head_position) > 0.01
-		or post.eye_position.distance_to(s.eye_position) > 0.01
-		or post.transform.basis != s.transform.basis
-	):
-		return false
-	for key: String in (
-		NetOwnerState.FLAGS + NetOwnerState.SCALARS + NetOwnerState.TIMERS + EXACT_STATE_FIELDS
-	):
+	if last_position_error > 0.02:
+		return _miss("position", last_position_error)
+	for key: String in EXACT_STATE_FIELDS:
 		if post.get(key) != s.get(key):
-			return false
+			return _miss(key)
+	if (
+		post.stamina != s.stamina
+		and _stamina_gate(post.stamina, block) != _stamina_gate(s.stamina, block)
+	):
+		return _miss("stamina_gate", absf(post.stamina - s.stamina))
+	var basis_error := _difference(post.transform.basis, s.transform.basis)
+	if basis_error > ANGLE_EPSILON:
+		return _miss("basis", basis_error)
+	# On the ground Advanced writes cosmetic head bob to Eyes. Only these modes
+	# integrate the vertical eye offset. Head position is compared in every mode.
+	var eye_error := absf(post.eye_position.y - s.eye_position.y)
+	if s.mode in MOTION_EYE_MODES and eye_error > LENGTH_EPSILON:
+		return _miss("eye_position", eye_error)
+	return _continuous_matches(post, s, block.rate)
+
+
+func _continuous_matches(post: CogitoMovementState, s: CogitoMovementState, rate: int) -> bool:
+	for key: String in ANGLES:
+		var difference := absf(angle_difference(post.get(key), s.get(key)))
+		if difference > ANGLE_EPSILON:
+			return _miss(key, difference)
+	for key: String in FIELD_EPSILONS:
+		var predicted: Variant = post.get(key)
+		var authoritative: Variant = s.get(key)
+		if predicted != authoritative:
+			var distance := _difference(predicted, authoritative)
+			if distance > FIELD_EPSILONS[key]:
+				return _miss(key, distance)
+	for key: String in NetOwnerState.TIMERS:
+		var difference := absf(post.get(key) - s.get(key))
+		if difference > 1.0 / rate:
+			return _miss(key, difference)
 	return true
 
 
 ## Called before Advanced samples the live input source. Keep current look on scene nodes.
 func begin_tick() -> void:
+	replay_usec = 0
+	replay_steps = -1
+	compared_post = false
+	if measure_replay:
+		replay_step_times.clear()
 	solver.prepare()
 	if not queued or in_transfer:
 		return
@@ -232,7 +387,7 @@ func begin_tick() -> void:
 	queued = null
 	var previous := baseline
 	baseline = block
-	if active and previous and previous.generation != block.generation:
+	if active and block.state and previous and previous.generation != block.generation:
 		# A complete legacy excursion can fall between two delivered eligible poses.
 		_suspend("mode_transition")
 	var first := maxi(block.ack, _floor_sequence) + 1
@@ -248,45 +403,99 @@ func begin_tick() -> void:
 	if active and not post and block.ack > _floor_sequence:
 		_suspend("missing_history")
 		return
+	compared_post = active and post != null
 	last_position_error = (
-		post.transform.origin.distance_to(block.state.transform.origin) if post else 0.0
+		post.transform.origin.distance_to(block.state.transform.origin) if active and post else 0.0
 	)
-	var changed := support_changed
+	var matched := _matches(block, previous, post)
 	support_changed = false
-	if not changed and _matches(block, previous, post):
+	if matched:
 		_retire(block.ack)
 		return
-	var old_state := state
-	state = block.state.duplicate()
+	if measure_replay and last_position_error > 0.02:
+		measurement_event.emit("correction", str(last_position_error), block.ack, 0)
+	var started := Time.get_ticks_usec() if measure_replay else 0
+	var was_active := state != null
+	var old_origin := _actor.position
+	var old_eye := _actor.eyes.global_position
+	state = _working
+	state.copy_from(block.state)
 	solver.profile.jump_cost = block.jump_cost
 	last_restore_tick = block.tick
 	last_replay.clear()
 	for seq in range(first, newest + 1):
 		var slot := posmod(seq, CAPACITY)
+		var step_start := Time.get_ticks_usec() if measure_replay else 0
 		if not solver.advance(state, _commands[slot], block):
-			_boundary_sequence = seq
-			_suspend(solver.suspend_reason)
+			# After a failed resume, cover both the tested suffix and one more input
+			# horizon. A single eligible pose can fall between two contacts with the prop.
+			_boundary_sequence = seq if was_active else newest + (newest - block.ack)
+			if measure_replay:
+				replay_usec = Time.get_ticks_usec() - started
+				replay_steps = seq - first + 1
+				replay_step_times.append(Time.get_ticks_usec() - step_start)
+			_suspend(solver.suspend_reason, solver.room.boundary_collider_id, seq)
 			return
-		_posts[slot] = state.duplicate()
+		_posts[slot].copy_from(state)
+		_post_valid[slot] = 1
 		last_replay.append(seq)
-	if old_state:
+		if measure_replay:
+			replay_step_times.append(Time.get_ticks_usec() - step_start)
+	if measure_replay:
+		replay_usec = Time.get_ticks_usec() - started
+		replay_steps = last_replay.size()
+	if was_active:
 		corrections += 1
-		var motion := (
-			solver.world_from_room.basis * (old_state.transform.origin - state.transform.origin)
-		)
-		motion += _actor.neck.global_basis * (old_state.head_position - state.head_position)
-		if motion.length() > SNAP_DISTANCE:
-			hard_resets += 1
-		render_offset = (
-			(motion + render_offset).limit_length(OFFSET_CAP)
-			if motion.length() <= SNAP_DISTANCE
-			else Vector3.ZERO
-		)
+	if was_active or following_authority:
+		_smooth_restore(old_origin, old_eye)
 	_retire(block.ack)
+	if following_authority and measure_replay:
+		measured_resumes += 1
+		measurement_event.emit("resume", reason, newest, 0)
+	following_authority = false
 	reason = ""
 	_present_predicted(true)
 	_eye_staged = true
 	sync_eye()
+
+
+func _hard_reset(detail: String) -> void:
+	hard_resets += 1
+	if measure_replay:
+		measured_resets += 1
+		measurement_event.emit("hard_reset", detail, newest, 0)
+
+
+func fallback_snap(target: Vector3) -> bool:
+	if following_authority and _actor.position.distance_to(target) > SNAP_DISTANCE:
+		_clear_offsets()
+		_hard_reset("fallback_distance")
+		return true
+	return false
+
+
+func _clear_offsets() -> void:
+	render_offset = Vector3.ZERO
+	_rig_offset = Vector3.ZERO
+	_rig.position = _rig_rest
+	_actor.eyes.position = Vector3.ZERO
+
+
+func _smooth_restore(old_origin: Vector3, old_eye: Vector3) -> void:
+	var root_motion := solver.world_from_room.basis * (old_origin - state.transform.origin)
+	var head_pose := _actor.head.transform
+	head_pose.origin = state.head_position
+	var target := solver.world_from_room * state.transform * _actor.body.transform
+	target = target * _actor.neck.transform * head_pose
+	var eye_height := state.eye_position.y if state.mode in MOTION_EYE_MODES else 0.0
+	var eye_motion := old_eye - (target * (Vector3.UP * eye_height))
+	if maxf(root_motion.length(), eye_motion.length()) > SNAP_DISTANCE:
+		_hard_reset("distance")
+		render_offset = Vector3.ZERO
+		_rig_offset = Vector3.ZERO
+	else:
+		render_offset = eye_motion.limit_length(OFFSET_CAP)
+		_rig_offset = (_rig_offset + root_motion).limit_length(OFFSET_CAP)
 
 
 ## Reconciliation precedes live input edges. Move only the gameplay queries in that interval.
@@ -308,8 +517,8 @@ func aim_transform() -> Transform3D:
 func _retire(ack: int) -> void:
 	for seq in range(maxi(_floor_sequence + 1, newest - CAPACITY + 1), ack + 1):
 		var slot := posmod(seq, CAPACITY)
-		_commands[slot] = null
-		_posts[slot] = null
+		_commands[slot].sequence = -1
+		_post_valid[slot] = 0
 	_floor_sequence = maxi(_floor_sequence, ack)
 
 
@@ -320,9 +529,10 @@ func live(raw: CogitoPlayerCommand) -> void:
 	var contiguous := raw.sequence == newest + 1
 	newest = raw.sequence
 	var slot := posmod(newest, CAPACITY)
-	var command := Channel.freeze(raw)
-	_commands[slot] = command
-	_posts[slot] = null
+	var command := Channel.freeze(raw, _commands[slot], _wire)
+	if not command:
+		_commands[slot].sequence = -1
+	_post_valid[slot] = 0
 	if not active:
 		return
 	if not contiguous or not command or newest - _floor_sequence > CAPACITY:
@@ -331,9 +541,10 @@ func live(raw: CogitoPlayerCommand) -> void:
 	var was_rolling := state.mode == Solver.MODE.ROLLING
 	if not solver.advance(state, command, baseline):
 		_boundary_sequence = newest
-		_suspend(solver.suspend_reason)
+		_suspend(solver.suspend_reason, solver.room.boundary_collider_id)
 		return
-	_posts[slot] = state.duplicate()
+	_posts[slot].copy_from(state)
+	_post_valid[slot] = 1
 	_actor.transform = state.transform
 	presented_support_key = state.support_key
 	if presented_support_key:
@@ -352,9 +563,7 @@ func live(raw: CogitoPlayerCommand) -> void:
 	var roll_impact := (
 		state.last_velocity.y if not was_rolling and state.mode == Solver.MODE.ROLLING else INF
 	)
-	_audio.observe(
-		Snapshot.capture(_actor, newest, baseline.revision), true, state.submerged, roll_impact
-	)
+	_audio.observe_actor(newest, baseline.revision, state.submerged, roll_impact)
 
 
 func _clip_offset() -> void:
@@ -372,21 +581,15 @@ func _clip_offset() -> void:
 
 
 func render(delta: float) -> void:
-	render_offset *= exp(-log(2.0) * delta / HALF_LIFE)
+	var decay := exp(-log(2.0) * delta / HALF_LIFE)
+	render_offset *= decay
+	_rig_offset *= decay
 	_display_offset()
 
 
 func _display_offset() -> void:
+	_rig.position = _rig_rest + _actor.global_basis.inverse() * _rig_offset
 	var local_offset := _actor.head.global_basis.inverse() * render_offset
-	var mode := state.mode
-	if (
-		mode
-		in [
-			Solver.MODE.LADDER_CLIMBING,
-			Solver.MODE.SWIMMING,
-			Solver.MODE.LEDGE_CLIMBING,
-			Solver.MODE.ROLLING
-		]
-	):
+	if active and state.mode in MOTION_EYE_MODES:
 		local_offset.y += state.eye_position.y
 	_actor.eyes.position = local_offset

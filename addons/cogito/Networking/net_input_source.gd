@@ -24,6 +24,13 @@ var _play_at := 0
 var _latest_received := -1
 var _ack := -1
 var _last: CogitoPlayerCommand
+var _decoded: Array[CogitoPlayerCommand] = []
+var _command_pool: Array[CogitoPlayerCommand] = []
+
+
+func _init() -> void:
+	for slot in WINDOW + CHANNEL.REDUNDANCY + 1:
+		_command_pool.append(CogitoPlayerCommand.new())
 
 
 ## Unwrap a wire sequence to the closest signed distance from the next expected tick.
@@ -36,7 +43,9 @@ func receive(data: PackedByteArray, driving := false) -> void:
 	if _packets >= 4:
 		return
 	_packets += 1
-	for command in CHANNEL.decode(data, driving):
+	if not CHANNEL.decode_into(data, driving, _decoded, _command_pool):
+		return
+	for command in _decoded:
 		var seq := unwrap(command.sequence, _ack + 1)
 		if seq <= _ack or _pending.has(seq):
 			continue

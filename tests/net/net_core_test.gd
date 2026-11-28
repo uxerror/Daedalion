@@ -5,6 +5,20 @@ const Identity := preload("res://addons/cogito/Networking/net_identity.gd")
 const SERVER_DIR := "user://net/core-test"
 
 
+func test_movement_switch_defaults_and_opt_out() -> void:
+	var expected := OS.get_environment("COGITO_OWNER_PREDICTION") != "0"
+	assert_bool(NetConfig.owner_prediction).is_equal(expected)
+	for key in ["COGITO_AUTHORITY_MOVEMENT", "COGITO_OWNER_PREDICTION"]:
+		var previous := OS.get_environment(key)
+		OS.unset_environment(key)
+		assert_bool(NetConfig.movement_enabled(key)).is_true()
+		OS.set_environment(key, "0")
+		assert_bool(NetConfig.movement_enabled(key)).is_false()
+		OS.set_environment(key, "1")
+		assert_bool(NetConfig.movement_enabled(key)).is_true()
+		OS.set_environment(key, previous)
+
+
 func test_offline_has_local_authority_and_no_work() -> void:
 	assert_int(CogitoNet.mode()).is_equal(CogitoNet.Mode.OFFLINE)
 	assert_bool(CogitoNet.is_server()).is_true()

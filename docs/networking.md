@@ -155,7 +155,7 @@ respawn_delay=10.0
 | `respawn_delay` | Finite, nonnegative seconds, default `10.0`. Zero enables immediate requests. | `--respawn-delay 1.5` |
 | `display_name` | `Host` for the listen player. Clients supply their own name in join credentials, default `Player`. | Config file |
 
-The protocol version is 18, including sessions with the authority movement switch off. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
+The protocol version is 20, including sessions with the authority movement switch off. Both protocol and content must match. Direct internet connections require the selected UDP port to reach the server. ENet support in MP0 covers native direct-address connections and LAN.
 
 The dedicated level starts empty and simulates admitted remote avatars. Their first-person cameras, HUDs and light-meter cameras are omitted. The default demo boot prevents the menu subtree from entering the tree. Dedicated startup skips solo save recovery and cleanup, the fade panel, game options, graphics and input-map setup by Cogito's menu autoload. The engine still loads project resources, Cogito settings and the existing autoload nodes, including InputHelper, DebugLine, InputRouter, audio and quest services. The dedicated export configures a simulation main scene and strips authored presentation when packing. Room physics uses a non-rendering SubViewport. The operator guide describes the pack and service installation.
 
@@ -545,18 +545,38 @@ and 8,910 B/s at the observer.
 
 ### Owner prediction and replay (PR3–PR8)
 
-Launch the server with `COGITO_AUTHORITY_MOVEMENT=1` and the owning client with
-`COGITO_OWNER_PREDICTION=1`. Both switches default to off. The client reads its switch
-once into `net_config.gd`'s static `owner_prediction` field. A test can set it before
-spawn. Protocol 20 requires checkpoint v5 on both peers. Admission rejects a protocol 19 peer.
+The shipped Advanced controller uses fixed-tick authority movement on dedicated and listen
+servers and owner prediction on remote clients by default. Set `COGITO_AUTHORITY_MOVEMENT=0`
+on the server to use the chart-driven authority, or `COGITO_OWNER_PREDICTION=0` on a client
+to follow server poses. An explicit `1` enables either setting. The reliable owner spawn
+advertises whether this incarnation has a movement kernel. A client creates its predictor
+only when the server advertises it and the local prefab supplies a matching profile.
+An opted-out server continues sending authoritative poses and 68-byte fallback checkpoints.
+Protocol 20 uses checkpoint v5 (568 bytes for an eligible tick).
 Physics defaults to 60 Hz, pose publication to 25 Hz and remote interpolation to 100 ms. A listen host runs its own authority movement once.
 
 The latest accepted private checkpoint replaces the queued one. At the beginning of the
 next owner physics tick the client compares its stored post-state at the acknowledged
-sequence. The thresholds are 2 cm for position, 0.10 m/s for velocity and 1 cm for eye
-and head displacement. The remaining integration state, timers, contacts, posture,
-permissions and tuning must agree. A newer server tick can repeat an ack. A held,
-expired or skipped input, changed generation or discontinuity counter requires a restore.
+sequence. Compare the full error against that post on every ack. A match retires history
+without moving the live simulation toward the server. Consequently three successive
+6 mm errors in the same direction fit the position budget, and the fourth restores at
+24 mm. A newer server tick can repeat an ack. Held, neutral or skipped input, a changed
+generation, a discontinuity or a new support segment requires reconciliation.
+
+| Checkpoint fields | Matching rule |
+|---|---|
+| Transform origin | Euclidean distance ≤ 0.02 m. |
+| Velocity, requested, main, last and support velocity, `gravity_vec`, current, jump-target and bunny-hop speeds | ≤ 0.10 m/s. The gravity accumulator is already multiplied by the fixed step. |
+| Head position and offset, local support point, ledge target, previous Y | ≤ 0.01 m. The simulation head is compared in every mode. |
+| Eye position | Compare Y within 0.01 m in ladder, swim, ledge and roll. These modes consume the vertical eye offset. Ground head bob and lateral camera animation are presentation. |
+| Root and body basis, direction, gravity axis, floor and wall normals | ≤ 0.001 vector distance, using the largest column distance for bases. For unit axes this is about 0.057°, or 1 mm lateral error per metre. Column distance also detects changes in scale. |
+| Body and neck yaw, head pitch | Shortest angular distance ≤ 0.001 rad, including across ±π. |
+| Analog input and slide vectors, speed multiplier | ≤ 0.001 in normalized input or multiplier units. A multiplier change on the server also advances the exact modifier generation. |
+| Gravity, current interpolation rate | ≤ 0.10 m/s² and 0.001/s respectively. Over one second the gravity tolerance corresponds to the velocity budget. |
+| Movement stamina | ≤ 0.000001 attribute unit for arithmetic noise. Empty/low, sprint-entry, jump-affordability and full-value decisions must match even within that epsilon. The checkpoint uses f64. |
+| Slide, jump and regeneration time remaining | ≤ one physics tick in seconds. The codec stores fractional ticks as f64. Stopped/active flags, roll ticks and ladder ticks are exact. |
+| All flags, mode, posture, ladder contact, ledge stage/key, support key | Exact. |
+| Adapter permissions, pending force and stamina tuning | Compare successive authoritative checkpoints exactly at their wire precision. A pending-force vector is f32 and the eight tuning values are f64. These values come from the server on both sides of this comparison. |
 
 On a match the owner retires the acknowledged commands. On a mismatch it restores the
 checkpoint and advances the contiguous pending commands through the shared movement tick,
@@ -567,25 +587,36 @@ A dropped datagram still has a local history entry. Replay uses private movement
 without changing the HUD attribute, playing audio, issuing gameplay requests, simulating rigid props, firing weapons or advancing input sequence numbers.
 
 The 128-slot ring is separate from the four-command send buffer. The replay budget is
-24 commands per correction. The controller records suspension counts in `reasons`.
+24 commands per correction. The diagnostic `reasons` dictionary counts changes of reason,
+including waits while already suspended. The measurement counts active suspensions separately.
 Set `COGITO_PREDICTION_DEBUG=1` on the client to print transitions and their sequences.
 
 | Reason | Condition |
 |---|---|
 | `fallback` | Authority supplied a legacy checkpoint, including free fall and seats. |
-| `unsupported_mode`, `unsupported_contact` | Pending force, invalidated pose, unsupported mode, dynamic obstruction, or a crossing command awaiting acknowledgement. |
+| `unsupported_mode`, `unsupported_contact` | Pending force, invalidated pose, unsupported mode, dynamic obstruction, or a failed contact solve. |
+| `awaiting_boundary_ack` | A scoped checkpoint predates the boundary command. After a failed resume require the server to cover the attempted tail and one more input horizon of the same length (at most 24 additional commands). |
 | `dynamic_support` | The floor is a rigid body, NPC or unknown kinematic support, or the checkpoint attachment cannot be resolved in this room. Resume from an eligible checkpoint covering the crossing command. |
 | `moving_ledge` | A capture on an unsupported collider or a continued climb observes nonzero linear or angular physics velocity in the bound room, or a restored collider is unavailable. Authority advances the moving target in Advanced. Resume from an eligible checkpoint covering the crossing command. |
 | `missing_history`, `replay_budget` | A command or required post-state has expired, the tail has a hole or replay needs more than 24 ticks. |
 | `impossible_ack`, `physics_rate` | The ack exceeds the live sequence, regresses within the scope or the physics rates differ. |
-| `mode_transition` (PR4) | The generation changed while prediction was active. An intervening legacy pose may have been lost. Reset the visual offset and audio phase before resuming. |
+| `mode_transition` (PR4) | The generation changed while prediction was active. An intervening legacy pose may have been lost. Reset the audio phase and reconcile the rendered pose on resume. |
 | `travel` | The authority started preparing a transfer, or the owner received a load offer. |
 
 During suspension the owner follows the published position and head with the usual PR2
 smoothing and continues sending input while alive. An eligible checkpoint with a complete
 tail resumes prediction. After a local unsupported contact the ack must also cover the
-boundary command. Revision and life changes clear both histories, old effects and the
-visual offset. In-place respawn preserves the actor's sequence watermark. Removing an
+boundary command. Failed speculative posts are discarded and pending commands are retained.
+On an ordinary handoff the camera and mannequin keep their world-space visual offsets.
+Resume moves the simulation immediately and decays the visual error with the 50 ms half-life.
+The offset is capped at 0.25 m and the camera offset is checked against clearance. Errors
+over 1 m snap. The visual offsets do not enter predicted commands or the collision solve.
+A room-mounted, unanimated CogitoSwitch can use its bound stationary pose as collision
+geometry while its basis matches at engine precision, its displacement stays within 10 µm,
+and physics reports at most 0.00001 m/s and 0.00001 rad/s. This accommodates Jolt
+normalizing an authored lamp basis on its first tick. Authored constant velocity remains exact. A moved switch or
+an unsegmented moving parent retains the ordinary kinematic boundary. Revision and life
+changes clear both histories, old effects and the visual offset. In-place respawn preserves the actor's sequence watermark. Removing an
 avatar releases the query bodies and its scoped history.
 
 Each solve uses the standing or crouching prefab hull in the bound room's physics space.
@@ -593,7 +624,12 @@ Their query bodies stay on layer zero. Sweeps use the movement mask captured bef
 spawn clears the replica collider (33 in Advanced). The clearance query retains the
 prefab cast mask (3). Both exclude the actor and its held body. Replaying updates
 value states. The replica receives only the final live transform, and the physical
-carried object continues following the server anchor.
+carried object continues following the server anchor. Owner-side carry presentation for
+held props and corpse grips is deferred to a later release. Seats, vehicles and rigid-body
+footing stay server-driven. Standing on a loose body suspends prediction with
+`dynamic_support`. Static ledges, landing rolls and door-driven lifts and platforms
+use the same movement step as walking, sprinting, jumping, crouching, stairs, slides,
+ladders and swimming.
 
 Gameplay aims from the simulation head. Interaction and carry markers follow this eye.
 The camera and wieldable model share the rendered eye. A correction preserves visual
@@ -727,10 +763,9 @@ on the new clock seeds its cadence. Observers continue to use authoritative snap
 
 ### Fixed-tick authority movement (PR1b)
 
-The development switch defaults to OFF. Launch the authority with the environment variable
-`COGITO_AUTHORITY_MOVEMENT=1`. For a GUI listen session run
-`COGITO_AUTHORITY_MOVEMENT=1 nice -n 19 godot --path .` and host from the multiplayer menu.
-For dedicated add `--headless -- --server` to that command. The spawner checks the switch and
+The authority enables the kernel by default. For a comparison run, launch
+`COGITO_AUTHORITY_MOVEMENT=0 nice -n 19 godot --path .` and host from the multiplayer
+menu, or add `--headless -- --server` for a dedicated server. The spawner checks
 the prefab's movement profile after an authority avatar enters its room. Both topologies use
 the same controller. Owners send the existing four-frame command packets. With owner prediction disabled they follow the published poses.
 
@@ -1412,6 +1447,15 @@ Measured on the headless Godot 4.7.2 authority pinned to one logical CPU, with f
 | Listen | 4.52 ms (4.19–4.71 ms) | 69.88 ms |
 
 The two live rooms fit the 16.7 ms physics budget in these steady samples. The cold crossing exceeded it. Resource reads and disk publication run in the background. Constructing and attaching the PackedScene, binding its gameplay nodes and capturing a consistent tick still use the main thread. The headless run measures simulation and callback latency; it does not measure GPU frame time.
+
+### Release measurements
+
+Run `python3 tools/check_multiplayer.py --scenario measure --players 4 --rtt 150 --seconds 60`
+after import. Each run starts a dedicated authority and fresh clients in Laboratory, then
+Lobby. The scripted route turns, walks, sprints, jumps and crouches. The first Lobby owner
+operates and rides the lift before joining the route. The tool writes a Markdown table and
+a matching JSON file under `reports/`. Use ENet on the release hardware. Add
+`--file-transport` for a socket-free smoke run. See the [full matrix and metric definitions](testing.md#release-measurement).
 
 ### Resident rooms on one CPU
 

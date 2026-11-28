@@ -17,6 +17,7 @@ GODOT_BIN=/usr/bin/godot tools/check.sh tests smoke
 | warnings | [gd_warnings.py](../tools/gd_warnings.py) collects the Godot language server's diagnostics and compares them with [gd_warnings_baseline.json](../tools/gd_warnings_baseline.json). |
 | tests | The bundled gdUnit4 runner discovers suites in [tests](../tests). They cover elements, saves, NPCs, items, quests, UI and objects. The wrapper creates a temporary user data directory and deletes it afterwards. |
 | smoke | The main menu, Lobby and Laboratory run headless for 400 frames each. The wrapper checks their output for script, parse and engine errors, with exceptions for known shutdown leak messages. |
+| multiplayer | Dedicated and listen scenarios use default prediction. File-transport gates also exercise both opt-outs, a prediction client against an opted-out server, impairment and a one-owner measurement. |
 
 ## Run gdUnit4 directly
 
@@ -51,7 +52,8 @@ Each scenario compares all 40 positions and rotations at rest against the author
 (2 cm / 3°), counts received corpse-row bytes through the fall and checks another second
 of silence. The drag must move the body on an observer. The dedicated scenario adds a
 late joiner. Run the harness without the scenario selector for the full matrix and repeat
-with `COGITO_AUTHORITY_MOVEMENT=1 COGITO_OWNER_PREDICTION=1`. Omit `--file-transport`
+with `COGITO_AUTHORITY_MOVEMENT=0 COGITO_OWNER_PREDICTION=0` and then only
+`COGITO_OWNER_PREDICTION=0`. Omit `--file-transport`
 on a machine with loopback UDP to exercise ENet.
 
 ## Baselines and CI
@@ -119,7 +121,6 @@ speed on stop. Each observation precedes authority receipt and any new pose.
 A predicted `render_us` can precede `arrival_us`. The probe waits for both events
 before emitting the row and records the initial visible displacement in `render_delta` on
 this path.
-PR3 will require more than 1 mm forward on the sampled tick.
 
 ### Offline movement goldens
 
@@ -215,13 +216,13 @@ payload on its owner and observer for at least one second each. The two `PR2` li
 report bytes per simulated second, excluding the enclosing batch, RPC and transport
 headers. Each process also records its local decoded mode in `NET POS`. Run
 `nice -n 19 python3 tools/check_multiplayer.py --file-transport` for the socket-free
-suite and repeat with `COGITO_AUTHORITY_MOVEMENT=1`.
+suite and repeat with `COGITO_AUTHORITY_MOVEMENT=0`.
 
 
 ## Prediction PR3
 
 Run the full gdUnit and file-transport suites with both switches off, authority only,
-and both `COGITO_AUTHORITY_MOVEMENT=1` and `COGITO_OWNER_PREDICTION=1`. The dedicated
+and with both variables unset (the enabled defaults). The dedicated
 prediction fixture opts into both switches locally for its lifecycle and correction
 tests. The latency and normal session fixtures inherit the process settings.
 
@@ -342,3 +343,72 @@ in all three switch configurations. The dedicated owner and listen client operat
 Lobby lift's child switch, ride and jump off. The process harness checks the rider's
 height against the platform and requires the observer to see the jump. For UDP loopback
 run the same scenario without `--file-transport`.
+
+## Release measurement
+
+After importing the project, run this ENet matrix on the release machine with both movement
+variables unset. Each command measures both demo scenes for the requested number of seconds
+after all peers have loaded and received their owner baselines.
+
+```sh
+unset COGITO_AUTHORITY_MOVEMENT COGITO_OWNER_PREDICTION
+for n in 1 2 4 8; do
+    for rtt in 0 16 150; do
+        python3 tools/check_multiplayer.py --scenario measure --players "$n" --rtt "$rtt" --seconds 60 || exit 1
+    done
+done
+```
+
+For a socket-free smoke run use
+`python3 tools/check_multiplayer.py --scenario measure --file-transport --players 1 --rtt 16 --seconds 4`.
+Reports are timestamped Markdown and JSON pairs in `reports/`. Record the CPU model,
+core count, affinity and Godot build with the results. Keep file-bus and ENet numbers
+labelled by transport. These runs use one headless client process per player on the same host.
+
+For four and eight clients the fixture stages each arrival on a separate patch of clear
+floor near the authored player marker. The default `steady` drive alternates targets
+1.8 m either side of the starting point each second, with sprint, jump, walk, crouch and
+turns. The Lobby rider uses two targets on the landing by the lift. For the original
+PR9 quarter-turn drive through rigid props, add `--measure-route contacts`. This
+reproduces contact handoffs independently of the steady-route sample. One Lobby owner first operates the lift and stays attached for
+90 input ticks. The gate requires measured rider travel. ENet uses one delayed UDP
+relay per client. The file bus applies the existing
+seeded receiver schedule to the movement channel. Both use half the requested RTT each way,
+with up to 10 ms jitter at 150 ms.
+
+- Entity count includes registered level objects and spawned player avatars at window end.
+- Server tick time covers SceneTree physics-frame dispatch through the last physics callback.
+  The report also includes Godot’s peak physics-process monitor reading and the longest
+  wall-clock interval between physics frames. Times are in microseconds.
+- Owner replay time covers restoring the checkpoint and advancing outstanding commands.
+  Elapsed main-thread microseconds measure replay cost. The per-command distribution times
+  individual replayed steps. The per-tick distribution includes zero-cost ticks. The
+  per-correction distribution includes only restore attempts. Depth is measured in commands
+  and acknowledged position error in centimetres. JSON includes each sample count.
+  An empty distribution has null percentiles. Percentiles use nearest rank.
+- `restore_causes` counts the first mismatching key of each restore attempt, including
+  seeds, changed segments and server alignment events. Continuous keys include error
+  magnitudes in the units of the matching rule. A zero-depth restore still costs CPU.
+  `replays_per_min` uses owner wall time. `replay_pct` divides attempts by active
+  predicted physics ticks. `horizontal_m` is the distance travelled during the window.
+- `correction_cm` retains the PR9 per-attempt population, including zero for a seed
+  with no comparable post. `matched_ack_cm` measures position error on **every**
+  eligible, comparable ack, including matches. For a repeated ack whose ring entry has
+  retired, the comparison uses the previous authoritative post at that sequence. Compare both populations and their
+  sample counts when changing the number of replays.
+- `hard_resets` counts visual snaps beyond 1 m and explicit unsmoothed scope resets
+  of a running or suspended owner (such as travel or life changes). `suspensions`
+  counts transitions from active prediction to authority following, by entry reason.
+  `resumes` counts successful returns after a suspension. Initial installation is a seed.
+  Changes of reason while already suspended appear as `wait` in the event log.
+- Per-client `events` carries the authority tick, command sequence, route phase,
+  owner position, reason and collider path/class/layer when available. Authority
+  contact intervals are matched by server tick for fallback blocks. A blank collider
+  means the event has no observed contact at that tick (e.g. an ack wait).
+- File rates count serialized multiplayer payload bytes. ENet counts data segments at
+  each relay, including retransmitted payload and excluding transport headers and ACKs.
+  The server column sums transmitted payload for all clients. Owner checkpoint sizes
+  are reported separately in bytes.
+- The allocation suite measures transient Godot object construction around live prediction,
+  a forced 12-command replay and a committed authority solve. It uses ObjectID generation
+  counters on the pinned engine. Native heap calls during physics queries are separate.

@@ -75,6 +75,10 @@ var _serial := 0
 var _tick := 0
 var _physics_frame := -1
 var _elapsed := 0.0
+var _reader := NetOwnerState.Reader.new()
+var _writer := StreamPeerBuffer.new()
+var _eligible := NetOwnerState.new()
+var _fallback := NetOwnerState.new()
 
 
 func _ready() -> void:
@@ -426,7 +430,16 @@ func _create(
 	var local := id == _session.local_id
 	if not _prefab:
 		_prefab = load(AVATAR.PREFAB)
-	avatar.spawn(_prefab, _level, id, start, local, multiplayer.is_server(), travel.host.dedicated)
+	avatar.spawn(
+		_prefab,
+		_level,
+		id,
+		start,
+		local,
+		multiplayer.is_server(),
+		travel.host.dedicated,
+		initial_pose.get("authority_movement", false)
+	)
 	elements.track("avatar:" + id, avatar.actor)
 	avatar.actor.player_interaction_component.network_interactions = interactions
 	avatar.wield.actor = avatar.actor
@@ -471,7 +484,8 @@ func _observe_mode(avatar: AVATAR, tick: int) -> void:
 
 func _private_frame(avatar: AVATAR, public_frame: Dictionary, peer: int) -> Dictionary:
 	var frame := public_frame.duplicate()
-	var block := NetOwnerState.new()
+	var block := _eligible if avatar.checkpoint_eligible else _fallback
+	block.dynamic_support = false
 	block.binding = _bindings[peer]
 	block.life = avatar.lifetime
 	block.revision = avatar.revision
@@ -488,7 +502,7 @@ func _private_frame(avatar: AVATAR, public_frame: Dictionary, peer: int) -> Dict
 	elif avatar.actor.authority_movement:
 		block.dynamic_support = avatar.actor.authority_movement.dynamic_support
 	frame.ack = block.ack
-	frame.owner_state = NetOwnerState.encode(block)
+	frame.owner_state = NetOwnerState.encode(block, _writer)
 	return frame
 
 
@@ -496,7 +510,7 @@ func _owner_checkpoint(frame: Dictionary, life: int) -> NetOwnerState:
 	var wire: Variant = frame.get("owner_state")
 	if not wire is PackedByteArray:
 		return null
-	var block := NetOwnerState.decode(wire)
+	var block := _reader.read(wire)
 	if block and block.binding == world.binding() and block.life == life:
 		if block.revision == frame.revision and block.tick == frame.tick and block.ack == frame.ack:
 			return block
@@ -510,6 +524,7 @@ func _send_spawn(peer: int, id: String) -> void:
 	if peer == _peer_by_id[id]:
 		_observe_mode(avatar, Engine.get_physics_frames() if tick > _tick else _physics_frame)
 		frame = _private_frame(avatar, frame, peer)
+		frame.authority_movement = avatar.actor.authority_movement != null
 	var wield := avatar.wield
 	frame.wield = [wield.public_item, wield.light_on, wield.aiming]
 	var private := Attributes.capture(avatar.actor) if peer == _peer_by_id[id] else {}

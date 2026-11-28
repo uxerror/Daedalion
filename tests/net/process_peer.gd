@@ -67,7 +67,11 @@ func _ready() -> void:
 
 
 func _admitted_session() -> void:
-	if _args.has("--latency"):
+	if _args.has("--measure-scene"):
+		var probe := preload("process_measure.gd").new()
+		probe.args = _args
+		add_child.call_deferred(probe)
+	elif _args.has("--latency"):
 		add_child.call_deferred(preload("process_latency.gd").new())
 	elif _args.has("--travel"):
 		add_child.call_deferred(ProcessTravel.new())

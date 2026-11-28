@@ -351,7 +351,13 @@ func _exit_tree() -> void:
 
 
 func neutral_command(sequence: int) -> CogitoPlayerCommand:
-	var command := super.neutral_command(sequence)
+	var command: CogitoPlayerCommand
+	if owner_prediction:
+		command = owner_prediction.sample_command(sequence)
+		command.yaw = body.rotation.y
+		command.pitch = head.rotation.x
+	else:
+		command = super.neutral_command(sequence)
 	command.neck_yaw = neck.rotation.y
 	command.toggle_crouch = TOGGLE_CROUCH
 	return command
@@ -381,8 +387,18 @@ func _on_input_owner_changed() -> void:
 
 
 ## Capture on demand at a tick boundary. The live chart remains the owner of its state.
-func capture_movement_state() -> CogitoMovementState:
-	var state := CogitoMovementState.new()
+func capture_movement_state(state: CogitoMovementState = null) -> CogitoMovementState:
+	if not state:
+		state = CogitoMovementState.new()
+	else:
+		state.support_key = 0
+		state.support_velocity = Vector3.ZERO
+		state.support_local = Vector3.ZERO
+		state.roll_ticks = 0
+		state.ledge_key = 0
+		state.ledge_target = Vector3.ZERO
+		state.ledge_stage = CogitoMovementState.LedgeStage.RISE
+		state.regen_remaining = 0.0
 	var stamina := stamina_attribute as CogitoStaminaAttribute
 	state.transform = transform
 	state.body_basis = body.global_transform.basis

@@ -42,7 +42,12 @@ exits on animation_finished at its existing chart callback. With the shipped cli
 60 Hz physics, the golden roll spends 61 ticks in Rolling. On a local player the
 AnimationPlayer advances on idle frames, so a lower render rate can delay that exit.
 
-The online opt-in hook is `authority_movement_profile()`. Advanced matches its shipped
+For the shipped Advanced prefab the dedicated or listen server runs the fixed step by
+default. A remote owner predicts eligible ticks as soon as it has a server checkpoint.
+Set `COGITO_AUTHORITY_MOVEMENT=0` on the host or `COGITO_OWNER_PREDICTION=0` on the
+client for server-pose movement. A server without the kernel advertises that at spawn.
+
+The custom controller opt-in hook is `authority_movement_profile()`. Advanced matches its shipped
 scene and script. A different prefab or controller uses its own chart by default. A game
 using the same on-foot rules, chart events and standing/crouching shapes can opt in from
 its Advanced subclass by returning `capture_movement_profile()` from this hook. Return

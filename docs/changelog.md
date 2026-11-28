@@ -1,3 +1,27 @@
+# Daedalion 1.4.0
+
+This release adds multiplayer to the Advanced demo and keeps independent travel between levels.
+
+## Breaking changes
+
+- Multiplayer peers must match protocol 20 and the server’s content version. Eligible owners receive a 568-byte v5 movement checkpoint. See [Networking](networking.md#owner-checkpoint-protocol-20).
+- Multiplayer worlds use layout 1 with separate world, level and player records in the v2 JSON envelope. Solo slots keep their 1.3.1 format. Import a solo slot into a new world to designate its owner. See [Saves](saves.md#multiplayer-saves) and [world generations](save-format.md#multiplayer-world-generations).
+
+## Added
+
+- Host a listen session or join by address from the Multiplayer menu. Players can travel independently between Lobby and Laboratory. The Linux dedicated server includes a config, operator commands and a systemd unit. See [Networking](networking.md) and [Dedicated server](dedicated-server.md).
+- The server owns interactions, inventories, equipment, damage, respawns, NPC perception and combat. Players can carry rigid objects and drag replicated corpses by a grip. World checkpoints retain level state and personal progression across restarts. See [Networking](networking.md).
+- Owners predict on-foot motion, including stairs, slides, ladders, swimming, ledge climbs, landing rolls and door-driven moving supports. Corrections replay pending commands. See [Player controller](player-controller.md#movement-step).
+
+## Changed
+
+- Dedicated and listen servers run fixed-tick movement for the shipped Advanced prefab by default. Clients can opt out independently. See [owner prediction](networking.md#owner-prediction-and-replay-pr3pr8).
+- The [release measurement](testing.md#release-measurement) records tick time, replay cost, corrections and payload rates in both demo scenes.
+
+## Fixed
+
+- A prediction-enabled client follows server poses when the host disables the movement kernel. Reconnects and forced pose changes clear stale movement history. See [Networking](networking.md#owner-checkpoint-protocol-20).
+
 # Daedalion 1.3.1
 
 Bug fixes for NPC combat. No breaking changes; the save format is unchanged.

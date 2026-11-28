@@ -26,6 +26,10 @@ var world_from_room := Transform3D.IDENTITY
 var exclusions: Array[RID] = []
 var suspend_reason := "unsupported_contact"
 var _actor: CogitoPlayerAdvanced
+var _step := Tick.new()
+var _volume := Collision.Volumes.new()
+var _contact := Collision.Contact.new()
+var _blocked_command := CogitoPlayerCommand.new()
 
 
 func _init(actor: CogitoPlayerAdvanced, tuning: CogitoMovementProfile, mask: int) -> void:
@@ -39,7 +43,8 @@ func prepare() -> void:
 	var parent := _actor.get_parent_node_3d()
 	if parent and not _actor.top_level:
 		world_from_room = parent.global_transform
-	exclusions.assign([_actor.get_rid()])
+	exclusions.clear()
+	exclusions.append(_actor.get_rid())
 	for exception in _actor.get_collision_exceptions():
 		if is_instance_valid(exception):
 			exclusions.append(exception.get_rid())
@@ -50,9 +55,10 @@ func prepare() -> void:
 
 
 func advance(s: CogitoMovementState, raw: CogitoPlayerCommand, block: NetOwnerState) -> bool:
+	room.boundary_collider_id = 0
 	var cmd := raw
 	if block.input_blocked:
-		cmd = CogitoPlayerCommand.new()
+		cmd = _blocked_command
 		cmd.yaw = s.body_yaw
 		cmd.pitch = s.head_pitch
 		cmd.neck_yaw = s.neck_yaw
@@ -74,14 +80,16 @@ func advance(s: CogitoMovementState, raw: CogitoPlayerCommand, block: NetOwnerSt
 			if edge == ACTION.CROUCH:
 				s.try_crouch = not s.try_crouch
 	s.cast_blocked = (s.cast_enabled or not s.standing_shape) and room.blocked(origin)
-	var step := Tick.new()
-	var volume := room.volumes(origin, s, cmd)
+	var step := _step
+	var volume := room.volumes(origin, s, cmd, _volume)
 	suspend_reason = "unsupported_contact"
 	step.request(s, profile, cmd, dt, volume)
 	if volume.moving_ledge and s.mode == MODE.LEDGE_CLIMBING:
 		suspend_reason = "moving_ledge"
+		if is_instance_valid(volume.observation.collider):
+			room.boundary_collider_id = volume.observation.collider.get_instance_id()
 		return false
-	var hit := room.solve(origin, s, profile, dt)
+	var hit := room.solve(origin, s, profile, dt, _contact)
 	if hit.legacy:
 		suspend_reason = "dynamic_support" if hit.dynamic_floor else "unsupported_contact"
 		return false

@@ -57,7 +57,8 @@ func spawn(
 	start: Transform3D,
 	local: bool,
 	server: bool,
-	dedicated := false
+	dedicated := false,
+	server_kernel := false
 ) -> void:
 	actor = prefab.instantiate()
 	actor.name = "Player_" + id.sha256_text()
@@ -125,12 +126,12 @@ func spawn(
 	root.add_child(actor)
 	if not dedicated and (not server or not local):
 		movement_audio = MovementAudio.new(actor)
-	if local and not server and Config.owner_prediction:
+	if local and server_kernel and Config.owner_prediction:
 		var profile := actor.authority_movement_profile()
 		if profile:
 			prediction = Prediction.new(actor, profile, authored_mask, movement_audio)
 			actor.owner_prediction = prediction
-	if server and OS.get_environment("COGITO_AUTHORITY_MOVEMENT") == "1":
+	if server and Config.movement_enabled("COGITO_AUTHORITY_MOVEMENT"):
 		var profile := actor.authority_movement_profile()
 		if profile:
 			actor.authority_movement = preload("net_authority_movement.gd").new(actor, profile)
@@ -174,7 +175,10 @@ func receive(frame: Dictionary, checkpoint: NetOwnerState = null) -> bool:
 			clear_baseline(not last.is_empty())
 			_baseline = checkpoint
 		revision = frame.revision
-		if not prediction or not prediction.active:
+		var snap := not prediction or not prediction.active
+		if prediction and prediction.following_authority:
+			snap = prediction.fallback_snap(frame.position)
+		if snap:
 			apply_pose(frame, 1.0, force_look)
 			actor.reset_physics_interpolation()
 	if prediction:
@@ -218,7 +222,11 @@ func present(delta: float, render_tick := -1.0) -> void:
 			frame.position = actor.get_parent_node_3d().to_local(point)
 	if not frame.is_empty():
 		var weight := 1.0 - exp(-22.0 * delta) if actor.is_local_presentation else 1.0
+		if prediction and prediction.fallback_snap(frame.position):
+			weight = 1.0
 		apply_pose(frame, weight, false)
+		if prediction and prediction.following_authority:
+			prediction.render(delta)
 
 
 ## Applies the snapshot to the body, animated rig and first-person eye height.

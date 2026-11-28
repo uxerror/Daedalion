@@ -29,7 +29,11 @@ const CLI_FLAGS := [
 	"--respawn-delay",
 ]
 
-static var owner_prediction := OS.get_environment("COGITO_OWNER_PREDICTION") == "1"
+static var owner_prediction := movement_enabled("COGITO_OWNER_PREDICTION")
+
+
+static func movement_enabled(variable: String) -> bool:
+	return OS.get_environment(variable) != "0"
 
 
 ## Default content version: the bundled plugin.cfg `version` (a test keeps them equal).

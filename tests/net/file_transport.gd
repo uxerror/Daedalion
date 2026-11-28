@@ -21,6 +21,7 @@ class FilePeer:
 	var incoming: Array = []
 	var serial := 0
 	var received_bytes := 0
+	var sent_bytes := 0
 
 	func _init(folder: String, number: int) -> void:
 		directory = folder
@@ -102,6 +103,7 @@ class FilePeer:
 	func _put_packet_script(buffer: PackedByteArray) -> Error:
 		for other: int in links:
 			if other == target or (target <= 0 and other != -target):
+				sent_bytes += buffer.size()
 				var batch: Array = outgoing.get_or_add(other, [])
 				batch.append([id, channel, mode, buffer.duplicate()])
 		return OK

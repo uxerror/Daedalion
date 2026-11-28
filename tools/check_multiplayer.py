@@ -41,6 +41,95 @@ def available_port():
         return probe.getsockname()[1]
 
 
+def physical_cores():
+    info = Path("/proc/cpuinfo")
+    if not info.exists():
+        return None
+    cores = set()
+    for stanza in info.read_text().split("\n\n"):
+        fields = dict(line.split(":", 1) for line in stanza.splitlines() if ":" in line)
+        fields = {key.strip(): value.strip() for key, value in fields.items()}
+        if "core id" in fields:
+            cores.add((fields.get("physical id"), fields["core id"]))
+    return len(cores) or None
+
+
+def percentiles(values, digits=3):
+    """Nearest rank. Empty correction windows retain null percentiles."""
+    values = sorted(values)
+    return {"n": len(values), **{
+        name: round(values[math.ceil(len(values) * q) - 1], digits) if values else None
+        for name, q in (("p50", .5), ("p95", .95), ("p99", .99), ("max", 1))
+    }}
+
+
+def report_measurements(reports):
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    directory = ROOT / "reports"
+    directory.mkdir(exist_ok=True)
+    first = reports[0]
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", prefix=f"measure-{stamp}-",
+                                     dir=directory, delete=False) as output:
+        json.dump(reports, output, indent=2)
+        output.write("\n")
+        root = Path(output.name)
+    def stats(data, keys=("p50", "p95", "p99", "max")):
+        return "/".join(str(data[k]) if data[k] is not None else "—" for k in keys)
+    rows = [f"{first['cpu']}, {first['physical_cores'] or 'unknown'} cores / {first['logical_cpus']} logical CPUs, Godot {first['godot']}, "
+            f"{first['transport']}, {first['route']} route, {first['players']} players, {first['rtt_ms']} ms RTT.",
+            "", "| Scene | Entities | Server tick µs p50/p95/p99/max | Engine peak µs | Worst interval µs | Egress B/s |",
+            "|---|---:|---|---:|---:|---:|"]
+    for run in reports:
+        rows.append(f"| {run['scene']} | {run['entities']} | {stats(run['server_tick_us'])} | "
+                    f"{run['engine_peak_us']} | {run['worst_frame_interval_us']} | {run['server_egress_Bps']} |")
+    rows += ["", "| Scene | Client | Replay µs/correction p50/p95/p99/max | Replay µs/tick "
+             "p50/p95/p99/max | Replay µs/command p50/p95/p99/max | Depth p50/p95/max | Correction cm p50/p95/p99/max | Replays/min (%) | Hard resets / resumes | "
+             "Suspensions | Up/down B/s | Checkpoint B | Lift m |", "|---|---|---|---|---|---|---|---:|---:|---|---|---|---:|"]
+    for run in reports:
+        for c in run["clients"]:
+            rows.append(f"| {run['scene']} | {c['client']} | {stats(c['replay_per_correction_us'])} | "
+                        f"{stats(c['replay_per_tick_us'])} | {stats(c['replay_per_command_us'])} | {stats(c['depth'], ('p50','p95','max'))} | "
+                        f"{stats(c['correction_cm'])} | {c['replays_per_min']} ({c['replay_pct']}) | "
+                        f"{c['hard_resets']}/{c['resumes']} | "
+                        f"{json.dumps(c['suspensions'])} | {c['up_Bps']}/{c['down_Bps']} | "
+                        f"{c['checkpoint_B']} | {c['lift_m']} |")
+    rows += ["", "| Scene | Client | Matched acks | Error cm p50/p95/p99/max | Horizontal m | First restore causes (count) |",
+             "|---|---|---:|---|---:|---|"]
+    for run in reports:
+        for client in run["clients"]:
+            ack = client["matched_ack_cm"]
+            causes = {k: v["n"] for k, v in client["restore_causes"].items()}
+            rows.append(f"| {run['scene']} | {client['client']} | {ack['n']} | {stats(ack)} | "
+                        f"{client['horizontal_m']} | {json.dumps(causes)} |")
+    root.with_suffix(".md").write_text("\n".join(rows) + "\n")
+    print(*rows, sep="\n")
+    print("PASS measurement:", root.with_suffix(".json").relative_to(ROOT))
+
+
+def enet_payload(data):
+    """Count data segments in an uncompressed ENet datagram, excluding protocol headers."""
+    command_sizes = (0, 8, 48, 44, 8, 4, 6, 8, 24, 8, 12, 16, 24)
+    payload_offsets = {6: 4, 7: 6, 8: 6, 9: 6, 12: 6}
+    header = int.from_bytes(data[:2], "big")
+    if header & 0x4000:
+        raise ValueError("cannot meter a compressed ENet packet")
+    pos = 4 if header & 0x8000 else 2
+    total = 0
+    while pos < len(data):
+        command = data[pos] & 15
+        if not 0 < command < len(command_sizes):
+            raise ValueError(f"unknown ENet command {command}")
+        length = 0
+        if command in payload_offsets:
+            offset = pos + payload_offsets[command]
+            length = int.from_bytes(data[offset:offset + 2], "big")
+        total += length
+        pos += command_sizes[command] + length
+    if pos != len(data):
+        raise ValueError("incomplete ENet datagram")
+    return total
+
+
 class DelayRelay:
     """One loopback owner. Delay real ENet datagrams without changing their contents."""
 
@@ -51,6 +140,9 @@ class DelayRelay:
         self.port = self.sock.getsockname()[1]
         self.running = threading.Event()
         self.running.set()
+        self.meter_until = 0
+        self.meter_error = None
+        self.payload = [0, 0]
         self.profile(0)
         self.thread = threading.Thread(target=self.forward, daemon=True)
         self.thread.start()
@@ -59,6 +151,9 @@ class DelayRelay:
         # Queue entries retain their old statistics across a profile boundary.
         self.link = (rtt / 2000, 0.010 if rtt >= 100 else 0.0,
                      [random.Random(140), random.Random(141)], [[0.0, 0], [0.0, 0]])
+
+    def meter(self, seconds):
+        self.meter_until = time.monotonic() + seconds
 
     def forward(self):
         pending = []
@@ -77,6 +172,11 @@ class DelayRelay:
                 if source != self.server:
                     owner = source
                 down = int(source == self.server)
+                if time.monotonic() < self.meter_until:
+                    try:
+                        self.payload[down] += enet_payload(data)
+                    except ValueError as error:
+                        self.meter_error = str(error)
                 dest = owner if down else self.server
                 if dest:
                     delay, jitter, rng, stats = self.link
@@ -95,6 +195,7 @@ class Role:
     def __init__(self, directory, args, events, expected_failure, bus):
         self.directory = directory
         self.home = directory / "data"
+        self.cli_server = "--server" in args
         self.stop_file = directory / "stop"
         self.events = deque()
         self.samples = deque(maxlen=600)
@@ -286,7 +387,10 @@ class Scenario:
 
     def stop(self, role):
         role.stopping = True
-        role.stop_file.touch()
+        if role.cli_server:
+            role.kill()
+        else:
+            role.stop_file.touch()
         while not role.exited:
             self.next_line()
 
@@ -789,7 +893,7 @@ class Scenario:
         print("PASS dedicated friendly_fire=false: protected rifle target, fire damage, burnout, late join")
 
     def owner_baseline(self, owner, observer, roster):
-        expected = "eligible" if os.getenv("COGITO_AUTHORITY_MOVEMENT") == "1" else "fallback"
+        expected = "eligible" if os.getenv("COGITO_AUTHORITY_MOVEMENT") != "0" else "fallback"
         for role, own_name in ((owner, "Ada"), (observer, "Ben")):
             start = self.sample(role, lambda s: set(s["pose_bytes"]) == set(roster)
                                 and s["owner_mode"] == expected)
@@ -1132,7 +1236,7 @@ class Scenario:
 
     @staticmethod
     def prediction_enabled():
-        return all(os.getenv(key) == "1" for key in ("COGITO_AUTHORITY_MOVEMENT", "COGITO_OWNER_PREDICTION"))
+        return all(os.getenv(key) != "0" for key in ("COGITO_AUTHORITY_MOVEMENT", "COGITO_OWNER_PREDICTION"))
 
     def prediction(self):
         for dedicated in (True, False):
@@ -1162,13 +1266,7 @@ class Scenario:
             if self.pose(self.server, names)["predicted"]:
                 raise CheckFailed("authority allocated owner prediction")
             for role in reversed(viewers):
-                if role is self.server and dedicated and not self.file_transport:
-                    # A real --server has no fixture stop file; stop it like the other ENet scenarios.
-                    role.kill()
-                    while not role.exited:
-                        self.next_line()
-                else:
-                    self.stop(role)
+                self.stop(role)
         print("PASS prediction: dedicated and listen, dropped jump tap, movement and observer agreement")
 
     def prediction_boundaries(self):
@@ -1307,6 +1405,97 @@ class Scenario:
             deltas.append(round(pose["actors"]["Ada"][2] - height, 4))
         return deltas
 
+    def measure(self, players, rtt, seconds, route):
+        reports = []
+        for scene in ("COGITO_4_Laboratory", "COGITO_3_Lobby"):
+            self.timeout_seconds = 90 + seconds + 6 * players
+            self.deadline = time.monotonic() + self.timeout_seconds
+            self.port = 17777 if self.file_transport else available_port()
+            if self.file_transport:
+                self.bus = self.directory / scene
+                self.bus.mkdir()
+            extra = ("--measure-scene", f"res://addons/cogito/DemoScenes/{scene}.tscn",
+                     "--players", str(players), "--rtt", str(rtt), "--seconds", str(seconds),
+                     "--measure-route", route)
+            self.server = self.fixture("Server", "authority", extra=extra, world=scene)
+            self.wait_line(self.server, lambda s: s.startswith("NET READY"))
+            port = self.port
+            clients, relays = [], []
+            with contextlib.ExitStack() as cleanup:
+                for index in range(players):
+                    if not self.file_transport:
+                        relay = DelayRelay(port)
+                        relays.append(relay)
+                        cleanup.callback(relay.close)
+                        relay.profile(rtt)
+                        self.port = relay.port
+                    client = self.fixture(f"P{index+1}", "client", extra=extra)
+                    clients.append(client)
+                    self.wait_line(client, lambda s: s.startswith("NET STATE "))
+                roles = [self.server, *clients]
+                for role in roles:
+                    self.wait_line(role, lambda s: s == "NET MEASURE READY")
+                time.sleep(1)  # drain spawn baselines and the rider's placement correction
+                for relay in relays:
+                    relay.meter(seconds)
+                for role in roles:
+                    (role.directory / "measure").touch()
+                def result(role):
+                    line = self.wait_line(role, lambda s: s.startswith("NET MEASURE RESULT "))
+                    return json.loads(line.removeprefix("NET MEASURE RESULT "))
+                server = result(self.server)
+                owners = []
+                for i, client in enumerate(clients):
+                    data = result(client)
+                    if relays:
+                        up, down = relays[i].payload
+                        if relays[i].meter_error:
+                            raise CheckFailed(relays[i].meter_error)
+                        data["sent_Bps"], data["received_Bps"] = up / seconds, down / seconds
+                    if data["predictor_installed"] != self.prediction_enabled():
+                        raise CheckFailed(f"unexpected movement negotiation for P{i+1}")
+                    if not data["checkpoint_bytes"] or min(data["sent_Bps"], data["received_Bps"]) <= 0:
+                        raise CheckFailed(f"missing owner checkpoint or traffic for P{i+1}")
+                    if scene.endswith("Lobby") and i == 0 and data["rider_travel_m"] < 0.2:
+                        raise CheckFailed("Lobby owner did not ride the moving lift")
+                    contacts = server["contacts"].get(f"P{i+1}", [])
+                    for event in data["events"]:
+                        if not event["collider"]:
+                            event["collider"] = next((c["collider"] for c in contacts
+                                                      if c["start"] <= event["tick"] <= c["end"]), "")
+                    owners.append({
+                        "client": f"P{i+1}", "predicted_ticks": data["predicted_ticks"], "up_Bps": round(data["sent_Bps"]),
+                        "down_Bps": round(data["received_Bps"]), "checkpoint_B": data["checkpoint_bytes"],
+                        "replay_per_tick_us": percentiles(data["replay_us"]),
+                        "replay_per_command_us": percentiles(data["step_us"]),
+                        "replay_per_correction_us": percentiles(data["corrections_us"]),
+                        "depth": percentiles(data["depth"]), "correction_cm": percentiles(data["error_cm"]),
+                        "matched_ack_cm": percentiles(data["ack_cm"]), "horizontal_m": round(data["walked_m"], 2),
+                        "hard_resets": data["hard_resets"], "suspensions": data["suspensions"],
+                        "restore_causes": {k: percentiles(v, 12) for k, v in data["causes"].items()},
+                        "resumes": data["resumes"], "replays_per_min": round(len(data["depth"]) * 60 / data["seconds"], 2),
+                        "replay_pct": round(100 * len(data["depth"]) / data["predicted_ticks"], 3)
+                        if data["predicted_ticks"] else None, "events": data["events"], "authority_contacts": contacts,
+                        "owner_seconds": data["seconds"], "lift_m": round(data["rider_travel_m"], 3),
+                    })
+                if self.prediction_enabled() and not all(c["predicted_ticks"] for c in owners):
+                    raise CheckFailed(f"no predicted movement during the route in {scene}")
+                egress = (sum(r.payload[1] for r in relays) / seconds if relays else server["sent_Bps"])
+                reports.append({
+                    "scene": scene, "route": route, "players": players, "rtt_ms": rtt, "seconds": server["seconds"],
+                    "transport": "file" if self.file_transport else "enet", "cpu": server["cpu"],
+                    "logical_cpus": server["logical_cpus"], "physical_cores": physical_cores(), "affinity": sorted(os.sched_getaffinity(0))
+                    if hasattr(os, "sched_getaffinity") else None, "godot": server["godot"],
+                    "prediction_requested": os.getenv("COGITO_OWNER_PREDICTION") != "0",
+                    "kernel_requested": os.getenv("COGITO_AUTHORITY_MOVEMENT") != "0",
+                    "entities": server["entities"], "server_tick_us": percentiles(server["ticks_us"]),
+                    "worst_frame_interval_us": server["worst_interval_us"], "engine_peak_us": server["engine_peak_us"],
+                    "server_egress_Bps": round(egress), "clients": owners,
+                })
+                for role in reversed(roles):
+                    self.stop(role)
+        report_measurements(reports)
+
     def latency(self):
         self.timeout_seconds = 60
         self.deadline = time.monotonic() + self.timeout_seconds
@@ -1444,17 +1633,26 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     scenarios = ("dedicated", "listen", "friendly_fire_off", "npc_dedicated", "npc_listen",
                  "persistent_dedicated", "persistent_listen", "travel_dedicated", "travel_listen",
-                 "residency_dedicated", "menus", "latency", "prediction", "prediction_boundaries")
+                 "residency_dedicated", "menus", "latency", "prediction", "prediction_boundaries", "measure")
     parser.add_argument("--scenario", choices=scenarios)
     parser.add_argument("--file-transport", action="store_true", help="use a socket-free packet bus")
     parser.add_argument("--survival-only", action="store_true", help="run only MP5 scenarios")
+    parser.add_argument("--players", type=int, choices=(1, 2, 4, 8), default=1)
+    parser.add_argument("--rtt", type=int, choices=(0, 16, 150), default=16)
+    parser.add_argument("--measure-route", choices=("steady", "contacts"), default="steady",
+                        help="bounded steady route or original PR9 contact stress drive")
+    parser.add_argument("--seconds", type=int, help="measurement seconds per demo room (default 60, gate 4)")
     args = parser.parse_args()
+    if args.seconds is not None and args.seconds < 3:
+        parser.error("--seconds must be at least 3 for the lift and walking route")
     for name in ([args.scenario] if args.scenario else scenarios[:3] if args.survival_only else scenarios):
         started = time.monotonic()
         with tempfile.TemporaryDirectory(prefix=f"cogito-{name}-") as directory:
             scenario = Scenario(Path(directory), args.file_transport)
             try:
-                if args.survival_only and name != "friendly_fire_off":
+                if name == "measure":
+                    scenario.measure(args.players, args.rtt, args.seconds or (60 if args.scenario else 4), args.measure_route)
+                elif args.survival_only and name != "friendly_fire_off":
                     scenario.survival(listen=name == "listen")
                 else:
                     getattr(scenario, name)()

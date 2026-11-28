@@ -6,7 +6,7 @@
 
 | Topic | Decision |
 |---|---|
-| Movement | Server-authoritative movement, immediate local look, interpolated remote players. The API keeps an input-sequence/ack hook so client prediction can be added later. |
+| Movement | Server-authoritative movement, immediate local look, interpolated remote players. PR9 enables owner prediction and bounded replay on the shipped Advanced prefab. |
 | Identity | Server-issued player ID; the client stores a key and proves possession on reconnect. A hook lets a game plug in its own account system. |
 | Death | Individual respawn at a checkpoint with inventory kept. Games can override the policy. Offline keeps reload-after-death. |
 | Death and respawn (2026-11-25) | A dead player sees a private death screen; its Respawn button unlocks after a server-configured delay (default 10 s). The player respawns at separately authored, level-scoped respawn points; a replaceable selection policy decides which one (the default picks among the enabled points of the player's current level, falling back to the level's player spawn). Games may replace the policy or the death screen freely. |
@@ -133,7 +133,7 @@ Use a thin `CogitoNet` facade over Godot’s high-level multiplayer API. Game co
 - **Role and identity.** Keep `peer_id` for one connection, `player_id` for one durable player record in a world and `entity_id` for one live avatar. A respawn may replace the avatar. A reconnect may change both peer and avatar. The server binds an authenticated identity to a peer before spawning. Default to a server-issued opaque player ID bound to proof of possession of a client key, with a fresh challenge on reconnect. Games can supply an account provider. A display name, claimed ID or save filename grants no ownership. Reject a second live login by default.
 - **Spawn.** Load the level, index authored objects, authenticate, select a clear spawn/connector position, create the authoritative player, restore its record or grant starter items once, then enable replication and input. A listen host takes this same path locally. Dedicated starts with an empty roster. Give each spawned player a stable network node name and private inventory/attribute instances. On disconnect clear input, holds, seats, carry and container sessions, capture the player, then despawn.
 - **Movement.** The local controller samples normalized movement axes, body yaw, aim pitch, held buttons and numbered action edges. The server consumes bounded commands at fixed physics ticks and acknowledges the last sequence in its snapshots. Send recent edges redundantly and consume each once. Expire stale input to neutral. Drive Advanced’s locomotion, collision, stairs, swim, climb, posture and push chart from these commands. A remote presentation rig interpolates between timestamped snapshots.
-- **Prediction default.** Apply local look, crosshair and input feedback immediately. Ship authoritative translation with smoothing in 1.4. Full movement rollback would need reproducible chart timers, moving platforms, pushes, element locks, seat exits and animation-dependent transitions. The cost of the simpler default is visible movement latency at internet RTT. Expose input sequence, authoritative tick and acknowledged frame so a game can add bounded movement prediction and reconciliation. Teleports, respawns and level changes clear interpolation history.
+- **Prediction default.** The 1.4 owner predicts eligible on-foot commands and reconciles against the authority checkpoint. Teleports, respawns and travel clear history. Seats, vehicles and rigid footing use authoritative poses. The [prediction plan](prediction-plan.md) records coverage, limits and handoffs.
 - **Local menus.** Opening inventory, a readable, a keypad, the wheel, pause or death UI affects one player. A menu sends neutral movement and releases held actions. World time continues. Death releases owned interactions and opens only the victim’s UI. Default respawn is server-approved at a game-selected safe checkpoint with retained inventory. Keep offline reload-after-death behavior.
 
 ### Entity identity, commands and effects
@@ -270,10 +270,21 @@ Each row has at most two implementation batches. Sizes are relative engineering 
 |---|---|---|
 | MP0 | Native ENet, application-configured capacity, one local player per client, game-supplied identity-provider hook | A demo limit must never become a fixed-size roster, spawn limit or save format. Test a roster larger than the demo default. |
 | MP0 | Key-bound persistent identity, one active login per identity, explicit world import ownership | Reconnect must survive a new peer ID and server restart. Decide how the game recovers a lost client credential. |
-| MP1 | Server movement, immediate local look, interpolated bodies, optional future prediction | **MP1 is the riskiest stage.** Controller input, physics, camera, UI, chart callbacks and animation timing meet in the same prefab. Sign off on real Advanced movement on dedicated and at representative RTT before expanding gameplay coverage. |
+| MP1 | Server movement, immediate local look, interpolated remote bodies, owner prediction by default since PR9 | **MP1 is the riskiest stage.** Controller input, physics, camera, UI, chart callbacks and animation timing meet in the same prefab. Sign off on real Advanced movement on dedicated and at representative RTT before expanding gameplay coverage. |
 | MP2–MP4 | Atomic world actions, actor-addressed UI, one carrier/seat occupant, revisioned shared containers | The main failure mode is a correct-looking visual with duplicated currency, damage or items. Acceptance must compare authoritative state and count side effects. |
 | MP5–MP7 | Individual respawn, retained inventory, zone-based authoritative visibility, simulation continues outside interest | Games can override death penalties and stealth sampling. Listen and dedicated must agree on gameplay outcomes with rendering disabled. |
 | MP8 | Shared quests by default, personal opt-in, explicit party inventory policy | Resolved 2026-11-26: count disconnected holdings for uniqueness, count connected eligible members for live possession objectives, preserve already completed objectives. |
 | MP9 | One transactional generation, flat profile files, 60 s dirty autosave, checkpoint on leave, explicit solo import | MP9 has the highest data-loss impact. Require restart and fault-injection evidence for a world containing offline profiles before release. |
 | MP10 | Independent per-player travel between levels; the server keeps every occupied level live plus an emptied level for a grace period (section 0 "Levels"). A validated connector moves only the triggering player by default, with a game hook for group travel, quorum or host approval. | Slow loading, failed targets and empty servers must not deadlock travel or stall players in other levels. A listen host simulates levels it does not render; measure the cost on 1 vCPU. |
-| MP11 | Direct connections and operator-managed deployment for 1.4 | Publish tested player/entity counts, bandwidth and tick-time measurements with the test scene and hardware. The engine transport ceiling is not a promised playable capacity. |
+| MP11 | Direct connections and operator-managed deployment for 1.4 | Publish the [release measurement](../testing.md#release-measurement) from `tools/check_multiplayer.py --scenario measure` with the tested player/entity counts, bandwidth, tick times, scenes and hardware. The engine transport ceiling is not a promised playable capacity. |
+
+### MP11 release hardware measurements
+
+**To be filled by the maintainer's hardware run.** Paste the ENet tables from
+`reports/measure-*.md` and retain their JSON companions. Run both rooms at 0, 16 and
+150 ms RTT for 1, 2, 4 and 8 players. See [reproduction and units](../testing.md#release-measurement).
+
+| Hardware and Godot | Scene | Players / entities | RTT | Server tick p50/p95/p99/max | Server egress | Owner payload / replay / corrections |
+|---|---|---|---|---|---|---|
+| Pending | Laboratory | | | | | |
+| Pending | Lobby | | | | | |

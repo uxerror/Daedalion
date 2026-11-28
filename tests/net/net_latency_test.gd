@@ -76,7 +76,7 @@ func _measure(rtt: int) -> void:
 func _expect_prediction() -> bool:
 	return (
 		preload("res://addons/cogito/Networking/net_config.gd").owner_prediction
-		and OS.get_environment("COGITO_AUTHORITY_MOVEMENT") == "1"
+		and OS.get_environment("COGITO_AUTHORITY_MOVEMENT") != "0"
 	)
 
 

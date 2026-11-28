@@ -40,6 +40,11 @@ var _modifier_bits := -1
 var _modifier_speed := 1.0
 var _committed_clearance := false
 var _chart_root: Node
+var _state := CogitoMovementState.new()
+var _tick := Tick.new()
+var _volume := Collision.Volumes.new()
+var _next_contact := Collision.Contact.new()
+var _excluded: Array[RID] = []
 var _fixed := false
 var _teleported := false
 var _legacy_ledge := false
@@ -228,7 +233,7 @@ func observe_modifiers(actor: CogitoPlayerAdvanced) -> void:
 
 
 func capture_checkpoint(actor: CogitoPlayerAdvanced, block: NetOwnerState) -> void:
-	block.state = actor.capture_movement_state()
+	block.state = actor.capture_movement_state(block.state)
 	block.modifier_generation = modifier_generation
 	# The authored ShapeCast can still describe the previous physics frame.
 	block.state.cast_blocked = _committed_clearance
@@ -248,9 +253,16 @@ func capture_checkpoint(actor: CogitoPlayerAdvanced, block: NetOwnerState) -> vo
 		block.step_slope_multiplier = stamina.step_slope_multiplier
 		block.regenerate_after = stamina.regenerate_after
 		block.jump_cost = profile.jump_cost
+	else:
+		block.stamina_locked = false
+		block.use_floor_slope_for_run_exhaustion = false
+		for key: String in NetOwnerState.STAMINA_TUNING:
+			block.set(key, 0.0)
 
 
 func advance(actor: CogitoPlayerAdvanced, dt: float) -> void:
+	if room:
+		room.boundary_collider_id = 0
 	dynamic_support = false
 	handoff_support = false
 	if force_requested:
@@ -280,7 +292,9 @@ func advance(actor: CogitoPlayerAdvanced, dt: float) -> void:
 		return
 	if not room:
 		room = Collision.new(actor, -1, true)
-	var excluded: Array[RID] = [actor.get_rid()]
+	var excluded := _excluded
+	excluded.clear()
+	excluded.append(actor.get_rid())
 	for exception in actor.get_collision_exceptions():
 		if is_instance_valid(exception):
 			excluded.append(exception.get_rid())
@@ -299,20 +313,22 @@ func advance(actor: CogitoPlayerAdvanced, dt: float) -> void:
 			actor._motion.ladder_contact = 0
 			contacts = support
 			_teleported = false
-	var s := actor.capture_movement_state()
+	var s := actor.capture_movement_state(_state)
 	if not room.prepare_support(s):
 		_clock(actor, false)
 		contacts = null
 		return
 	s.cast_blocked = (s.cast_enabled or not s.standing_shape) and room.blocked(origin)
-	var tick := Tick.new()
-	var volume := room.volumes(origin, s, actor.current_command)
+	var tick := _tick
+	var volume := room.volumes(origin, s, actor.current_command, _volume)
 	if solves == 0:
 		# At spawn the chart samples its authored head cast before its first
 		# posture update. Subsequent commands start from the committed head.
 		volume.submerged = actor.is_head_in_water()
 	tick.request(s, profile, actor.current_command, dt, volume)
 	if volume.moving_ledge and s.mode == MODE.LEDGE_CLIMBING:
+		if is_instance_valid(volume.observation.collider):
+			room.boundary_collider_id = volume.observation.collider.get_instance_id()
 		_legacy_ledge = true
 		_clock(actor, false)
 		contacts = null
@@ -322,7 +338,7 @@ func advance(actor: CogitoPlayerAdvanced, dt: float) -> void:
 			actor.ledge_collider = volume.ledge.collider
 			actor.state_chart.send_event("ledge_climb")
 		return
-	var hit := room.solve(origin, s, profile, dt)
+	var hit := room.solve(origin, s, profile, dt, _next_contact)
 	if hit.legacy:
 		dynamic_support = hit.dynamic_floor
 		if s.support_key:
@@ -341,6 +357,7 @@ func advance(actor: CogitoPlayerAdvanced, dt: float) -> void:
 	tick.finish(s, profile, actor.current_command, hit, dt, room_from_world)
 	committed_tick = Engine.get_physics_frames()
 	_committed_clearance = s.cast_blocked
+	_next_contact = contacts if contacts else Collision.Contact.new()
 	contacts = hit
 	solves += 1
 	actor.authority_solve_count += 1

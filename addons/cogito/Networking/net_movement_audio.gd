@@ -25,6 +25,8 @@ var _slide: AudioStreamPlayer3D
 var _sliding := false
 var _volume_loop := false
 var _previous_volume := {}
+var _frames: Array[Dictionary] = [{}, {}]
+var _slot := 0
 
 
 func _init(actor: CogitoPlayerAdvanced) -> void:
@@ -40,6 +42,12 @@ func reset() -> void:
 		_actor._set_underwater_audio(false)
 		_actor._show_underwater_effect(false)
 		_volume_loop = false
+
+
+func observe_actor(tick: int, revision: int, submerged: bool, impact: float) -> void:
+	_slot = 1 - _slot
+	var frame := Snapshot.capture_into(_actor, tick, revision, _frames[_slot])
+	observe(frame, true, submerged, impact)
 
 
 ## Feed accepted snapshots, or a single stream of forward predicted poses for a future owner.
