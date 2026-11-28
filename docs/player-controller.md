@@ -65,8 +65,14 @@ Offline aim continues to use the animated eye.
 On static stairs and slides, replay restores the enabled hull, head offset, slide direction,
 slide and jump timer phase, and jump history from the owner checkpoint. The online owner's
 ledge query uses a separate disabled ShapeCast at the simulated pose. The shared probe uses the prefab's original cast and clearance distances.
-Both peers retain the room-local target, climb stage and collider key. A moving
-collider gives the climb back to Advanced until moving-support prediction lands in PR8.
+Both peers retain the room-local target, climb stage and collider key. A segment-driven
+support adds its room identity, a local anchor and point velocity to the checkpoint.
+For a floor the anchor is the rider origin. For a climb it is the target on the lip.
+At each tick the solver takes the difference between the two evaluated anchor positions,
+sweeps carried displacement against obstructions, and solves the actor's requested motion.
+Step-off clears the anchor. A supported jump takes vertical momentum from the platform at
+the existing takeoff phase. Unsupported moving ledges and dynamic footing use Advanced.
+The offline controller continues to take platform velocity from CharacterBody3D.
 
 ## Per-actor input and presentation
 

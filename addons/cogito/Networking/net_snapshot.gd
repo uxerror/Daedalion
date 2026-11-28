@@ -39,6 +39,11 @@ static func capture(actor: CogitoPlayerAdvanced, tick: int, revision: int) -> Di
 		"posture": int(actor.current_body_posture_state),
 		"sitting": actor.is_sitting,
 	}
+	var kernel := actor.authority_movement
+	if kernel and kernel.contacts and kernel.contacts.floor_support and actor.movement_grounded():
+		var support_motion := kernel.contacts.floor_support
+		frame.support = support_motion.key
+		frame.footing = support_motion.body.to_local(actor.global_position)
 	var phase := roll_phase(actor)
 	if phase >= 0:
 		frame.roll_phase = phase
@@ -109,6 +114,13 @@ func at_tick(tick: float, rate: int) -> Dictionary:
 			var vel: Vector3 = before.velocity
 			pose.position = pos.lerp(after.position, weight)
 			pose.velocity = vel.lerp(after.velocity, weight)
+			if before.has("support"):
+				if before.support == after.get("support", 0):
+					var local: Vector3 = before.footing
+					pose.footing = local.lerp(after.footing, weight)
+				else:
+					pose.erase("support")
+					pose.erase("footing")
 			pose.yaw = lerp_angle(before.yaw, after.yaw, weight)
 			pose.neck = lerp_angle(before.neck, after.neck, weight)
 			pose.pitch = lerpf(before.pitch, after.pitch, weight)

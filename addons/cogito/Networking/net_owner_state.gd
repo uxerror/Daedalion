@@ -4,13 +4,15 @@ extends RefCounted
 
 enum Disposition { FRESH, HELD, NEUTRAL, GAP }
 
-const VERSION := 4
+const VERSION := 5
 const HEADER_BYTES := 68
-const ELIGIBLE_BYTES := 540
+const ELIGIBLE_BYTES := 568
 const ALIGNMENT := [
 	"binding", "life", "revision", "generation", "tick", "ack", "last_fresh_tick", "discontinuities"
 ]
 const VECTORS := [
+	"support_local",
+	"support_velocity",
 	"requested_velocity",
 	"velocity",
 	"main_velocity",
@@ -100,6 +102,7 @@ var pending_force := Vector3.ZERO
 var force_requested := false
 var teleported := false
 var input_blocked := false
+var dynamic_support := false
 var stamina_locked := false
 var use_floor_slope_for_run_exhaustion := false
 var value_max: float
@@ -115,7 +118,8 @@ var jump_cost: float
 static func encode(checkpoint: NetOwnerState) -> PackedByteArray:
 	var stream := StreamPeerBuffer.new()
 	stream.put_u8(VERSION)
-	stream.put_u8(int(checkpoint.disposition) | (128 if checkpoint.state else 0))
+	var flags := 128 if checkpoint.state else (4 if checkpoint.dynamic_support else 0)
+	stream.put_u8(int(checkpoint.disposition) | flags)
 	stream.put_u16(checkpoint.rate)
 	for field: String in ALIGNMENT:
 		stream.put_64(checkpoint.get(field))
@@ -139,6 +143,7 @@ static func _write_state(stream: StreamPeerBuffer, checkpoint: NetOwnerState) ->
 	stream.put_u8(state_value.ledge_stage)
 	stream.put_u32(state_value.ledge_key)
 	_put_vector(stream, state_value.ledge_target)
+	stream.put_u32(state_value.support_key)
 	stream.put_u8(
 		(
 			int(checkpoint.force_requested)
@@ -169,12 +174,15 @@ static func _write_state(stream: StreamPeerBuffer, checkpoint: NetOwnerState) ->
 
 ## A malformed block has no usable prefix. Validate its full extent before reading the tail.
 static func decode(data: PackedByteArray) -> NetOwnerState:
-	if data.size() < HEADER_BYTES or data[0] != VERSION or (data[1] & 0x7c) != 0:
+	if data.size() < HEADER_BYTES or data[0] != VERSION or (data[1] & 0x78) != 0:
 		return null
 	var eligible := (data[1] & 128) != 0
 	if data.size() != (ELIGIBLE_BYTES if eligible else HEADER_BYTES):
 		return null
 	var value := NetOwnerState.new()
+	value.dynamic_support = (data[1] & 4) != 0
+	if eligible and value.dynamic_support:
+		return null
 	value.rate = data.decode_u16(2)
 	value.disposition = (data[1] & 3) as Disposition
 	for i in ALIGNMENT.size():
@@ -220,6 +228,7 @@ static func _read_state(stream: StreamPeerBuffer, value: NetOwnerState) -> bool:
 	s.ledge_stage = stage as CogitoMovementState.LedgeStage
 	s.ledge_key = stream.get_u32()
 	s.ledge_target = _get_vector(stream)
+	s.support_key = stream.get_u32()
 	var adapter := stream.get_u8()
 	if (
 		mode_value >= CogitoMovementState.Mode.size()

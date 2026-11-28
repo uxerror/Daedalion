@@ -379,7 +379,7 @@ func test_interaction_validation_and_private_results(_timeout := 15000) -> void:
 
 func test_concurrent_retry_replica_events_and_late_baseline(_timeout := 15000) -> void:
 	var server := _branch(1)
-	assert_int(server.start_server({"save_dir": "user://net/objects"})).is_equal(OK)
+	assert_int(server.start_server({"save_dir": create_temp_dir("objects")})).is_equal(OK)
 	var level := _arena(server)
 	var first := _observer(2)
 	var second := _observer(3)
@@ -434,7 +434,9 @@ func test_concurrent_retry_replica_events_and_late_baseline(_timeout := 15000) -
 	assert_array(quiet).is_empty()
 	assert_bool(baseline.get_node("Door/Audio").playing).is_false()
 	assert_bool(baseline.get_node("Door").is_open).is_true()
-	assert_vector(baseline.get_node("Door").position).is_equal(level.get_node("Door").open_position)
+	var door: CogitoDoor = level.get_node("Door")
+	var expected := door.position if door.net_support else door.open_position
+	assert_vector(baseline.get_node("Door").position).is_equal(expected)
 	assert_bool(baseline.get_node("Button").has_been_used).is_true()
 	assert_bool(baseline.get_node("Switch").is_on).is_true()
 	assert_bool(baseline.get_node("Keypad").is_locked).is_false()

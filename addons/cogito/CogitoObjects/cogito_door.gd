@@ -12,6 +12,7 @@ signal lock_state_changed(is_locked:bool)
 signal damage_received(damage_value:float)
 
 const NET_MOTION := preload("../Networking/net_door_motion.gd")
+const SupportMotion := preload("../Networking/net_support_motion.gd")
 
 enum DoorType {
   ROTATING,
@@ -119,6 +120,7 @@ var close_timer : Timer #Used for auto-close
 var interaction_nodes : Array[Node]
 var cogito_properties : CogitoProperties = null
 var player_interaction_component : PlayerInteractionComponent
+var net_support: SupportMotion
 var _net_motion: NET_MOTION
 #endregion
 
@@ -467,6 +469,11 @@ func apply_net_state(state: Dictionary, silent: bool) -> void:
 	var moved := is_open != bool(state.open)
 	is_open = state.open
 	is_locked = state.locked
+	if state.has("segment") and SupportMotion.accepts(self) and not multiplayer.is_server():
+		var world: Node = get_meta(&"cogito_net_world")
+		if not net_support:
+			net_support = world.bind_support(self, world.entities.id_for(self))
+		world.observe_tick(state.get("sample_tick", state.segment.tick))
 	if moved or silent:
 		_net_motion.apply(self, state, silent)
 	interaction_text = interaction_text_when_open if is_open else interaction_text_when_closed
@@ -498,6 +505,9 @@ func net_bind_replica() -> void:
 
 ## Drop the session destination before binding this door again.
 func net_unbind() -> void:
+	if net_support:
+		net_support.close()
+		net_support = null
 	if _net_motion:
 		_net_motion.stop()
 		_net_motion = null

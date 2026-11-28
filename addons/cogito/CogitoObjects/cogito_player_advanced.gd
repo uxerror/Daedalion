@@ -407,9 +407,16 @@ func capture_movement_state() -> CogitoMovementState:
 	state.on_ceiling = is_on_ceiling()
 	if authority_movement and authority_movement.contacts:
 		var contact := authority_movement.contacts
+		state.support_key = contact.support_key
+		state.support_local = contact.support_local
+		state.support_velocity = contact.support_velocity
 		state.wall_normal = contact.wall_normal
 		state.on_wall = contact.wall_normal != Vector3.ZERO
 		state.on_ceiling = contact.ceiling
+	elif authority_movement and current_moving_state == MovingState.LedgeClimbing:
+		state.support_key = _motion.support_key
+		state.support_local = _motion.support_local
+		state.support_velocity = _motion.support_velocity
 	state.head_offset = head_offset
 	state.air_steps_enabled = is_enabled_stair_stepping_in_air
 	state.mode = current_moving_state as CogitoMovementState.Mode
@@ -519,6 +526,7 @@ func capture_movement_profile() -> CogitoMovementProfile:
 	profile.crouching_depth = CROUCHING_DEPTH
 	profile.jump_velocity = JUMP_VELOCITY
 	profile.crouch_jump_velocity = CROUCH_JUMP_VELOCITY
+	profile.platform_on_leave = platform_on_leave
 	profile.can_crouch_jump = CAN_CROUCH_JUMP
 	profile.can_bunnyhop = CAN_BUNNYHOP
 	profile.bunny_hop_acceleration = BUNNY_HOP_ACCELERATION
@@ -910,6 +918,16 @@ func _move_body() -> void:
 		authority_solve_count += 1
 		if authority_movement:
 			authority_movement.contacts = null
+			if authority_movement.handoff_support:
+				var floors := platform_floor_layers
+				var walls := platform_wall_layers
+				platform_floor_layers = 0
+				platform_wall_layers = 0
+				move_and_slide()
+				platform_floor_layers = floors
+				platform_wall_layers = walls
+				authority_movement.handoff_support = false
+				return
 	move_and_slide()
 
 
@@ -1257,14 +1275,10 @@ func _can_jump() -> bool:
 
 
 func _handle_jump_on_platform():
-	if platform_on_leave != PLATFORM_ON_LEAVE_DO_NOTHING:
-		var platform_velocity = get_platform_velocity()
-		# TODO: Make PLATFORM_ON_LEAVE_ADD_VELOCITY work... somehow. 
-		# Velocity X and Z gets overridden later, so you immediately lose the velocity
-		if PLATFORM_ON_LEAVE_ADD_UPWARD_VELOCITY:
-			platform_velocity.x = 0
-			platform_velocity.z = 0
-		main_velocity += platform_velocity
+	var platform_velocity := get_platform_velocity()
+	if authority_movement and authority_movement.handoff_support:
+		platform_velocity = authority_movement.handoff_velocity
+	main_velocity += Movement.platform_takeoff(platform_velocity, platform_on_leave)
 
 
 func _jump(_jump_target_speed) -> void:

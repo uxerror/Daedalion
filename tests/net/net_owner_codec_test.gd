@@ -20,11 +20,13 @@ func _block() -> NetOwnerState:
 
 func test_legacy_alignment_and_framing() -> void:
 	var block := _block()
+	block.dynamic_support = true
 	var wire := Codec.encode(block)
 	assert_int(wire.size()).is_equal(Codec.HEADER_BYTES)
 	var copy := Codec.decode(wire)
 	assert_object(copy).is_not_null()
 	assert_object(copy.state).is_null()
+	assert_bool(copy.dynamic_support).is_true()
 	for field: String in Codec.ALIGNMENT + ["disposition", "rate"]:
 		assert_int(copy.get(field)).is_equal(block.get(field))
 	assert_object(Codec.decode(wire.slice(0, -1))).is_null()
@@ -78,8 +80,8 @@ func test_every_stored_field_and_adapter_latch_round_trips() -> void:
 		for i in Codec.STAMINA_TUNING.size():
 			block.set(Codec.STAMINA_TUNING[i], 0.123 + i)
 		var wire := Codec.encode(block)
-		assert_int(wire.size()).is_equal(540)
-		assert_int(wire[0]).is_equal(4)
+		assert_int(wire.size()).is_equal(568)
+		assert_int(wire[0]).is_equal(5)
 		var copy := Codec.decode(wire)
 		assert_object(copy).is_not_null()
 		for key in fields:

@@ -16,6 +16,8 @@ func state(door: CogitoDoor) -> Dictionary:
 		if door.door_type == CogitoDoor.DoorType.SLIDING:
 			target = door.position
 	var data := {"open": door.is_open, "locked": door.is_locked, "target": target}
+	if door.net_support:
+		data.segment = door.net_support.latest()
 	if door.door_type == CogitoDoor.DoorType.ANIMATED:
 		var reverse := not door.is_open and door.reverse_opening_anim_for_close
 		data.clip = _clip if _has_target else _clip_for(door, door.is_open)
@@ -70,7 +72,17 @@ func apply(door: CogitoDoor, data: Dictionary, snap: bool) -> void:
 	if door.door_type == CogitoDoor.DoorType.SLIDING:
 		property = ^"position"
 		duration = door.door_speed
-	if snap:
+	if door.net_support and data.has("segment"):
+		var world: Node = door.get_meta(&"cogito_net_world")
+		var owner: CogitoPlayerAdvanced = world.get_parent().local_actor
+		if owner and owner.owner_prediction and door.net_support.latest() != data.segment:
+			owner.owner_prediction.support_changed = true
+		door.net_support.install(data.segment)
+		door.net_support.drive(data.get("sample_tick", world.support_tick))
+	elif door.net_support and not snap:
+		var world: Node = door.get_meta(&"cogito_net_world")
+		door.net_support.start(world.support_tick, _target, duration)
+	elif snap:
 		var body := (door as Node3D) as AnimatableBody3D
 		var sync := body != null and body.sync_to_physics
 		if sync:
@@ -80,6 +92,8 @@ func apply(door: CogitoDoor, data: Dictionary, snap: bool) -> void:
 		door.reset_physics_interpolation()
 		if sync:
 			body.sync_to_physics = true
+		if door.net_support:
+			door.net_support.hold()
 	else:
 		_tween = door.create_tween().set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
 		_tween.tween_property(door, property, _target, duration)

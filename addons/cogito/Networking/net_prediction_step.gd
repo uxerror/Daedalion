@@ -57,6 +57,9 @@ func advance(s: CogitoMovementState, raw: CogitoPlayerCommand, block: NetOwnerSt
 		cmd.pitch = s.head_pitch
 		cmd.neck_yaw = s.neck_yaw
 		cmd.has_control = false
+	if not room.prepare_support(s, block.tick + raw.sequence - block.ack):
+		suspend_reason = "dynamic_support"
+		return false
 	var dt := 1.0 / block.rate
 	var origin := world_from_room * s.transform
 	var rotation := Basis.from_euler(Vector3(0, cmd.yaw, 0))
@@ -80,6 +83,7 @@ func advance(s: CogitoMovementState, raw: CogitoPlayerCommand, block: NetOwnerSt
 		return false
 	var hit := room.solve(origin, s, profile, dt)
 	if hit.legacy:
+		suspend_reason = "dynamic_support" if hit.dynamic_floor else "unsupported_contact"
 		return false
 	step.finish(s, profile, cmd, hit, dt, world_from_room.affine_inverse())
 	if s.has_stamina:

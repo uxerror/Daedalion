@@ -293,6 +293,7 @@ func _takeoff(
 	elif s.mode == MODE.SPRINTING:
 		Step.Ground.sprint_takeoff(s, p, dt, s)
 		s.jump_target_speed = s.bunny_hop_speed
+	s.main_velocity += Step.platform_takeoff(s.support_velocity, p.platform_on_leave)
 	s.was_sprinting = cmd.is_held(ACTION.SPRINT)
 	s.was_jumping = true
 	s.was_in_air = true
@@ -383,6 +384,11 @@ func finish(
 	if not crouched and Step.Posture.tall_shape_ready(s.head_position.y, p.crouching_depth):
 		s.standing_shape = true
 		s.crouching_shape = false
+	if climbing and exited_ledge:
+		hit.attach(hit.floor_support, hit.pose.origin, dt)
+	s.support_key = hit.support_key
+	s.support_local = hit.support_local
+	s.support_velocity = hit.support_velocity
 
 
 func _air(

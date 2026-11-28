@@ -16,6 +16,7 @@ var body: StaminaBody
 var stamina: CogitoStaminaAttribute
 var world_from_room: Transform3D
 var first: int
+var next_tick: int
 var compared := 0
 var pos_error := 0.0
 var vel_error := 0.0
@@ -48,6 +49,7 @@ class StaminaBody:
 
 func _init(actor: CogitoPlayerAdvanced, k: int, checkpoint: NetOwnerState = null) -> void:
 	first = k
+	next_tick = k
 	world_from_room = actor.global_transform * actor.transform.affine_inverse()
 	var source := checkpoint
 	if not source:
@@ -86,6 +88,8 @@ func _init(actor: CogitoPlayerAdvanced, k: int, checkpoint: NetOwnerState = null
 
 
 func advance(cmd: CogitoPlayerCommand) -> void:
+	next_tick += 1
+	room.prepare_support(state, next_tick)
 	var step := Tick.new()
 	state.has_control = cmd.has_control
 	state.neck_yaw = cmd.neck_yaw
@@ -131,6 +135,7 @@ func compare_to(actual: CogitoMovementState) -> void:
 		NetOwnerState.FLAGS
 		+ ["mode", "posture", "floor_normal", "wall_normal", "ladder_contact", "ladder_ticks"]
 		+ ["ledge_stage", "ledge_target", "ledge_key", "roll_ticks"]
+		+ ["support_key", "support_local", "support_velocity"]
 	):
 		if state.get(key) != actual.get(key):
 			mismatches[key] = mismatches.get(key, 0) + 1

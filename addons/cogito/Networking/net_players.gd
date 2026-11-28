@@ -485,6 +485,8 @@ func _private_frame(avatar: AVATAR, public_frame: Dictionary, peer: int) -> Dict
 	block.generation = avatar.mode_generation
 	if avatar.checkpoint_eligible:
 		avatar.actor.authority_movement.capture_checkpoint(avatar.actor, block)
+	elif avatar.actor.authority_movement:
+		block.dynamic_support = avatar.actor.authority_movement.dynamic_support
 	frame.ack = block.ack
 	frame.owner_state = NetOwnerState.encode(block)
 	return frame
@@ -670,6 +672,8 @@ func _physics_process(delta: float) -> void:
 		if not is_inside_tree():
 			return
 	if _avatars.is_empty():
+		if multiplayer.is_server() and not world.supports.is_empty() and _level.can_process():
+			_tick += 1
 		return
 	carry.flush_rotation()
 	if local_actor:
@@ -785,6 +789,7 @@ func _receive_pose(id: String, life: int, frame: Dictionary, accepted := -1) -> 
 		var previous_revision := avatar.revision
 		if not avatar.receive(frame, checkpoint):
 			return
+		world.observe_tick(frame.tick)
 		if avatar.actor == local_actor:
 			avatar.wield.reconcile(frame.ack, accepted)
 		if avatar.actor == local_actor and avatar.revision != previous_revision:
@@ -793,9 +798,10 @@ func _receive_pose(id: String, life: int, frame: Dictionary, accepted := -1) -> 
 
 func _process(delta: float) -> void:
 	bodies.present()
+	var render_tick := world.present_supports()
 	for avatar in _avatars.values():
 		if avatar.timeline:
-			avatar.present(delta)
+			avatar.present(delta, render_tick)
 
 
 func _install_life(avatar: AVATAR, life: int) -> void:

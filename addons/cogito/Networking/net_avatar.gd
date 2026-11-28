@@ -198,13 +198,24 @@ func clear_baseline(crossing := false) -> void:
 
 
 ## Updates visible pose only. The owner keeps its event-frequency look between resets.
-func present(delta: float) -> void:
+func present(delta: float, render_tick := -1.0) -> void:
 	if prediction and prediction.active:
 		prediction.render(delta)
 		return
 	var frame := timeline.latest()
 	if not actor.is_local_presentation:
-		frame = timeline.presentation(Engine.physics_ticks_per_second)
+		var rate := Engine.physics_ticks_per_second
+		frame = (
+			timeline.at_tick(render_tick, rate) if render_tick >= 0 else timeline.presentation(rate)
+		)
+	if render_tick >= 0 and not actor.is_local_presentation and frame.has("support"):
+		var api := actor.player_interaction_component.network_interactions
+		var motion: Variant = api.world.supports.get(frame.support)
+		if motion:
+			var visual: Transform3D = api.world.visual_pose(frame.support, render_tick)
+			var point: Vector3 = visual * frame.footing
+			frame = frame.duplicate()
+			frame.position = actor.get_parent_node_3d().to_local(point)
 	if not frame.is_empty():
 		var weight := 1.0 - exp(-22.0 * delta) if actor.is_local_presentation else 1.0
 		apply_pose(frame, weight, false)

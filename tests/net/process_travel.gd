@@ -24,6 +24,7 @@ var _volume_driver: VolumeDriver
 class VolumeDriver:
 	extends CogitoPlayerInputSource
 	var phase: String
+	var lift_jump_ticks := 0
 
 	func sample(actor: CogitoPlayer, seq: int) -> CogitoPlayerCommand:
 		var cmd := super.sample(actor, seq)
@@ -31,7 +32,16 @@ class VolumeDriver:
 		cmd.pitch = 0
 		cmd.neck_yaw = 0
 		cmd.toggle_crouch = phase == "drop"
-		if phase == "ledge":
+		if phase == "lift_jump":
+			lift_jump_ticks += 1
+			cmd.held = 1 << CogitoPlayerCommand.Action.JUMP
+			if lift_jump_ticks == 1:
+				cmd.add_edge(CogitoPlayerCommand.Action.JUMP)
+			if lift_jump_ticks >= 6:
+				phase = "lift_exit"
+		elif phase == "lift_exit":
+			cmd.move = Vector2.UP
+		elif phase == "ledge":
 			cmd.move = Vector2.UP
 			cmd.held = 1 << CogitoPlayerCommand.Action.JUMP
 		elif phase == "climb":
@@ -150,6 +160,13 @@ func _apply(cmd: Dictionary, travel: Node) -> void:
 			_volume_driver = VolumeDriver.new()
 		CogitoNet.local_player().input_source = _volume_driver
 		_volume_driver.phase = cmd.phase
+		_volume_driver.lift_jump_ticks = 0
+	elif cmd.op == "lift_switch":
+		var endpoint: Node = travel.endpoint_for(CogitoNet.local_player_id())
+		var switch := (
+			endpoint.active_level().get_node("Platform/GenericSwitch/BasicInteraction") as Node
+		)
+		endpoint.interactions.submit(switch, &"interact")
 	elif cmd.op == "chair":
 		var endpoint: Node = travel.endpoint_for(CogitoNet.local_player_id())
 		var interaction: Node = endpoint.active_level().get_node("CogitoSittable2/BasicInteraction")
@@ -179,6 +196,11 @@ func _apply(cmd: Dictionary, travel: Node) -> void:
 				_max_gap = 0
 				var zone := root.get_node(TO_LAB if root.scene_file_path == LOBBY else TO_LOBBY)
 				actor.global_position = zone.global_position
+			elif cmd.op == "lift_start":
+				var lift := root.get_node("Platform") as Node3D
+				actor.global_position = lift.to_global(Vector3(0.85, 0.96, -1.15))
+				actor.main_velocity = Vector3.ZERO
+				actor.gravity_vec = Vector3.ZERO
 			elif cmd.op == "lane_start":
 				actor.position = Vector3(-4, 51, 0)
 			elif cmd.op == "ladder_start":
@@ -240,6 +262,14 @@ func _sample(travel: Node) -> void:
 		"order": _order,
 		"switch": switch_on,
 	}
+	if lobby:
+		var lift: CogitoDoor = lobby.active_level().get_node("Platform")
+		data.lift = lift.position.y
+		if lift.net_support and not CogitoNet.is_server() and lobby.world._render_tick >= 0:
+			var visual: Transform3D = lobby.world.visual_pose(
+				lift.net_support.key, lobby.world._render_tick
+			)
+			data.lift = lift.get_parent_node_3d().to_local(visual.origin).y
 	var player := local as CogitoPlayerAdvanced
 	data.seated = player != null and player.is_sitting
 	data.predicting = (

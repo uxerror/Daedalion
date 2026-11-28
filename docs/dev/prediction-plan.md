@@ -521,10 +521,18 @@ include tests and are relative engineering estimates. The dependency order is to
 | **PR4 — slide, boundaries and lifecycle · L · implemented behind default-off switches** | Movement step and `Networking/{net_seats,net_death,net_travel,net_carry,net_wield,net_elements}.gd` integration points. Complete static stairs/slide and authority handoffs. | Slide-jump, fallback entry/exit, stamina gate, freeze, carry throw, driver swap, death, respawn, failed/successful travel and stale old-room frames pass. Remote clocks and host authority pass regression tests. | Complete the GUI checklist below with two players, including an unmatched destination seat. |
 | **PR6 — ladders and swimming · L · implemented behind default-off switches** | Movement step modes for ladder climb/jump-off and water (surface, dive, rise, exit clearance), `Scripts/ladder_area.gd`, water volumes as observed contacts, oxygen staying authoritative. | Entry/exit both ways at matched ticks, ladder cooldown and jump-off, dive/rise/surface replay, exit onto a ledge, no duplicate splash/footstep effects on replay. | Ladder up/down/jump off, swim surface, dive and climb out at 16 and 150 ms. |
 | **PR7 — ledge climb and roll · L · implemented behind default-off switches** | Ledge capture/stages as tick-driven state (no animation clock), roll duration as ticks instead of `animation_finished` on the online path, offline unchanged. | Ledge capture, middle/final stage and crouch exit replay identically; hard landing into roll and roll completion at the same tick on both peers; offline animation timing unchanged. | Climb onto crates and ledges, roll after a fall, while observed. |
-| **PR8 — moving supports · XL** | Timestamped support motion shared by `Networking/{net_bodies,net_door_motion}.gd`, platform/lift authoring contract, support identity in the owner checkpoint, support velocity sampled at the replayed tick. | Ride a platform and a lift, step on/off at speed, jump from a moving platform, be pushed by a closing door; corrections stay under thresholds without rubber-banding. | Demo platform and lift at 16 and 150 ms with an observer. |
+| **PR8 — moving supports · XL · implemented behind default-off switches** | Timestamped support motion shared by `Networking/{net_world_state,net_door_motion,net_support_motion}.gd`, platform/lift authoring contract, support identity in the owner checkpoint, support velocity sampled at the replayed tick. | Ride a platform and a lift, step on/off at speed, jump from a moving platform, be pushed by a closing door; corrections stay under thresholds without rubber-banding. | Demo platform and lift at 16 and 150 ms with an observer. |
 | **PR9 — release gate and defaults · M** | `tests/net/process_arena.gd/.tscn`, `tools/check_multiplayer.py`, `docs/networking.md`, `docs/player-controller.md`, `docs/dev/multiplayer-plan.md`. Enable the verified mode set by default. | Both topologies pass the impairment and offline gates. Record payload B/s, correction distribution, replay depth, p95/p99 replay CPU and worst physics frame alongside hardware and scene. | Maintainer signs off at 16 ms and 100–150 ms, including a long walking/turning run. |
 
 ### Manual GUI checklist
+
+For PR8 launch the server with `COGITO_AUTHORITY_MOVEMENT=1` and both clients with
+`COGITO_OWNER_PREDICTION=1`. In Lobby, use the switch on Platform next to
+Hint_05_Platform (near x = −4, z = 6.6). Ride up and down, walk off at the top, jump
+during ascent and descent, then reverse halfway through a trip. Repeat with a second
+player on the platform and beside it. Close the rotating bathroom door on a walking
+player and repeat at SlidingDoor in Laboratory. Repeat both topologies at 100–150 ms
+and listen for repeated footsteps or door sounds during a correction.
 
 For PR7, start the authority with `COGITO_AUTHORITY_MOVEMENT=1` and the clients with
 `COGITO_OWNER_PREDICTION=1`. In Laboratory, face the two stacked boxes at

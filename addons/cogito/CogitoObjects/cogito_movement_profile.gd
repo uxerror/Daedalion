@@ -18,6 +18,7 @@ var crouching_speed: float
 var lerp_speed: float
 var air_lerp_speed: float
 var crouching_depth: float
+var platform_on_leave: int
 var jump_velocity: float
 var crouch_jump_velocity: float
 var can_crouch_jump: bool

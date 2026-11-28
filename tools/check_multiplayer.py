@@ -177,11 +177,11 @@ class Scenario:
         self.roles.append(role)
         return role
 
-    def fixture(self, label, role, copy_from=None, expected_failure=None, extra=()):
+    def fixture(self, label, role, copy_from=None, expected_failure=None, extra=(), world="world"):
         directory = self.directory / f"{len(self.roles)}-{label}"
         args = [
             FIXTURE, "--", "--role", role, "--port", str(self.port), "--name", label,
-            "--stop", str(directory / "stop"), "--save-dir", str(self.directory / "world"),
+            "--stop", str(directory / "stop"), "--save-dir", str(self.directory / world),
             *extra,
         ]
         return self.launch(label, args, copy_from, expected_failure)
@@ -1182,7 +1182,8 @@ class Scenario:
             if self.file_transport:
                 self.bus = self.directory / f"bus-{len(self.roles)}"
                 self.bus.mkdir()
-            self.server = self.fixture("Host", "authority" if dedicated else "host", extra=extra)
+            self.server = self.fixture("Host", "authority" if dedicated else "host", extra=extra,
+                                       world="boundary-dedicated" if dedicated else "boundary-listen")
             self.wait_line(self.server, lambda line: line.startswith("NET READY"))
             owner = self.fixture("Ada", "client", extra=extra)
             roles = [self.server, owner]
@@ -1213,6 +1214,7 @@ class Scenario:
                 self.sample(role, lambda s: s["modes"].get("Ada") == "ROLLING"
                             and (role is not owner or s["predicting"] == enabled))
             self.sample(owner, lambda s: s["modes"]["Ada"] == "IDLE")
+            self._ride_lobby_lift(roles, owner, enabled)
             self.order(self.server, op="cross", who="Ada")
             destination = self.sample(owner, lambda s: s["local"] == lab and s["predicting"] == enabled)
             authority = self.sample(self.server, lambda s: s["actors"].get("Ada", [""])[0] == lab)
@@ -1251,6 +1253,43 @@ class Scenario:
                   "climb and landing roll seen on all peers; predicting =", enabled, flush=True)
             for role in reversed(roles):
                 self.stop(role)
+
+    def _ride_lobby_lift(self, roles, owner, enabled):
+        self.order(owner, op="volume_input", phase="idle")
+        self.order(self.server, op="lift_start", who="Ada")
+        starts = {}
+        for role in roles:
+            staged = self.sample(role, lambda s: abs(s["actors"]["Ada"][1] + 4.167) < 0.05
+                                 and s["modes"]["Ada"] == "IDLE"
+                                 and (role is not owner or s["predicting"] == enabled))
+            starts[role] = staged["lift"]
+            role.samples.clear()
+        self.order(owner, op="lift_switch")
+
+        def riding(sample, role, distance):
+            return (abs(sample["lift"] - starts[role]) > distance
+                    and abs(sample["actors"]["Ada"][2] - sample["lift"] - 0.90) < 0.16
+                    and sample["modes"]["Ada"] == "IDLE"
+                    and (role is not owner or sample["predicting"] == enabled))
+
+        self.sample(owner, lambda s: riding(s, owner, 1.85) and 1.85 < s["lift"] < 2.36)
+        self.order(owner, op="volume_input", phase="lift_jump")
+        heights = []
+        for role in roles:
+            # A turn consuming another process's output may span the whole jump.
+            # Inspect this role's samples from the switch instead of its newest row.
+            while not any(s["modes"].get("Ada") == "JUMPING"
+                          and s["actors"]["Ada"][2] > s["lift"] + 1.04
+                          and (role is not owner or s["predicting"] == enabled)
+                          for s in role.samples):
+                self.next_line()
+            ride = next((s for s in role.samples if riding(s, role, 0.3)), None)
+            if ride is None:
+                raise CheckFailed(f"{role.directory.name}: no attached rider during lift travel")
+            heights.append(ride["actors"]["Ada"][2])
+        self.sample(self.server, lambda s: s["actors"]["Ada"][1] < -5.35)
+        self.order(owner, op="volume_input", phase="idle")
+        print("PR8 PROCESS Lobby ride and jump", heights, "prediction =", enabled, flush=True)
 
     def _volume_motion(self, roles, owner, mode, phase, travel, enabled):
         # Require a committed mode on the authority, the owner and the observing window.

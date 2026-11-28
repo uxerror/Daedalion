@@ -42,6 +42,11 @@ enum Posture { UNDEFINED, CROUCHING, STANDING, SITTING }
 @export_storage var gravity_vector: Vector3
 @export_storage var gravity_vec: Vector3
 
+## Stable room entity hash and the rider origin (or climb target) in support coordinates.
+@export_storage var support_key: int
+@export_storage var support_local: Vector3
+@export_storage var support_velocity: Vector3
+
 ## Previous solve and posture.
 @export_storage var on_floor: bool
 @export_storage var floor_normal: Vector3

@@ -130,3 +130,63 @@ func test_runs_without_scene_tree() -> void:
 	assert_int(status).is_zero()
 	assert_bool("MOVEMENT MAINLOOP PASS" in log_text).override_failure_message(log_text).is_true()
 	assert_bool("SCRIPT ERROR" in log_text).is_false()
+
+
+func test_platform_takeoff_uses_authored_vertical_momentum() -> void:
+	for speed: float in [-1.25, 0.0, 2.75]:
+		var velocity := Vector3(4, speed, -2)
+		for policy in [
+			CharacterBody3D.PLATFORM_ON_LEAVE_ADD_VELOCITY,
+			CharacterBody3D.PLATFORM_ON_LEAVE_ADD_UPWARD_VELOCITY
+		]:
+			assert_vector(Step.platform_takeoff(velocity, policy)).is_equal(Vector3.UP * speed)
+		var none := Step.platform_takeoff(velocity, CharacterBody3D.PLATFORM_ON_LEAVE_DO_NOTHING)
+		assert_vector(none).is_equal(Vector3.ZERO)
+
+
+func test_rotating_segment_follows_authored_physics_callback(
+	forced: bool, _test_parameters := [[false], [true]]
+) -> void:
+	var root := Node3D.new()
+	get_tree().root.add_child(root)
+	var native := AnimatableBody3D.new()
+	native.set_script(preload("res://addons/cogito/CogitoObjects/cogito_door.gd"))
+	var door := (native as Node3D) as CogitoDoor
+	door.open_rotation = Vector3(-91, 0, 0) if forced else Vector3(0, 95, 0)
+	door.door_speed = 3.6 if forced else 1.0
+	if forced:
+		door.forced_rotation_axis = CogitoDoor.ForcedRotationAxis.AxisX
+	var other := native.duplicate() as Node3D
+	root.add_child(native)
+	root.add_child(other)
+	var motion := preload("res://addons/cogito/Networking/net_support_motion.gd").new(other, 1)
+	await get_tree().physics_frame
+	door.open_door(null)
+	motion.start(0, door.open_rotation, 1)
+	var worst := 0.0
+	for tick in range(1, 131):
+		await get_tree().physics_frame
+		var pose := motion.pose(tick)
+		for axis in 3:
+			worst = maxf(worst, pose.basis[axis].distance_to(native.basis[axis]))
+	motion.close()
+	root.free()
+	print("PR8 ROTATION forced=", forced, " maximum basis column error=", worst)
+	assert_float(worst).is_less(0.0002)
+
+
+func test_sliding_segment_matches_the_authored_idle_tween_on_both_physics_sync_modes() -> void:
+	var output := []
+	var args := [
+		"--headless",
+		"--path",
+		ProjectSettings.globalize_path("res://"),
+		"--fixed-fps",
+		"60",
+		"res://tests/player/sliding_support_probe.tscn",
+	]
+	var status := OS.execute(OS.get_executable_path(), args, output, true)
+	var log_text := "\n".join(output)
+	assert_int(status).override_failure_message(log_text).is_zero()
+	assert_bool("PR8 SLIDING RID" in log_text).is_true()
+	assert_bool("SCRIPT ERROR" in log_text).is_false()

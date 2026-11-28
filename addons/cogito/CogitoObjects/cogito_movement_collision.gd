@@ -2,6 +2,7 @@ extends RefCounted
 ## One room's query geometry. Every sweep specifies its starting transform. The two
 ## layer-zero query bodies supply the prefab shapes to Jolt without moving a gameplay body.
 
+const Support := preload("../Networking/net_support_motion.gd")
 const MODE := CogitoMovementState.Mode
 const LEDGE := CogitoMovementStep.Ledge
 const STAIRS := CogitoMovementStep.Stairs
@@ -50,10 +51,26 @@ class Contact:
 	var floor_normal := Vector3.ZERO
 	var wall_normal := Vector3.ZERO
 	var ceiling := false
+	var support_key := 0
+	var support_local := Vector3.ZERO
+	var support_velocity := Vector3.ZERO
+	var floor_support: Support
+	var carried := Vector3.ZERO
+	var dynamic_floor := false
 	var legacy := false
 	var stair := Vector3.ZERO
 	var stair_normal := Vector3.ZERO
 	var step_up := false
+
+	func attach(motion: Support, point: Vector3, dt: float) -> void:
+		support_key = 0
+		support_local = Vector3.ZERO
+		support_velocity = Vector3.ZERO
+		if motion:
+			var world: Node = motion.door.get_meta(&"cogito_net_world")
+			support_key = motion.key
+			support_local = motion.world_pose(world.support_tick).affine_inverse() * point
+			support_velocity = motion.displacement(world.support_tick, support_local) / dt
 
 
 ## A replica with collisions disabled can supply the original movement mask explicitly.
@@ -131,6 +148,29 @@ func set_exclusions(bodies: Array[RID]) -> void:
 	_head.exclude = bodies
 
 
+func _support_motion(node: Object) -> Support:
+	return node.net_support if is_instance_valid(node) and node is CogitoDoor else null
+
+
+func prepare_support(s: CogitoMovementState, tick := -1) -> bool:
+	var api := _actor.player_interaction_component.network_interactions
+	if not api:
+		return s.support_key == 0
+	var world: Node = api.world
+	if tick >= 0:
+		world.drive_supports(tick)
+	if s.support_key == 0:
+		return true
+	var motion: Support = world.supports.get(s.support_key)
+	if not motion:
+		return false
+	if s.mode == MODE.LEDGE_CLIMBING:
+		var target := motion.world_pose(world.support_tick) * s.support_local
+		var parent := _actor.get_parent_node_3d()
+		s.ledge_target = parent.to_local(target) if parent and not _actor.top_level else target
+	return true
+
+
 ## Seed a new pose after a teleport or check the support on leaving legacy.
 func support(pose: Transform3D, standing: bool) -> Contact:
 	_climb_body = null
@@ -147,7 +187,9 @@ func support(pose: Transform3D, standing: bool) -> Contact:
 		var normal := _hit.get_collision_normal()
 		if normal.y >= _floor_cos:
 			result.floor_normal = normal
-			result.legacy = result.legacy or _dynamic_contact()
+			result.dynamic_floor = _dynamic_contact()
+			result.legacy = result.legacy or result.dynamic_floor
+			result.floor_support = _support_motion(_hit.get_collider())
 	PhysicsServer3D.body_set_collision_mask(body, 0)
 	return result
 
@@ -200,7 +242,7 @@ func _observe_ledge(
 	if s.mode == MODE.LEDGE_CLIMBING:
 		if s.ledge_key != 0:
 			_climb_body = _resolve_ledge(s.ledge_key)
-			v.moving_ledge = not is_instance_valid(_climb_body) or LEDGE.moving(_climb_body)
+			v.moving_ledge = not is_instance_valid(_climb_body) or _moving_ledge(_climb_body)
 		return
 	if not cmd or not cmd.is_held(CogitoPlayerCommand.Action.JUMP) or s.posture_locked:
 		return
@@ -221,7 +263,11 @@ func _observe_ledge(
 		if _climb_body:
 			v.ledge_key = String(_actor.get_parent().get_path_to(_climb_body)).hash()
 			_ledge_bodies[v.ledge_key] = _climb_body
-			v.moving_ledge = LEDGE.moving(_climb_body)
+			v.moving_ledge = _moving_ledge(_climb_body)
+
+
+func _moving_ledge(body: PhysicsBody3D) -> bool:
+	return not _support_motion(body) and LEDGE.moving(body)
 
 
 ## A newly bound owner can first see a climb halfway up the wall.
@@ -294,7 +340,7 @@ func _step_probe(
 		)
 	if is_nan(rise):
 		return false
-	result.legacy = _dynamic_contact()
+	result.legacy = result.legacy or _dynamic_contact()
 	result.stair = Vector3.UP * rise
 	result.stair_normal = normal
 	result.step_up = up
@@ -303,6 +349,8 @@ func _step_probe(
 
 func _dynamic_contact() -> bool:
 	var object := _hit.get_collider()
+	if _support_motion(object):
+		return false
 	if is_instance_valid(_climb_body) and object == _climb_body and not LEDGE.moving(_climb_body):
 		return false
 	if object is StaticBody3D:
@@ -340,6 +388,42 @@ func _stairs(
 		_step_probe(body, result.pose, forward, height, false, profile, result)
 
 
+func _carry(body: RID, s: CogitoMovementState, result: Contact) -> void:
+	if not s.support_key:
+		return
+	var world: Node = _actor.player_interaction_component.network_interactions.world
+	var support_motion: Support = world.supports.get(s.support_key)
+	if not support_motion:
+		return
+	var delta := support_motion.displacement(world.support_tick, s.support_local)
+	if delta != Vector3.ZERO:
+		var previous := _params.exclude_bodies
+		var excluded := previous.duplicate()
+		excluded.append(support_motion.body.get_rid())
+		_params.exclude_bodies = excluded
+		_params.margin = _margin
+		if _sweep(body, result.pose, delta):
+			result.legacy = _dynamic_contact()
+		result.carried = _hit.get_travel()
+		result.pose.origin += result.carried
+		_params.exclude_bodies = previous
+
+
+func _attachment(s: CogitoMovementState, result: Contact, dt: float) -> void:
+	var motion := result.floor_support
+	if motion and (motion.body.collision_layer & _actor.platform_floor_layers) == 0:
+		motion = null
+		result.floor_support = null
+	var point := result.pose.origin
+	if s.mode == MODE.LEDGE_CLIMBING:
+		motion = _support_motion(_climb_body)
+		var parent := _actor.get_parent_node_3d()
+		point = (
+			parent.to_global(s.ledge_target) if parent and not _actor.top_level else s.ledge_target
+		)
+	result.attach(motion, point, dt)
+
+
 ## state.on_floor describes the previous solve. No CharacterBody contact cache is read.
 func solve(
 	origin: Transform3D, state: CogitoMovementState, profile: CogitoMovementProfile, dt: float
@@ -353,6 +437,7 @@ func solve(
 	# Only a synchronous query sees the authored mask. A room physics step sees
 	# two layer-zero, mask-zero bodies and cannot collide with them at world zero.
 	PhysicsServer3D.body_set_collision_mask(body, _mask)
+	_carry(body, state, result)
 	_params.margin = 0.001  # PhysicsTestMotionParameters3D default used for Advanced's steps.
 	if state.mode not in [MODE.LADDER_CLIMBING, MODE.SWIMMING, MODE.LEDGE_CLIMBING]:
 		_stairs(body, state, profile, dt, result)
@@ -375,6 +460,8 @@ func solve(
 		var remainder := _hit.get_remainder()
 		if normal.y >= _floor_cos:
 			result.floor_normal = normal
+			result.floor_support = _support_motion(_hit.get_collider())
+			result.dynamic_floor = _dynamic_contact()
 			if result.velocity.y <= 0:
 				result.velocity.y = 0
 			if motion.slide(Vector3.UP).is_zero_approx():
@@ -402,8 +489,17 @@ func solve(
 		if normal.y >= _floor_cos:
 			result.legacy = result.legacy or _dynamic_contact()
 			result.floor_normal = normal
+			result.floor_support = _support_motion(_hit.get_collider())
+			result.dynamic_floor = _dynamic_contact()
 			var travel := _hit.get_travel()
 			if travel.length() > _margin:
 				result.pose.origin.y += travel.y
+	_attachment(state, result, dt)
+	if state.support_key and not result.support_key and not result.floor_normal:
+		var inherited := state.support_velocity
+		if profile.platform_on_leave == CharacterBody3D.PLATFORM_ON_LEAVE_ADD_UPWARD_VELOCITY:
+			inherited.y = maxf(0.0, inherited.y)
+		if profile.platform_on_leave != CharacterBody3D.PLATFORM_ON_LEAVE_DO_NOTHING:
+			result.velocity += inherited
 	PhysicsServer3D.body_set_collision_mask(body, 0)
 	return result

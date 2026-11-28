@@ -20,6 +20,9 @@ const EXACT_STATE_FIELDS := [
 	"roll_ticks",
 	"ledge_stage",
 	"ledge_key",
+	"support_key",
+	"support_local",
+	"support_velocity",
 	"ledge_target",
 	"body_basis",
 	"requested_velocity",
@@ -46,6 +49,10 @@ var solver: Solver
 var newest := -1
 var last_replay: Array[int] = []
 var last_restore_tick := -1
+var support_changed := false
+var presented_support_key := 0
+var presented_support_pose := Transform3D.IDENTITY
+var hard_resets := 0
 var corrections := 0
 var last_position_error := 0.0
 var reasons := {}
@@ -96,6 +103,8 @@ func reset(crossing := false) -> void:
 	last_restore_tick = -1
 	last_position_error = 0
 	corrections = 0
+	hard_resets = 0
+	support_changed = false
 	reasons.clear()
 
 
@@ -120,9 +129,12 @@ func _present_predicted(enabled: bool) -> void:
 
 
 func _suspend(why: String) -> void:
+	presented_support_key = 0
+	presented_support_pose = Transform3D.IDENTITY
 	_eye_staged = false
 	_simulation_eye.transform = Transform3D.IDENTITY
 	if active:
+		hard_resets += 1
 		_actor.reset_roll_presentation()
 		render_offset = Vector3.ZERO
 		_actor.eyes.position = Vector3.ZERO
@@ -158,7 +170,7 @@ func post_at(sequence: int) -> CogitoMovementState:
 func _problem(block: NetOwnerState, first: int) -> String:
 	var problem := ""
 	if not block.state:
-		problem = "fallback"
+		problem = "dynamic_support" if block.dynamic_support else "fallback"
 	elif block.rate != Engine.physics_ticks_per_second:
 		problem = "physics_rate"
 	elif block.ack > newest or block.ack < _last_valid_ack:
@@ -239,7 +251,9 @@ func begin_tick() -> void:
 	last_position_error = (
 		post.transform.origin.distance_to(block.state.transform.origin) if post else 0.0
 	)
-	if _matches(block, previous, post):
+	var changed := support_changed
+	support_changed = false
+	if not changed and _matches(block, previous, post):
 		_retire(block.ack)
 		return
 	var old_state := state
@@ -261,6 +275,8 @@ func begin_tick() -> void:
 			solver.world_from_room.basis * (old_state.transform.origin - state.transform.origin)
 		)
 		motion += _actor.neck.global_basis * (old_state.head_position - state.head_position)
+		if motion.length() > SNAP_DISTANCE:
+			hard_resets += 1
 		render_offset = (
 			(motion + render_offset).limit_length(OFFSET_CAP)
 			if motion.length() <= SNAP_DISTANCE
@@ -319,6 +335,12 @@ func live(raw: CogitoPlayerCommand) -> void:
 		return
 	_posts[slot] = state.duplicate()
 	_actor.transform = state.transform
+	presented_support_key = state.support_key
+	if presented_support_key:
+		var world: Node = _actor.player_interaction_component.network_interactions.world
+		presented_support_pose = world.supports[presented_support_key].world_pose(
+			world.support_tick
+		)
 	_actor.velocity = state.velocity
 	_actor.current_moving_state = state.mode as CogitoPlayerAdvanced.MovingState
 	_actor.current_body_posture_state = state.posture as CogitoPlayerAdvanced.BodyPostureState

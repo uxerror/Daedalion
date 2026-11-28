@@ -29,6 +29,9 @@ var profile: CogitoMovementProfile
 var contacts: Collision.Contact
 var pending_force := Vector3.ZERO
 var force_requested := false
+var dynamic_support := false
+var handoff_support := false
+var handoff_velocity := Vector3.ZERO
 var solves := 0
 var committed_tick := -1
 var modifier_generation := 0
@@ -69,6 +72,9 @@ func invalidate() -> void:
 	if _local_audio:
 		_local_audio.reset()
 	committed_tick = -1
+	dynamic_support = false
+	handoff_support = false
+	handoff_velocity = Vector3.ZERO
 	_teleported = true
 	contacts = null
 	pending_force = Vector3.ZERO
@@ -101,6 +107,9 @@ func respawn(actor: CogitoPlayerAdvanced) -> void:
 	actor.was_jumping = false
 	actor.was_standing = false
 	actor._motion.roll_ticks = 0
+	actor._motion.support_key = 0
+	actor._motion.support_local = Vector3.ZERO
+	actor._motion.support_velocity = Vector3.ZERO
 	actor._motion.ledge_key = 0
 	actor._motion.ledge_target = Vector3.ZERO
 	actor._motion.ledge_stage = STAGE.RISE
@@ -136,9 +145,15 @@ func respawn(actor: CogitoPlayerAdvanced) -> void:
 ## Preserve the authored capture if a chart tick enters climb during a dynamic solve.
 func chart_ledge(actor: CogitoPlayerAdvanced) -> void:
 	var body := actor.ledge_collider as PhysicsBody3D
-	_legacy_ledge = CogitoMovementStep.Ledge.moving(body)
+	_legacy_ledge = room._moving_ledge(body)
+	var motion := room._support_motion(body)
 	var local := actor.transform * actor.global_transform.affine_inverse()
 	actor._motion.ledge_target = local * actor.ledge_position
+	var capture := Collision.Contact.new()
+	capture.attach(motion, actor.ledge_position, 1.0 / Engine.physics_ticks_per_second)
+	actor._motion.support_key = capture.support_key
+	actor._motion.support_local = capture.support_local
+	actor._motion.support_velocity = capture.support_velocity
 	actor._motion.ledge_key = String(actor.get_parent().get_path_to(body)).hash() if body else 0
 	actor._motion.ledge_stage = STAGE.RISE
 	if actor.is_in_ledge_climbing_final_stage:
@@ -236,6 +251,8 @@ func capture_checkpoint(actor: CogitoPlayerAdvanced, block: NetOwnerState) -> vo
 
 
 func advance(actor: CogitoPlayerAdvanced, dt: float) -> void:
+	dynamic_support = false
+	handoff_support = false
 	if force_requested:
 		_clock(actor, false)
 		_chart_root.process_mode = Node.PROCESS_MODE_DISABLED
@@ -251,7 +268,7 @@ func advance(actor: CogitoPlayerAdvanced, dt: float) -> void:
 	if actor.current_moving_state != MODE.LEDGE_CLIMBING:
 		_legacy_ledge = false
 	elif _legacy_ledge and is_instance_valid(actor.ledge_collider):
-		if not CogitoMovementStep.Ledge.moving(actor.ledge_collider as PhysicsBody3D):
+		if not room._moving_ledge(actor.ledge_collider as PhysicsBody3D):
 			chart_ledge(actor)
 	if _teleported and actor.current_moving_state in [MODE.LEDGE_CLIMBING, MODE.ROLLING]:
 		actor.state_chart.send_event(
@@ -275,6 +292,7 @@ func advance(actor: CogitoPlayerAdvanced, dt: float) -> void:
 	if _teleported or (not contacts and actor.is_on_floor()):
 		var support := room.support(origin, not actor.standing_collision_shape.disabled)
 		if support.legacy:
+			dynamic_support = support.dynamic_floor
 			_clock(actor, false)
 			return
 		if _teleported:
@@ -282,6 +300,10 @@ func advance(actor: CogitoPlayerAdvanced, dt: float) -> void:
 			contacts = support
 			_teleported = false
 	var s := actor.capture_movement_state()
+	if not room.prepare_support(s):
+		_clock(actor, false)
+		contacts = null
+		return
 	s.cast_blocked = (s.cast_enabled or not s.standing_shape) and room.blocked(origin)
 	var tick := Tick.new()
 	var volume := room.volumes(origin, s, actor.current_command)
@@ -302,6 +324,11 @@ func advance(actor: CogitoPlayerAdvanced, dt: float) -> void:
 		return
 	var hit := room.solve(origin, s, profile, dt)
 	if hit.legacy:
+		dynamic_support = hit.dynamic_floor
+		if s.support_key:
+			handoff_support = true
+			handoff_velocity = s.support_velocity
+			actor.global_position += hit.carried
 		if actor.current_moving_state == MODE.LEDGE_CLIMBING:
 			_legacy_ledge = true
 		_clock(actor, false)

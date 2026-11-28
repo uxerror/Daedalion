@@ -2,7 +2,7 @@ extends RefCounted
 ## Session configuration shared by programmatic startup and the dedicated CLI.
 
 const WorldFiles := preload("../SceneManagement/cogito_world_files.gd")
-const PROTOCOL_VERSION := 19
+const PROTOCOL_VERSION := 20
 ## Keep equal to `version` in addons/cogito/plugin.cfg (net_core_test checks it).
 const CONTENT_VERSION := "1.3.1"
 const DEMO_LEVEL := "res://addons/cogito/DemoScenes/COGITO_4_Laboratory.tscn"

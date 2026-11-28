@@ -25,6 +25,13 @@ static func request_motion(
 	out_state.requested_velocity = with_gravity(result, state.gravity_vec)
 
 
+## Advanced retains only the vertical platform component in its explicit jump momentum.
+static func platform_takeoff(velocity: Vector3, policy: int) -> Vector3:
+	if policy == CharacterBody3D.PLATFORM_ON_LEAVE_DO_NOTHING:
+		return Vector3.ZERO
+	return Vector3.UP * velocity.y
+
+
 static func with_gravity(momentum: Vector3, accumulator: Vector3) -> Vector3:
 	return momentum + accumulator
 

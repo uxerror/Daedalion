@@ -206,7 +206,7 @@ adapter and fixed-tick stepper. It compares contacts, timers, permissions, postu
 stamina, position, velocity and simulation head height on every tick.
 
 `net_owner_session_test.gd` checks dedicated and listen owner privacy on serialized RPCs,
-reliable life renewal, takeover, explicit pose acceptance and rejection of a protocol 18 peer by a protocol 19 host.
+reliable life renewal, takeover, explicit pose acceptance and rejection of a protocol 19 peer by a protocol 20 host.
 The movement source test covers repeated, skipped, expired and wrapped sequences. The
 authority and travel suites check mode generations across handoffs and room bindings.
 
@@ -322,3 +322,23 @@ The prediction_boundaries process route drops Ada above the test floor in Lobby.
 After travelling to Laboratory, Ada climbs the two stacked boxes at ClimbingTest3.
 Both topologies require the authority, owner and observer to report each mode. The
 process scenario runs over file transport or ENet with the same commands as PR4.
+
+## Prediction PR8 moving supports
+
+Run `net_prediction_support_test.gd` for the translating lift, horizontal platform,
+door push, rotating sweep, moving ledge and late-join trajectories. It instantiates
+the support bodies in the test room. The PR8 LANE lines give median, p95 and maximum
+matched-ack position error in metres, maximum replay depth, hard resets after
+warm-up and the suspension counters. Four memory RTT profiles drop every tenth command.
+The checkpoint fixture restores the owner after a 0.30 m displacement and checks
+replayed position, velocity, eye, stamina and effects. The offline platform golden
+remains in the original 18-lane runner. The player movement suite also launches
+sliding_support_probe.tscn at fixed 60 FPS. It compares both original sync modes against
+the segment at the physical RID for the entire Lobby-length stroke. The rotating tests
+sample both the original free-axis and forced-axis callbacks.
+
+Run `python3 tools/check_multiplayer.py --file-transport --scenario prediction_boundaries`
+in all three switch configurations. The dedicated owner and listen client operate the
+Lobby lift's child switch, ride and jump off. The process harness checks the rider's
+height against the platform and requires the observer to see the jump. For UDP loopback
+run the same scenario without `--file-transport`.

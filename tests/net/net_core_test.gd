@@ -58,9 +58,9 @@ func test_transport_ceiling_allows_a_local_listen_host() -> void:
 func test_protocol_and_content_are_checked_separately() -> void:
 	var version := NetConfig.content_version()
 	assert_str(version).is_not_empty()
-	assert_int(NetConfig.PROTOCOL_VERSION).is_equal(19)
-	assert_str(NetConfig.version_error(19, version, version)).is_empty()
-	assert_str(NetConfig.version_error(18, version, version)).is_equal("Protocol version mismatch")
+	assert_int(NetConfig.PROTOCOL_VERSION).is_equal(20)
+	assert_str(NetConfig.version_error(20, version, version)).is_empty()
+	assert_str(NetConfig.version_error(19, version, version)).is_equal("Protocol version mismatch")
 	assert_str(NetConfig.version_error(0, version, version)).is_equal("Protocol version mismatch")
 	var reason := NetConfig.version_error(NetConfig.PROTOCOL_VERSION, "old", version)
 	assert_str(reason).is_equal("Content version mismatch")

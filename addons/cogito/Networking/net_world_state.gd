@@ -6,6 +6,8 @@ signal presented(entity: String, revision: int, event: StringName)
 
 const ANIMATION := preload("net_animation.gd")
 const ENTITIES := preload("net_entities.gd")
+const Support := preload("net_support_motion.gd")
+const Snapshot := preload("net_snapshot.gd")
 const CHUNK_SIZE := 32
 
 ## Identity bindings for this level.
@@ -14,6 +16,13 @@ var entities := ENTITIES.new()
 var revisions := {}
 ## Public carrier identities by body id. Empty hands have no map entry.
 var holders: Dictionary[String, String] = {}
+var supports: Dictionary[int, Support] = {}
+var support_tick := 0
+var _ambiguous := {}
+var _sample_tick := -1
+var _sample_frame := 0
+var _sample_time := 0
+var _render_tick := -1.0
 var _animations: Array[ANIMATION] = []
 var _states := {}
 var _subscribers := {}
@@ -21,6 +30,88 @@ var _pending := {}
 var _generation := 0
 var _client_binding := 0
 var _awaiting_avatar := false
+
+
+func _ready() -> void:
+	process_physics_priority = -100
+	set_physics_process(false)
+
+
+func bind_support(node: CogitoDoor, id: String) -> Support:
+	var key := id.hash()
+	if key == 0 or _ambiguous.has(key):
+		return null
+	if supports.has(key):
+		var previous := supports[key]
+		if previous.door == node:
+			return previous
+		_ambiguous[key] = true
+		previous.door.net_support = null
+		previous.close()
+		_states[entities.id_for(previous.door)] = previous.door.net_state()
+		supports.erase(key)
+		return null
+	var motion := Support.new(node, key)
+	node.tree_exiting.connect(_remove_support.bind(node, key), CONNECT_ONE_SHOT)
+	supports[key] = motion
+	set_physics_process(true)
+	return motion
+
+
+func _remove_support(node: CogitoDoor, key: int) -> void:
+	if supports.has(key) and supports[key].door == node:
+		node.net_support.close()
+		node.net_support = null
+		supports.erase(key)
+		set_physics_process(not supports.is_empty())
+
+
+func observe_tick(tick: int) -> void:
+	if tick > _sample_tick:
+		_sample_tick = tick
+		_sample_frame = Engine.get_physics_frames()
+		_sample_time = Time.get_ticks_usec()
+
+
+func _physics_process(_dt: float) -> void:
+	if not entities.root.can_process():
+		return
+	if multiplayer.is_server():
+		drive_supports(get_parent()._tick + 1)
+	elif _sample_tick >= 0:
+		var viewer: CogitoPlayerAdvanced = get_parent().local_actor
+		if viewer and viewer.owner_prediction and viewer.owner_prediction.active:
+			var prediction := viewer.owner_prediction
+			drive_supports(
+				prediction.baseline.tick + prediction.newest - prediction.baseline.ack + 1
+			)
+		else:
+			drive_supports(_sample_tick + Engine.get_physics_frames() - _sample_frame)
+
+
+func drive_supports(tick: int) -> void:
+	support_tick = tick
+	for key: int in supports:
+		supports[key].drive(tick)
+
+
+func present_supports() -> float:
+	if supports.is_empty() or _sample_tick < 0:
+		return -1
+	var elapsed := (Time.get_ticks_usec() - _sample_time) / 1000000.0
+	var rate := Engine.physics_ticks_per_second
+	_render_tick = maxf(_render_tick, _sample_tick + (elapsed - Snapshot.DELAY) * rate)
+	for key: int in supports:
+		supports[key].present(visual_pose(key, _render_tick))
+	return _render_tick
+
+
+func visual_pose(key: int, remote_tick: float) -> Transform3D:
+	var viewer: CogitoPlayerAdvanced = get_parent().local_actor
+	if viewer and viewer.owner_prediction and viewer.owner_prediction.active:
+		if viewer.owner_prediction.presented_support_key == key:
+			return viewer.owner_prediction.presented_support_pose
+	return supports[key].world_pose(remote_tick)
 
 
 ## Capture each adapter in its own coordinate space, including unobserved tombstones.
@@ -32,6 +123,9 @@ func capture() -> Dictionary:
 			continue
 		if node.has_method("net_state"):
 			records[id] = node.net_state()
+			if node is CogitoDoor and node.net_support:
+				records[id].segment = node.net_support.baseline(support_tick)
+				records[id].saved_tick = support_tick
 		if node is CogitoSittable:
 			records[id].occupant = ""
 		if node is CogitoNPC:
@@ -47,7 +141,14 @@ func restore(records: Dictionary) -> Error:
 		if id.begins_with("runtime:"):
 			get_parent().spawner.reserve_id(id)
 		var row: Dictionary = records[id]
+		var door := entities.live_object(id) as CogitoDoor
+		if door and door.net_support and row.has("segment"):
+			row = row.duplicate(true)
+			row.segment.tick += support_tick - int(row.get("saved_tick", support_tick))
+			row.erase("saved_tick")
 		apply_state(id, 1, row, true)
+		if door:
+			_states[id] = door.net_state()
 		if id.begins_with("runtime:") and not row.get("removed", false):
 			if not entities.live_object(id):
 				return ERR_CANT_CREATE
@@ -67,9 +168,14 @@ func bind(root: Node, key: String) -> void:
 	_client_binding = _generation
 	entities.registered.connect(_runtime_registered)
 	entities.bind(root, key, _generation if multiplayer.is_server() else 0)
+	var enabled := (
+		multiplayer.is_server() and OS.get_environment("COGITO_AUTHORITY_MOVEMENT") == "1"
+	)
 	for id in entities.objects:
 		var node := entities.objects[id]
 		node.set_meta(&"cogito_net_world", self)
+		if enabled and node is CogitoDoor and Support.accepts(node):
+			node.net_support = bind_support(node, id)
 		revisions[id] = 0
 		_watch_area(id, node)
 		if node.has_method("net_state"):
@@ -141,11 +247,21 @@ func clear() -> void:
 			continue
 		if node is CogitoElementArea and node.enabled_changed.is_connected(_area_enabled.bind(id)):
 			node.enabled_changed.disconnect(_area_enabled.bind(id))
+		if node is CogitoDoor:
+			var remove := _remove_support.bind(node, id.hash())
+			if node.tree_exiting.is_connected(remove):
+				node.tree_exiting.disconnect(remove)
 		if node.has_method("net_unbind"):
 			node.net_unbind()
 		node.remove_meta(&"cogito_net_world")
 		if node.has_signal(&"net_changed") and node.is_connected(&"net_changed", _changed.bind(id)):
 			node.disconnect(&"net_changed", _changed.bind(id))
+	supports.clear()
+	_ambiguous.clear()
+	set_physics_process(false)
+	support_tick = 0
+	_sample_tick = -1
+	_render_tick = -1
 	_awaiting_avatar = false
 	entities = ENTITIES.new()
 	revisions.clear()
@@ -221,6 +337,10 @@ func subscribe(peer: int, nonce: int) -> void:
 		if node is Node3D and state.has("pose") and get_parent().spawner.owns(id):
 			state = state.duplicate()
 			state.pose = node.frame_root() if node is NetNpcCorpse else node.global_transform
+		if node is CogitoDoor and node.net_support:
+			state = node.net_state()
+			state.segment = node.net_support.baseline(support_tick)
+			state.sample_tick = support_tick
 		var row := [id, revisions[id], state]
 		if holders.has(id):
 			row.append(holders[id])
